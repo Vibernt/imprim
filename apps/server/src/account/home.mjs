@@ -6,6 +6,8 @@ import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { getSession, requireCsrf, cookies, cookie, CSRF_COOKIE, SESSION_COOKIE, BROWSER_COOKIE } from '../auth/session.mjs';
 import { confirmedFactors, FRESH_MFA_MS, forgetDevices } from '../auth/mfa.mjs';
 import { normalizeEmail } from '../services/admission.mjs';
+import { limitEmail, attempt } from '../auth/rate-limit.mjs';
+import { appSessionLifetimeMs } from '../oidc/app-sessions.mjs';
 import { endAccess } from '../services/access.mjs';
 import { logoutStatements, flushLogouts } from '../oidc/backchannel.mjs';
 import { dispatchDeliveries } from '../services/outbox.mjs';
@@ -57,7 +59,7 @@ ${action(request, '/account/delete', `<label for="confirm_email">Type your email
 export async function accountAction(request, env, ctx) {
     const session = await requireSession(request, env);
     const url = new URL(request.url), what = url.pathname.slice('/account/'.length);
-    if (request.method === 'GET' && what === 'email/confirm') return confirmEmailPage(request, session);
+    if (request.method === 'GET' && what === 'email/confirm') return confirmEmailPage(request, env, session);
     const body = await readBody(request, 'form');
     await requireCsrf(request, env, session, body.csrf);
     const now = Date.now();
@@ -83,7 +85,7 @@ export async function accountAction(request, env, ctx) {
         invariant(typeof body.client_id === 'string' && body.client_id.length <= 200, 'invalid_request', 'App required.');
         await env.DB.batch([
             env.DB.prepare(`INSERT INTO logout_outbox(id,client_id,user_id,sid,uri,created) SELECT lower(hex(randomblob(16))),a.client_id,a.user_id,NULL,c.backchannel_uri,?
-                FROM app_sessions a JOIN clients c ON c.id=a.client_id WHERE a.user_id=? AND a.client_id=? GROUP BY a.client_id`).bind(now, session.user_id, body.client_id),
+                FROM app_sessions a JOIN clients c ON c.id=a.client_id WHERE a.user_id=? AND a.client_id=? AND a.created>? GROUP BY a.client_id`).bind(now, session.user_id, body.client_id, now - appSessionLifetimeMs),
             env.DB.prepare('DELETE FROM app_sessions WHERE user_id=? AND client_id=?').bind(session.user_id, body.client_id)]);
         ctx.waitUntil(flushLogouts(env).catch(() => audit(env, 'logout_dispatch_failed', null, { pending: true })));
         await audit(env, 'app_signed_out', session.user_id, { client_id: body.client_id });
@@ -99,14 +101,25 @@ export async function accountAction(request, env, ctx) {
     if (what === 'delete') return deleteAccount(request, env, ctx, session, body);
     invariant(false, 'not_found', 'Unknown account action.', 404);
 }
+// With a second factor on the account, changing the address needs it too: mailbox control alone must not move it.
+async function requireFreshFactor(env, session) {
+    if ((await confirmedFactors(env, session.user_id)).length)
+        invariant(session.mfa_at && session.mfa_at > Date.now() - FRESH_MFA_MS, 'mfa_required', 'Enter a second-factor code at /mfa?next=/account first (within ten minutes).', 403);
+}
 async function startEmailChange(request, env, ctx, session, body) {
     // Proof at both ends: a fresh email link for the current address now, and a link to the new one below.
     invariant(freshMailbox(session), 'reauth_required', 'Sign in with an email link (within ten minutes) before changing your email.', 403);
+    await requireFreshFactor(env, session);
+    invariant(await attempt(env, 'email-change:' + session.user_id, 5), 'rate_limit', 'Too many email changes. Try again later.', 429);
     const email = normalizeEmail(body.new_email);
     invariant(email !== session.email.toLowerCase(), 'invalid_request', 'That is already your email.');
     const browser = cookies(request)[BROWSER_COOKIE];
     invariant(tokenShape(browser), 'browser_binding', 'Reload the account page and try again.', 403);
     invariant(env.EMAIL?.send && env.EMAIL_FROM, 'email_config', 'Transactional email is not configured.', 503);
+    const message = `We sent a confirmation link to ${email}.`;
+    // An address another account holds gets no email, and the answer is the same, so this reveals nothing.
+    const held = await env.DB.prepare('SELECT 1 FROM users WHERE realm_id=? AND email=?').bind(env.REALM.id, email).first();
+    if (held || !await limitEmail(env, email, request)) return accountHome(request, env, session, message);
     const token = randomToken(), now = Date.now();
     await env.DB.batch([env.DB.prepare('DELETE FROM email_changes WHERE user_id=?').bind(session.user_id),
         env.DB.prepare('INSERT INTO email_changes(hash,user_id,new_email,browser_hash,expires_at) VALUES(?,?,?,?,?)').bind(await sha256(token), session.user_id, email, await sha256(browser), now + 900000)]);
@@ -114,17 +127,20 @@ async function startEmailChange(request, env, ctx, session, body) {
         text: `Open this link in the browser where you asked for the change, then choose Confirm. It expires in 15 minutes.\n\n${env.ISSUER}/account/email/confirm?token=${token}\n\nIgnore this email if you did not ask for it.` })
         .catch(error => console.error(JSON.stringify({ type: 'email_change_failed', code: error?.code || 'send_failed' }))));
     notify(env, ctx, session.email, 'email change requested', `Someone signed in to your account asked to change its email to ${email}. Nothing changes until that address is confirmed.`);
-    return accountHome(request, env, session, `We sent a confirmation link to ${email}.`);
+    return accountHome(request, env, session, message);
 }
 // GET shows a confirm button; only the POST changes anything, so link scanners cannot.
-function confirmEmailPage(request, session) {
+async function confirmEmailPage(request, env, session) {
     const token = uniqueParams(new URL(request.url).searchParams).token;
     invariant(tokenShape(token), 'invalid_request', 'Invalid confirmation link.');
-    return page('Confirm new email', `<h1>Confirm your new email</h1><p>Signed in as ${e(session.email)}.</p>
+    const row = await env.DB.prepare('SELECT new_email FROM email_changes WHERE hash=? AND user_id=? AND expires_at>?').bind(await sha256(token), session.user_id, Date.now()).first();
+    invariant(row, 'invalid_grant', 'This link expired, was used, or belongs to another account.', 400);
+    return page('Confirm new email', `<h1>Confirm your new email</h1><p>Change ${e(session.email)} to <strong>${e(row.new_email)}</strong>?</p>
 ${action(request, '/account/email/confirm', hidden('token', token), 'Confirm')}`);
 }
 async function confirmEmailChange(request, env, ctx, session, body) {
     invariant(tokenShape(body.token) && tokenShape(cookies(request)[BROWSER_COOKIE]), 'invalid_grant', 'Invalid confirmation link.', 400);
+    await requireFreshFactor(env, session);
     const row = await env.DB.prepare('DELETE FROM email_changes WHERE hash=? AND user_id=? AND browser_hash=? AND expires_at>? RETURNING *')
         .bind(await sha256(body.token), session.user_id, await sha256(cookies(request)[BROWSER_COOKIE]), Date.now()).first();
     invariant(row, 'invalid_grant', 'This link expired, was used, or belongs to another account or browser.', 400);

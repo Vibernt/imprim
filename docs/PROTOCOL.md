@@ -90,7 +90,9 @@ must equal the issuer. Credentials are discoverable and need user verification (
 - **Profile:** a display name, sent as `name` with the `profile` scope.
 - **Email:** changing it needs proof at both ends. That is an email-link sign-in within ten minutes for the current
   address, then a single-use, browser-bound confirmation (a POST, not the link itself) from the new address. The old
-  address is told at request and at change. An address another account in the realm holds is refused.
+  address is told at request and at change. With a second factor on the account, both steps also need it within
+  ten minutes. An address another account in the realm holds gets no email, and the answer is the same. A person
+  can start five changes an hour.
 - **Security:** the password, factors and remembered browsers.
 - **Sessions:** identity sessions show device, place and last use. Signing one or all others out sends back-channel
   logout.
@@ -108,6 +110,7 @@ must equal the issuer. Credentials are discoverable and need user verification (
 - an admin MFA reset.
 
 **Admin MFA reset** (`POST /admin/api/users/<id>/reset-mfa {reason}`) needs a fresh admin second factor and a reason.
+An admin can reset, block, delete or merge only someone of equal or lower role.
 It removes the person's factors, recovery codes and remembered browsers, and ends their sessions. The reason is
 audited and the person is told by email.
 

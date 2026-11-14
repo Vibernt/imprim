@@ -132,3 +132,40 @@ test('an admin MFA reset needs a reason, removes factors, ends sessions and tell
     await w.drain();
     assert.ok(w.mails.some(m => m.to === 'person@example.com' && /two-factor authentication was reset/.test(m.subject)));
 });
+
+// Review findings on the account milestone.
+test('review 1: with a second factor, changing the email needs it, so mailbox control alone cannot move the account', async t => {
+    const w = await world(t);
+    const { jar } = await signedIn(w, t);
+    await enrolMfa(w, jar, csrfOf(jar));
+    w.env.DB.db.exec('UPDATE sessions SET mfa_at=NULL');
+    const refused = await form(w, '/account/email', { csrf: csrfOf(jar), new_email: 'attacker@example.com' }, jar);
+    assert.equal(refused.status, 403);
+    assert.equal((await refused.json()).error, 'mfa_required');
+    w.env.DB.db.prepare('UPDATE sessions SET mfa_at=?').run(Date.now());
+    assert.equal((await form(w, '/account/email', { csrf: csrfOf(jar), new_email: 'new@example.com' }, jar)).status, 200);
+    await w.drain();
+    const token = new URL(w.mails.find(m => m.to === 'new@example.com').text.match(/(\/account\/email\/confirm\?token=[A-Za-z0-9_-]+)/)[1], w.env.ISSUER).searchParams.get('token');
+    assert.match(await (await w.call(`/account/email/confirm?token=${token}`, { headers: { cookie: jar } })).text(), /new@example\.com/);
+    w.env.DB.db.exec('UPDATE sessions SET mfa_at=NULL');
+    assert.equal((await form(w, '/account/email/confirm', { csrf: csrfOf(jar), token }, jar)).status, 403);
+});
+test('review 2: a realm admin cannot reset, block or delete a platform admin', async t => {
+    const w = await world(t); turnstile(t);
+    w.env.DB.db.exec("INSERT INTO users(id,realm_id,email,email_verified,created) VALUES('boss','default','boss@example.com',1,0); INSERT INTO admins(realm_id,email,role,created) VALUES('default','boss@example.com','platform',0)");
+    w.env.DB.db.exec("UPDATE admins SET role='realm' WHERE email='admin@example.com'");
+    const admin = await adminLogin(w);
+    assert.equal((await admin.post('users/boss/reset-mfa', { reason: 'attempted takeover' })).status, 403);
+    for (const action of ['block', 'delete']) assert.equal((await admin.post(`users/boss/${action}`)).status, 403, action);
+    assert.equal(w.env.DB.db.prepare("SELECT status FROM users WHERE id='boss'").get().status, 'active');
+});
+test('review 3 and 4: a held address gets no email, and email changes are capped', async t => {
+    const w = await world(t);
+    const { jar } = await signedIn(w, t);
+    w.env.DB.db.exec("INSERT INTO users(id,realm_id,email,created) VALUES('taken','default','taken@example.com',0)");
+    assert.equal((await form(w, '/account/email', { csrf: csrfOf(jar), new_email: 'taken@example.com' }, jar)).status, 200);
+    await w.drain();
+    assert.ok(!w.mails.some(m => m.to === 'taken@example.com'));
+    for (let i = 0; i < 4; i++) await form(w, '/account/email', { csrf: csrfOf(jar), new_email: `n${i}@example.com` }, jar);
+    assert.equal((await form(w, '/account/email', { csrf: csrfOf(jar), new_email: 'n9@example.com' }, jar)).status, 429);
+});

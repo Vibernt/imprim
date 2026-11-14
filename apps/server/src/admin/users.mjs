@@ -4,10 +4,20 @@ import { auditStatement } from './auth.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { logoutStatements } from '../oidc/backchannel.mjs';
 import { notify } from '../services/notify.mjs';
+// An admin acts only on people of equal or lower role: a realm admin cannot block, delete, merge or reset the
+// second factor of a platform admin.
+const RANK = { realm: 1, platform: 2 };
+async function requireRank(env, actor, targetEmail) {
+    const roles = await env.DB.prepare('SELECT a.email,a.role FROM admins a WHERE a.realm_id=? AND (a.email=(SELECT email FROM users WHERE id=?) OR a.email=?)').bind(realmId(env), actor, targetEmail).all();
+    const actorEmail = (await env.DB.prepare('SELECT email FROM users WHERE id=?').bind(actor).first())?.email?.toLowerCase();
+    const rank = email => RANK[roles.results.find(r => r.email.toLowerCase() === email?.toLowerCase())?.role] ?? 0;
+    invariant(rank(actorEmail) >= rank(targetEmail), 'access_denied', 'You cannot change an administrator with a higher role.', 403);
+}
 export async function changeUser(env, actor, id, action, survivor, confirmSourceEmail) {
     const user = await env.DB.prepare('SELECT * FROM users WHERE id=? AND realm_id=?').bind(id, realmId(env)).first();
     invariant(user && !user.merged_into, 'invalid_request', 'User unavailable.');
     invariant(id !== actor, 'invalid_request', 'Administrators cannot change their own status or merge themselves.');
+    await requireRank(env, actor, user.email);
     invariant(['block','unblock','delete','merge'].includes(action), 'invalid_request', 'Unknown user action.');
     if (action === 'unblock') {
         invariant(user.status === 'blocked', 'invalid_request', 'Only a blocked user can be unblocked.');
@@ -77,6 +87,7 @@ export async function resetMfa(env, actor, id, reason) {
     const user = await env.DB.prepare("SELECT * FROM users WHERE id=? AND realm_id=? AND status='active' AND merged_into IS NULL").bind(id, realmId(env)).first();
     invariant(user, 'not_found', 'User not found.', 404);
     invariant(id !== actor, 'invalid_request', 'Administrators cannot reset their own second factor.');
+    await requireRank(env, actor, user.email);
     await env.DB.batch([
         env.DB.prepare('DELETE FROM mfa_factors WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(id),
         env.DB.prepare('DELETE FROM webauthn_credentials WHERE user_id=?').bind(id),
