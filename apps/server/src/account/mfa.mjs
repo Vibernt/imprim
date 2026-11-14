@@ -9,6 +9,7 @@ import { qrSvg } from '../lib/qr.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { safeNext } from '../auth/mfa-challenge.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
+import { credentials } from '../webauthn/ceremonies.mjs';
 import { notify } from '../services/notify.mjs';
 const FRESH_AUTH_MS = 600000;
 const hidden = (name, value) => `<input type="hidden" name="${name}" value="${e(value ?? '')}">`;
@@ -17,14 +18,17 @@ const carry = values => hidden('request_id', values.request_id) + hidden('next',
 const post = (request, values, action, body, label) => `<form method="post" action="/account/mfa">${hidden('csrf', csrfOf(request))}${carry(values)}${hidden('action', action)}${body}<button>${e(label)}</button></form>`;
 const audit = (env, event, userId, detail = {}) => env.DB.prepare('INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,?,?,?)').bind(event, userId, JSON.stringify(detail), Date.now(), env.REALM.id);
 async function overview(request, env, session, values, message = '') {
-    const factors = await confirmedFactors(env, session.user_id);
+    const all = await confirmedFactors(env, session.user_id), factors = all.filter(f => f.type === 'totp'), passkeys = await credentials(env, session.user_id);
     const left = (await env.DB.prepare('SELECT count(*) n FROM recovery_codes WHERE user_id=? AND used_at IS NULL').bind(session.user_id).first()).n;
     const required = values.request_id ? '<p role="alert">This app requires a second factor. Add one to continue.</p>' : '';
     return page('Two-factor authentication', `<h1>Two-factor authentication</h1>${required}${message ? `<p role="status">${e(message)}</p>` : ''}
-${factors.length ? `<h2>Authenticator apps</h2>${factors.map(f => `<section><p><strong>${e(f.name)}</strong> · added ${e(new Date(f.created).toISOString().slice(0, 10))}${f.last_used ? ` · last used ${e(new Date(f.last_used).toISOString().slice(0, 10))}` : ''}</p>
+${all.length ? `<h2>Authenticator apps</h2>${factors.map(f => `<section><p><strong>${e(f.name)}</strong> · added ${e(new Date(f.created).toISOString().slice(0, 10))}${f.last_used ? ` · last used ${e(new Date(f.last_used).toISOString().slice(0, 10))}` : ''}</p>
 ${post(request, values, 'remove', hidden('factor_id', f.id), 'Remove')}</section>`).join('')}
 <h2>Recovery codes</h2><p>${left} unused. Each works once if you lose your authenticator.</p>${post(request, values, 'recovery', '', 'Generate new recovery codes')}` : '<p>No second factor yet.</p>'}
-<h2>Add an authenticator app</h2>${post(request, values, 'start', '', 'Add authenticator app')}`);
+<h2>Add an authenticator app</h2>${post(request, values, 'start', '', 'Add authenticator app')}
+<h2>Passkeys</h2>${passkeys.map(p => `<section><p><strong>${e(p.name)}</strong> · added ${e(new Date(p.created).toISOString().slice(0, 10))}${p.backup_eligible ? ' · synced' : ''}</p>
+<form method="post" action="/account/passkeys/remove">${hidden('csrf', csrfOf(request))}${hidden('id', p.id)}<button>Remove</button></form></section>`).join('')}
+<label for="passkey-name">Passkey name</label><input id="passkey-name" maxlength="60" value="Passkey"><button id="passkey-add" type="button">Add a passkey</button><p id="message" role="status"></p>`, { script: '/assets/passkey.js' });
 }
 export async function mfaAccount(request, env, ctx) {
     const session = await getSession(request, env);
@@ -78,7 +82,7 @@ ${post(request, values, 'confirm', `${hidden('factor_id', id)}<label for="name">
     // Removing a factor or replacing recovery codes needs a second factor in the last ten minutes.
     invariant(freshMfa, 'mfa_required', 'Enter a code at /mfa?next=/account/mfa first (within ten minutes).', 403);
     if (values.action === 'remove') {
-        const factor = factors.find(f => f.id === values.factor_id);
+        const factor = factors.find(f => f.id === values.factor_id && f.type === 'totp');
         invariant(factor, 'not_found', 'Factor not found.', 404);
         await env.DB.batch([env.DB.prepare('DELETE FROM mfa_factors WHERE id=? AND user_id=?').bind(factor.id, session.user_id),
             ...(factors.length === 1 ? [env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(session.user_id)] : []),

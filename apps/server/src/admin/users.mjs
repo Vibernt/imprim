@@ -79,6 +79,7 @@ export async function resetMfa(env, actor, id, reason) {
     invariant(id !== actor, 'invalid_request', 'Administrators cannot reset their own second factor.');
     await env.DB.batch([
         env.DB.prepare('DELETE FROM mfa_factors WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(id),
+        env.DB.prepare('DELETE FROM webauthn_credentials WHERE user_id=?').bind(id),
         env.DB.prepare('DELETE FROM trusted_devices WHERE user_id=?').bind(id),
         ...logoutStatements(env, id), env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id),
         auditStatement(env, actor, 'admin_mfa_reset', id, { reason: reason.trim() })]);

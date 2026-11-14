@@ -73,6 +73,19 @@ Only ES256 is emitted/advertised; private key material is never in JWKS. Human a
 
 ## Sign-in and sessions
 
+**Passkeys** (WebAuthn Level 2; client method `passkey`). The relying-party ID is the realm's host, and the origin
+must equal the issuer. Credentials are discoverable and need user verification (a PIN or biometric).
+- **Algorithms:** ES256, Ed25519 and RS256. Attestation is `none`, so Imprim claims nothing about the authenticator's
+  make.
+- **Challenges:** 256-bit, single-use, bound to the browser and to their purpose (register, sign-in, second factor),
+  valid for five minutes.
+- **Signature counter:** it must move forward atomically, so a cloned or replayed assertion is refused.
+- **Sign-in:** a passkey sign-in counts as multi-factor: `amr` is `hwk` (or `swk` for a synced passkey), `user` and
+  `mfa`, and `acr` is MFA. Administrators sign in by email link and use passkeys only as their second factor.
+- **Second factor:** at `/mfa`, a passkey sits beside authenticator apps.
+- **Adding and removing:** adding one follows the rule for any factor (a fresh sign-in, or a fresh second factor when
+  one exists). Removing one needs a fresh second factor. Each change is audited and emailed.
+
 **Account page** (`/account`). A signed-in person manages:
 - **Profile:** a display name, sent as `name` with the `profile` scope.
 - **Email:** changing it needs proof at both ends. That is an email-link sign-in within ten minutes for the current

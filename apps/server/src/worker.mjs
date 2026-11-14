@@ -14,6 +14,8 @@ import { passwordPage } from './account/password.mjs';
 import { mfaChallenge } from './auth/mfa-challenge.mjs';
 import { mfaAccount } from './account/mfa.mjs';
 import { accountAction } from './account/home.mjs';
+import { registrationOptions, register, assertionOptions, assertionVerify, removePasskey } from './webauthn/ceremonies.mjs';
+import { passkeyScript } from './webauthn/script.mjs';
 import { githubStart, githubCallback, OAUTH_COOKIE } from './auth/github-sign-in.mjs';
 import { googleStart, googleCallback, GOOGLE_COOKIE } from './auth/google-sign-in.mjs';
 import { cookie, getSession } from './auth/session.mjs';
@@ -31,6 +33,12 @@ async function route(request, env, ctx, url) {
     const key = `${request.method} ${url.pathname}`;
     switch (key) {
         case 'GET /assets/page.css': return new Response(pageCss, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+        case 'GET /assets/passkey.js': return new Response(passkeyScript, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+        case 'POST /v1/auth/passkey/options': return assertionOptions(request, env);
+        case 'POST /v1/auth/passkey/verify': return assertionVerify(request, env, ctx);
+        case 'POST /account/passkeys/options': return registrationOptions(request, env);
+        case 'POST /account/passkeys/register': return register(request, env, ctx);
+        case 'POST /account/passkeys/remove': return removePasskey(request, env, ctx);
         case 'GET /assets/sign-in.js': return new Response(signInScript, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
         case 'GET /.well-known/oauth-authorization-server':
         case 'GET /.well-known/openid-configuration': return json(discovery(env), 200, { 'access-control-allow-origin': '*' });
@@ -72,7 +80,7 @@ async function route(request, env, ctx, url) {
 // Public metadata is unlimited (and memoised); /token, /userinfo and /v1/invitations limit by the authenticated client
 // inside the handler, because Worker-hosted apps share Cloudflare egress addresses (S2).
 const unlimited = new Set(['GET /.well-known/openid-configuration', 'GET /.well-known/oauth-authorization-server', 'GET /.well-known/jwks.json',
-    'GET /assets/page.css', 'GET /assets/sign-in.js', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations']);
+    'GET /assets/page.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations']);
 export function limiterFor(method, path) {
     if (unlimited.has(`${method} ${path}`)) return null;
     return path.startsWith('/v1/auth/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';

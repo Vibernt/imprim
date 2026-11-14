@@ -7,8 +7,10 @@ import { matchingStep, base32 } from './totp.mjs';
 export const ACR_MFA = 'urn:imprim:acr:mfa', ACR_SINGLE = 'urn:imprim:acr:sf';
 export const DEVICE_COOKIE = '__Host-vi_device', FRESH_MFA_MS = 600000, AGENT_MFA_MS = 900000, ADMIN_MFA_MS = 3600000;
 export const RECOVERY_CODES = 10;
+// Authenticator apps and passkeys both count as second factors.
 export async function confirmedFactors(env, userId) {
-    return (await env.DB.prepare('SELECT id,type,name,created,last_used FROM mfa_factors WHERE user_id=? AND confirmed=1 ORDER BY created').bind(userId).all()).results;
+    return (await env.DB.prepare(`SELECT id,type,name,created,last_used FROM mfa_factors WHERE user_id=?1 AND confirmed=1
+        UNION ALL SELECT id,'passkey',name,created,last_used FROM webauthn_credentials WHERE user_id=?1 ORDER BY created`).bind(userId).all()).results;
 }
 const acrRequested = row => (row?.acr_values || '').split(' ').includes(ACR_MFA);
 // What this sign-in needs: 'none', 'verify' (has a factor) or 'enrol' (must add one first).

@@ -17,7 +17,7 @@ export function page(title, body, { script = '', turnstile = false, cookies = []
     });
     for (const cookie of cookies) headers.append('set-cookie', cookie);
     return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(title)} · ${BRAND}</title><link rel="stylesheet" href="/assets/page.css"><header class="brand">${BRAND}</header><main>${body}</main>${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ''}${script ? `<script src="${escapeHtml(script)}" defer></script>` : ''}</html>`, { status, headers });
+<title>${escapeHtml(title)} · ${BRAND}</title><link rel="stylesheet" href="/assets/page.css"><header class="brand">${BRAND}</header><main>${body}</main>${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ''}${[script].flat().filter(Boolean).map(src => `<script src="${escapeHtml(src)}" defer></script>`).join('')}</html>`, { status, headers });
 }
 export const errorPage = (message, status = 400) => page('Sign-in error', `<h1>Sign-in could not finish</h1><p>${escapeHtml(message)}</p><p>Return to the app and start again.</p>`, { status });
 export async function withBrand(response, name) {

@@ -1,6 +1,6 @@
 import { invariant } from '../lib/errors.mjs';
-// Ordered per client. 'passkey' is reserved for the passkeys milestone.
-export const METHODS = ['email', 'password', 'github', 'google'];
+// Ordered per client.
+export const METHODS = ['email', 'password', 'passkey', 'github', 'google'];
 const domainPattern = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 export function validateSignInSettings(methods, domains = []) {
     invariant(Array.isArray(methods) && methods.length > 0 && methods.length <= METHODS.length &&

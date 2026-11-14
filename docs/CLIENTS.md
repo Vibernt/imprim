@@ -58,7 +58,8 @@ validates domain and callback settings, and generates SQL only. It accepts a 64-
 applies it. Existing client IDs fail rather than being overwritten. Configure Google credentials as described in
 OPERATIONS.md before enabling Google. Missing provider configuration fails explicitly; no alternate method is chosen.
 
-`sign_in_methods` is an ordered list from `email`, `password`, `github` and `google`. With `password`, the sign-in
+`sign_in_methods` is an ordered list from `email`, `password`, `passkey`, `github` and `google`. `passkey` adds
+"Sign in with a passkey" (people add passkeys at `/account/mfa`). With `password`, the sign-in
 page shows a password field and an "email me a link to set one" action (see PROTOCOL.md).
 
 `mfa` (`off`, `optional`, `required`), `mfa_trusted_device_days` (0–90) and `agent_consent_mfa` (`off`,

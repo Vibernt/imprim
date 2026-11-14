@@ -149,6 +149,7 @@ async function deleteAccount(request, env, ctx, session, body) {
     await env.DB.batch([...endAccess(env, id),
         env.DB.prepare('DELETE FROM user_identities WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM user_passwords WHERE user_id=?').bind(id),
         env.DB.prepare('DELETE FROM mfa_factors WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(id),
+        env.DB.prepare('DELETE FROM webauthn_credentials WHERE user_id=?').bind(id),
         forgetDevices(env, id), env.DB.prepare('DELETE FROM client_admissions WHERE user_id=?').bind(id),
         env.DB.prepare("UPDATE users SET status='deleted',display_name=NULL WHERE id=?").bind(id),
         env.DB.prepare("INSERT INTO audit(event,actor,target,detail,created,realm_id) VALUES('account_deleted',?,?,'{}',?,?)").bind(id, id, now, env.REALM.id)]);

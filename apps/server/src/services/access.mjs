@@ -26,6 +26,7 @@ export async function claimMailbox(env, user) {
         ...endAccess(env, user.id),
         env.DB.prepare('DELETE FROM user_identities WHERE user_id=?').bind(user.id),
         env.DB.prepare('DELETE FROM user_passwords WHERE user_id=?').bind(user.id),
+        env.DB.prepare('DELETE FROM webauthn_credentials WHERE user_id=?').bind(user.id),
         env.DB.prepare('UPDATE users SET email_verified=1 WHERE id=?').bind(user.id),
         env.DB.prepare("INSERT INTO audit(event,actor,target,detail,created,realm_id) SELECT 'mailbox_claimed',?,?,'{}',?,realm_id FROM users WHERE id=?").bind(user.id, user.id, now, user.id)
     ]).catch(error => { invariant(!String(error.message).includes('admin_assertions'), 'conflict', 'Account changed; sign in again.', 409); throw error; });
