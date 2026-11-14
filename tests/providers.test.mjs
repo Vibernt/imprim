@@ -50,9 +50,14 @@ async function signIn(w, id, { code = 'good-code', method = 'GET', fake } = {}) 
     fake.state.authorize = authorize.searchParams;
     const jar = [flow.cookie, cookieJar(start)].join('; ');
     const params = { code, state: authorize.searchParams.get('state') };
-    const callback = method === 'POST'
-        ? await w.call(`/login/provider/${id}/callback`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: jar, origin: 'https://appleid.apple.com' }, body: new URLSearchParams(params) })
-        : await w.call(`/login/provider/${id}/callback?${new URLSearchParams(params)}`, { headers: { cookie: jar } });
+    let callback;
+    if (method === 'POST') {
+        // A real browser sends only SameSite=None cookies on Apple's cross-site POST.
+        const upstream = jar.split('; ').filter(c => c.startsWith('__Host-vi_up=')).join('; ');
+        const posted = await w.call(`/login/provider/${id}/callback`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: upstream, origin: 'https://appleid.apple.com' }, body: new URLSearchParams(params) });
+        assert.equal(posted.status, 303);
+        callback = await w.call(new URL(posted.headers.get('location')).pathname + new URL(posted.headers.get('location')).search, { headers: { cookie: jar } });
+    } else callback = await w.call(`/login/provider/${id}/callback?${new URLSearchParams(params)}`, { headers: { cookie: jar } });
     return { start, authorize, jar, callback, params };
 }
 const acme = { type: 'oidc', issuer: 'https://sso.acme.test', client_id: 'client-123', client_secret: { env: 'ACME_SECRET' }, name: 'Acme SSO' };
@@ -151,4 +156,25 @@ test('realm config refuses literal provider secrets, unknown types and fields, a
         { ms: { type: 'microsoft', tenant: 'everyone' } }, { acme: { type: 'oidc', issuer: 'https://x.test', trusted_domains: ['*.x.test'] } }])
         assert.throws(() => validateRealmConfig({ providers }), error => error.code === 'realm_config', JSON.stringify(providers));
     assert.ok(validateRealmConfig({ providers: { acme: { ...acme, trusted_domains: ['acme.test'] }, github: { client_id: 'x', client_secret: { env: 'GH' } } } }));
+});
+
+// Review findings on the provider registry.
+test('review 1: an unvouched Microsoft email never claims an invitation (nOAuth)', async t => {
+    const w = await world(t, 'invited'); w.env.MS_SECRET = 'shh';
+    w.env.DB.db.prepare("INSERT INTO invitations VALUES('app','person@example.com',?)").run(Date.now() + 60000);
+    const fake = await fakeProvider(t, { type: 'microsoft', claims: { email_verified: undefined } });
+    await configure(w, 'microsoft', { type: 'microsoft', client_id: 'client-123', client_secret: { env: 'MS_SECRET' } });
+    assert.equal((await signIn(w, 'microsoft', { fake })).callback.status, 403);
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM client_admissions').get().n, 0);
+    fake.state.claims = { email_verified: undefined, xms_edov: true };
+    assert.equal((await signIn(w, 'microsoft', { fake })).callback.status, 303, 'a tenant-verified domain may use the invitation');
+});
+test('review 1: a pinned Microsoft tenant with trusted_domains is authoritative without email_verified', async t => {
+    const w = await world(t, 'invited'); w.env.MS_SECRET = 'shh';
+    w.env.DB.db.exec(`UPDATE clients SET allowed_domains='["example.com"]' WHERE id='app'`);
+    const tenant = '11111111-1111-1111-1111-111111111111';
+    const fake = await fakeProvider(t, { type: 'microsoft', tenant, claims: { email_verified: undefined } });
+    await configure(w, 'microsoft', { type: 'microsoft', tenant, client_id: 'client-123', client_secret: { env: 'MS_SECRET' }, trusted_domains: ['example.com'] });
+    assert.equal((await signIn(w, 'microsoft', { fake })).callback.status, 303);
+    assert.equal(w.env.DB.db.prepare('SELECT email_verified FROM users').get().email_verified, 1);
 });

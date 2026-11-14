@@ -40,6 +40,6 @@ CREATE TRIGGER clients_methods_update BEFORE UPDATE OF sign_in_methods,google_ho
  OR (SELECT count(DISTINCT value) FROM json_each(NEW.sign_in_methods)) != json_array_length(NEW.sign_in_methods);
  SELECT RAISE(ABORT,'invalid google_hosted_domains') WHERE
  EXISTS(SELECT 1 FROM json_each(NEW.google_hosted_domains) WHERE type!='text' OR value='' OR value!=lower(value)
- OR value GLOB '*[^a-z0-9.-]*' OR value NOT LIKE '%.%' OR value LIKE '.%' OR value LIKE '%..%')
+ OR value GLOB '*[^a-z0-9.-]*' OR value NOT LIKE '%.%' OR value LIKE '.%' OR value LIKE '%.' OR value LIKE '%..%')
  OR (SELECT count(DISTINCT value) FROM json_each(NEW.google_hosted_domains)) != json_array_length(NEW.google_hosted_domains);
 END;

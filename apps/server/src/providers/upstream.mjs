@@ -111,10 +111,19 @@ export async function providerStart(request, env, id) {
     const params = new URLSearchParams({ client_id: provider.client_id, redirect_uri: callbackUrl(env, id), response_type: 'code', state, nonce,
         scope: provider.type === 'apple' ? 'openid email' : (provider.scopes || 'openid email profile'), code_challenge: await challengeOf(verifier), code_challenge_method: 'S256' });
     if (provider.type === 'apple') params.set('response_mode', 'form_post');
-    return redirect(`${meta.authorization_endpoint}?${params}`, [stateCookie(provider, browser, STATE_MS / 1000)]);
+    const target = new URL(meta.authorization_endpoint);
+    for (const [key, value] of params) target.searchParams.set(key, value);
+    return redirect(target.href, [stateCookie(provider, browser, STATE_MS / 1000)]);
 }
 export async function providerCallback(request, env, id) {
-    const values = request.method === 'POST' ? await readBody(request, 'form') : uniqueParams(new URL(request.url).searchParams);
+    // Apple's form_post is a cross-site POST, which carries no SameSite=Lax cookies (the browser binding). Answer it
+    // with a 303 to the same callback as a GET: a top-level GET navigation does carry them. State is not touched here.
+    if (request.method === 'POST') {
+        const posted = await readBody(request, 'form'), forward = new URLSearchParams();
+        for (const key of ['code', 'state', 'error']) if (typeof posted[key] === 'string') forward.set(key, posted[key]);
+        return redirect(`${callbackUrl(env, id)}?${forward}`);
+    }
+    const values = uniqueParams(new URL(request.url).searchParams);
     const browser = cookies(request)[UPSTREAM_COOKIE];
     invariant(tokenShape(values.state), 'invalid_grant', 'Invalid sign-in state.', 401);
     const row = await env.DB.prepare('DELETE FROM oauth_states WHERE hash=? AND provider=? RETURNING *').bind(await sha256(values.state), id).first();
@@ -134,15 +143,17 @@ export async function providerCallback(request, env, id) {
     const claims = await verifyIdToken(env, id, provider, meta, data.id_token, row.oidc_nonce);
     invariant(typeof claims.email === 'string', 'access_denied', 'The provider did not share an email address.', 403);
     const email = normalizeEmail(claims.email);
-    const verified = claims.email_verified === true || claims.email_verified === 'true';
+    // Microsoft sends no email_verified; xms_edov says the tenant verified the email's domain.
+    const verified = claims.email_verified === true || claims.email_verified === 'true' || (provider.type === 'microsoft' && [true, 'true', '1', 1].includes(claims.xms_edov));
     invariant(verified || provider.type === 'microsoft', 'access_denied', 'A verified email is required.', 403);
-    // Mailbox proof only where the realm says this provider is authoritative for the email's domain (and, for
-    // Microsoft, only with a pinned tenant). Otherwise the email is a provider claim (security pass S4).
-    const domain = email.split('@')[1];
-    const authoritative = verified && (provider.trusted_domains || []).includes(domain) && (provider.type !== 'microsoft' || /^[0-9a-f-]{36}$/.test(provider.tenant || ''));
+    // Mailbox proof only where the realm says this provider is authoritative for the email's domain: for Microsoft,
+    // a pinned tenant that owns the domain. Otherwise the email is a provider claim (security pass S4); an
+    // unvouched Microsoft email is weaker still and never satisfies an invitation (nOAuth).
+    const domain = email.split('@')[1], pinned = /^[0-9a-f-]{36}$/.test(provider.tenant || '');
+    const authoritative = (provider.trusted_domains || []).includes(domain) && (provider.type === 'microsoft' ? pinned : verified);
     const current = await pendingRequest(env, request, row.request_id);
     requireMethod(current.client, id);
-    const user = await providerIdentity(env, current.client, id, { providerId: claims.sub, email, login: null, authoritative }, await getSession(request, env));
+    const user = await providerIdentity(env, current.client, id, { providerId: claims.sub, email, login: null, authoritative, verified: verified || authoritative }, await getSession(request, env));
     const signed = await issueSession(env, user, id);
     await audit(env, 'sign_in', user.id, { method: id });
     return completeAuthorization(env, request, row.request_id, signed.session, [...signed.cookies, stateCookie(provider, '', 0)]);

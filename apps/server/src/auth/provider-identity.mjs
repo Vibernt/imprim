@@ -14,7 +14,7 @@ export async function providerIdentity(env, client, provider, profile, session =
     const email = linked ? linked.email : profile.email;
     invariant(!await isAdmin(env, email) && !await isAdmin(env, profile.email), 'access_denied', 'Account unavailable.', 403);
     // A registry provider marked authoritative for the domain (trusted_domains) proves the mailbox, as Google's hd does.
-    const proof = profile.email !== email ? 'provider' : profile.authoritative ? 'mailbox' : mailboxProof(provider, profile.email, profile.hd);
+    const proof = profile.email !== email ? 'provider' : profile.authoritative ? 'mailbox' : profile.verified === false ? 'claim' : mailboxProof(provider, profile.email, profile.hd);
     if (!linked && matching?.status === 'active' && !matching.merged_into)
         invariant(proof === 'mailbox' || session?.user_id === matching.id, 'link_required',
             'An account already uses this email. Sign in with an email link first, then continue with this provider in the same browser.', 403);

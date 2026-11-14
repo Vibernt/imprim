@@ -53,7 +53,12 @@ A client offers a provider by listing its id in `sign_in_methods`. The callback 
   email's domain in `trusted_domains`. Microsoft also needs a pinned tenant id for that. Only then does the
   provider's email link an existing account or satisfy `allowed_domains`.
 - **Microsoft:** tokens are checked against the issuer of the token's own tenant, and a pinned `tenant` must match.
-- **Apple:** the provider posts the callback cross-site (`form_post`), so its one state cookie is `SameSite=None`.
+  An email Microsoft does not vouch for (no `xms_edov`, and not a pinned tenant's trusted domain) can sign in but never
+  claims an invitation or a domain rule.
+- **Changing a provider's issuer:** identities are keyed by provider id and subject. To point at a different issuer,
+  add a new provider id; do not edit the issuer of one in use.
+- **Apple:** the provider posts the callback cross-site (`form_post`). Imprim answers with a 303 to the same callback
+  as a GET, so the browser's own cookies arrive; the one state cookie is `SameSite=None`.
   The client secret is an ES256 JWT that Imprim signs with `private_key` (PKCS#8 PEM).
 
 - The email sender's domain must be enabled for Cloudflare Email sending on the account.

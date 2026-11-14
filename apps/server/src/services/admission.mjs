@@ -23,8 +23,11 @@ export function mailboxProof(method, email, hd = null) {
     return 'provider';
 }
 // Client policy alone: open signup, an invitation for this exact address, or an allowed domain proven by the mailbox.
+// proof 'claim' (an email no one vouched for) admits only by open signup or an earlier admission, never by an
+// invitation or domain addressed to that mailbox.
 async function policyAdmits(env, client, email, proof) {
     if (client.signup_policy === 'open') return true;
+    if (proof === 'claim') return false;
     if (proof === 'mailbox' && JSON.parse(client.allowed_domains).includes(domainOf(email))) return true;
     return Boolean(await env.DB.prepare('SELECT 1 FROM invitations WHERE client_id=? AND email=? AND expires_at>?')
         .bind(client.id, email, Date.now()).first());
