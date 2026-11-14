@@ -7,6 +7,7 @@ import { getClient, registeredUri } from './clients.mjs';
 import { requireMethod } from './sign-in-methods.mjs';
 import { sessionByHash } from '../auth/session.mjs';
 import { admitSession, admissionGuard } from '../services/admission.mjs';
+import { mfaGate } from '../auth/mfa.mjs';
 export async function pendingRequest(env, request, id) {
     invariant(typeof id === 'string' && id.length <= 100, 'invalid_request', 'Authorization request required.');
     const row = await env.DB.prepare('SELECT * FROM auth_requests WHERE id=? AND expires_at>?').bind(id, Date.now()).first();
@@ -22,11 +23,17 @@ export function authorizationResponse(env, row, values, responseCookies = []) {
     for (const [key, value] of Object.entries({ ...values, state: row.state, iss: env.ISSUER })) url.searchParams.set(key, value);
     return redirect(url.href, responseCookies);
 }
-export async function completeAuthorization(env, request, id, session, responseCookies = []) {
+export async function completeAuthorization(env, request, id, session, responseCookies = [], { interactive = true } = {}) {
     const { row, client } = await pendingRequest(env, request, id);
     requireMethod(client, session.method, session.google_hd, true);
     invariant(await sessionByHash(env, session.hash), 'access_denied', 'Account unavailable.', 403);
     await admitSession(env, client, session);
+    // The second factor sits in front of every code and every agent consent.
+    const gate = await mfaGate(env, request, { client, session, row, agent: Boolean(row.agent_client_id) });
+    if (gate) {
+        invariant(interactive, 'interaction_required', 'A second factor is required.');
+        return redirect(`${env.ISSUER}${gate}`, responseCookies);
+    }
     if (row.agent_client_id) {
         await validateAgentRequest(env, row, session);
         return redirect(`${env.ISSUER}/agent/consent?request_id=${row.id}`, responseCookies);

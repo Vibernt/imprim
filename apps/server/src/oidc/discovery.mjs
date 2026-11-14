@@ -10,7 +10,8 @@ export function discovery(env) {
         subject_types_supported: ['public'], id_token_signing_alg_values_supported: ['ES256'],
         token_endpoint_auth_methods_supported: ['client_secret_basic', 'none'], code_challenge_methods_supported: ['S256'],
         scopes_supported: ['openid', 'email', 'profile'],
-        claims_supported: ['iss','aud','azp','sub','iat','exp','email','email_verified','amr','auth_time','sid','nonce'],
+        claims_supported: ['iss','aud','azp','sub','iat','exp','email','email_verified','amr','acr','auth_time','sid','nonce'],
+        acr_values_supported: ['urn:imprim:acr:sf', 'urn:imprim:acr:mfa'],
         authorization_response_iss_parameter_supported: true,
         request_parameter_supported: false, request_uri_parameter_supported: false,
         claims_parameter_supported: false

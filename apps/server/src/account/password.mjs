@@ -10,6 +10,8 @@ import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { audit } from '../services/audit.mjs';
 import { notify } from '../services/notify.mjs';
+import { logoutStatements, flushLogouts } from '../oidc/backchannel.mjs';
+import { forgetDevices } from '../auth/mfa.mjs';
 export const FRESH_MS = 600000;
 const freshMailbox = session => session.method === 'email' && session.auth_time * 1000 > Date.now() - FRESH_MS;
 function form(request, session, values, hasPassword, message = '') {
@@ -34,7 +36,10 @@ export async function passwordPage(request, env, ctx) {
     const body = await readBody(request, 'form');
     await requireCsrf(request, env, session, body.csrf);
     const pending = body.request_id ? await pendingRequest(env, request, body.request_id) : null;
-    if (stored && !freshMailbox(session))
+    // A first password needs fresh mailbox proof (an email link in the last ten minutes); a change needs that or the
+    // current password.
+    if (!stored) invariant(freshMailbox(session), 'reauth_required', 'Use an email link to set a password.', 403);
+    else if (!freshMailbox(session))
         invariant(typeof body.current_password === 'string' && await verifyPassword(body.current_password, stored), 'invalid_grant', 'Your current password is incorrect.', 403);
     validatePassword(body.password, session.email);
     await assertNotBreached(body.password);
@@ -45,15 +50,21 @@ export async function passwordPage(request, env, ctx) {
         env.DB.prepare(`INSERT INTO user_passwords(user_id,algorithm,iterations,salt,hash,created,updated) VALUES(?,?,?,?,?,?,?)
             ON CONFLICT(user_id) DO UPDATE SET algorithm=excluded.algorithm,iterations=excluded.iterations,salt=excluded.salt,hash=excluded.hash,updated=excluded.updated`)
             .bind(session.user_id, next.algorithm, next.iterations, next.salt, next.hash, now, now),
+        // Everyone else signed in as this person is signed out of identity and, by back-channel, of every app.
+        ...logoutStatements(env, session.user_id, null, session.sid),
         env.DB.prepare('DELETE FROM sessions WHERE user_id=? AND hash<>?').bind(session.user_id, session.hash),
+        forgetDevices(env, session.user_id),
         env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,'{}',?,?)").bind(stored ? 'password_changed' : 'password_set', session.user_id, now, env.REALM.id)
     ]);
+    ctx?.waitUntil(flushLogouts(env).catch(() => audit(env, 'logout_dispatch_failed', null, { pending: true })));
     notify(env, ctx, session.email, stored ? 'your password was changed' : 'a password was set on your account',
         `${stored ? 'Your password was changed' : 'A password was set for your account'} on ${new Date(now).toUTCString()}. Other signed-in sessions were signed out.`);
     if (!pending) return redirect(`${env.ISSUER}/account/password?done=1`);
     // Continue to the app as a password sign-in: the person has just proved the mailbox and chosen the password.
     const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(session.user_id).first();
     const signed = await issueSession(env, user, 'password');
+    const response = await completeAuthorization(env, request, pending.row.id, signed.session, signed.cookies);
+    // Only once the new session has reached the app does the email-link session go.
     await env.DB.prepare('DELETE FROM sessions WHERE hash=?').bind(session.hash).run();
-    return completeAuthorization(env, request, pending.row.id, signed.session, signed.cookies);
+    return response;
 }

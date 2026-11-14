@@ -159,3 +159,44 @@ test('the sign-in page offers password, link and set-password actions only where
     const only = await (await w.authorize()).text();
     assert.ok(only.includes('id="password-sign-in"') && only.includes('id="set-password"') && !only.includes('id="send-link"'));
 });
+
+// Review findings on the password milestone.
+test('review 1: a parallel burst of guesses cannot pass the account limit', async t => {
+    const { w } = await passwordWorld(t);
+    await setPassword(w);
+    const flows = await Promise.all(Array.from({ length: 40 }, () => begin(w)));
+    const statuses = await Promise.all(flows.map(flow => w.post('/v1/auth/password', { request_id: flow.request_id, email: 'person@example.com', password: 'wrong password here', turnstile: crypto.randomUUID() }, flow.cookie).then(r => r.status)));
+    assert.equal(statuses.filter(s => s === 401).length, PASSWORD_FAILURE_LIMIT);
+    assert.equal(statuses.filter(s => s === 429).length, 40 - PASSWORD_FAILURE_LIMIT);
+    assert.equal((await signIn(w)).response.status, 429, 'locked even for the right password');
+});
+test('review 2: a reset signs whoever else is signed in out of every app by back-channel', async t => {
+    const { w } = await passwordWorld(t);
+    w.env.LOGOUT_QUEUE = { async send() {} };
+    await setPassword(w);
+    const other = await signIn(w);
+    const code = new URL((await other.response.json()).redirect).searchParams.get('code');
+    assert.equal((await w.exchange(code)).status, 200);
+    const sid = w.env.DB.db.prepare('SELECT sid FROM app_sessions').get().sid;
+    await setPassword(w, 'a completely new passphrase');
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM app_sessions WHERE sid=?').get(sid).n, 0);
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM logout_outbox WHERE sid=?').get(sid).n, 1);
+});
+test('review 3: a newcomer admitted by allowed_domains sets a password and stays admitted', async t => {
+    const w = await world(t, 'invited'); network(t);
+    w.env.DB.db.exec(`UPDATE clients SET sign_in_methods='["password"]', allowed_domains='["example.com"]' WHERE id='app'`);
+    const { saved } = await setPassword(w);
+    assert.equal(saved.status, 303, await saved.clone().text());
+    assert.ok(new URL(saved.headers.get('location')).searchParams.get('code'));
+    assert.equal((await signIn(w)).response.status, 200);
+});
+test('review 4: a provider session cannot set a first password without a fresh email link', async t => {
+    const { w } = await passwordWorld(t);
+    const { issueSession } = await import('../apps/server/src/auth/session.mjs');
+    const { ensureUser } = await import('../apps/server/src/services/admission.mjs');
+    const signed = await issueSession(w.env, await ensureUser(w.env, 'person@example.com'), 'github');
+    const jar = signed.cookies.map(c => c.split(';')[0]).join('; ');
+    const saved = await form(w, '/account/password', { csrf: jar.match(/__Host-vi_csrf=([^;]+)/)[1], password: GOOD }, jar);
+    assert.equal(saved.status, 403);
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM user_passwords').get().n, 0);
+});

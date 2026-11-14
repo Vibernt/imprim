@@ -6,9 +6,10 @@ import { expireEvent } from '../services/outbox-expiry.mjs';
 import { appSessionLifetimeMs } from './app-sessions.mjs';
 import { realmEnvForClient } from '../realms/realm.mjs';
 // Capture destinations before deleting associations. RP sessions may outlive identity sessions, up to 30 days.
-export function logoutStatements(env, userId, sid = null) {
-    const where = sid === null ? 'a.user_id=?' : 'a.user_id=? AND a.sid=?';
-    const args = sid === null ? [userId] : [userId, sid];
+// sid: one session; except: every session but that one; neither: all of the user's sessions.
+export function logoutStatements(env, userId, sid = null, except = null) {
+    const where = sid !== null ? 'a.user_id=? AND a.sid=?' : except !== null ? 'a.user_id=? AND a.sid<>?' : 'a.user_id=?';
+    const args = sid !== null ? [userId, sid] : except !== null ? [userId, except] : [userId];
     const now = Date.now();
     return [
         env.DB.prepare(`INSERT INTO logout_outbox(id,client_id,user_id,sid,uri,created)

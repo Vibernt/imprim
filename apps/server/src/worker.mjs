@@ -10,6 +10,8 @@ import { limitAddress } from './auth/rate-limit.mjs';
 import { requestMagic, verifyMagic } from './auth/magic.mjs';
 import { passwordSignIn } from './auth/password.mjs';
 import { passwordPage } from './account/password.mjs';
+import { mfaChallenge } from './auth/mfa-challenge.mjs';
+import { mfaAccount } from './account/mfa.mjs';
 import { githubStart, githubCallback, OAUTH_COOKIE } from './auth/github-sign-in.mjs';
 import { googleStart, googleCallback, GOOGLE_COOKIE } from './auth/google-sign-in.mjs';
 import { cookie, getSession } from './auth/session.mjs';
@@ -45,6 +47,8 @@ async function route(request, env, ctx, url) {
         case 'POST /v1/auth/magic/verify': return verifyMagic(request, env);
         case 'POST /v1/auth/password': return passwordSignIn(request, env);
         case 'GET /account/password': case 'POST /account/password': return passwordPage(request, env, ctx);
+        case 'GET /mfa': case 'POST /mfa': return mfaChallenge(request, env, ctx);
+        case 'GET /account/mfa': case 'POST /account/mfa': return mfaAccount(request, env, ctx);
         case 'GET /v1/auth/github/start': return githubStart(request, env);
         case 'GET /auth/github/callback': return githubCallback(request, env);
         case 'GET /v1/auth/google/start': return googleStart(request, env);

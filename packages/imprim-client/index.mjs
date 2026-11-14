@@ -70,17 +70,22 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
     const verify = createVerifier({ keys, issuerText, clientId, resourcePrefixes, fail });
     return {
         ...backchannelMethods(verify, fail),
-        async startLogin({ state, nonce, prompt, loginHint, method } = {}) {
+        // acrValues / maxAge ask for a stronger or fresher sign-in (step-up); check claims.acr and auth_time after.
+        async startLogin({ state, nonce, prompt, loginHint, method, acrValues, maxAge } = {}) {
             if (!redirectUri) fail('configuration', 'redirectUri is required for login.');
             const values = { state: state ?? random(), nonce: nonce ?? random(), codeVerifier: random() };
             if (!values.state || !values.nonce || values.state.length > 512 || values.nonce.length > 512) fail('configuration', 'Invalid state or nonce.');
-            if (method !== undefined && !['email', 'github', 'google'].includes(method)) fail('configuration', 'Invalid sign-in method.');
+            if (method !== undefined && !['email', 'password', 'github', 'google'].includes(method)) fail('configuration', 'Invalid sign-in method.');
+            if (acrValues !== undefined && (typeof acrValues !== 'string' || !/^[\x21-\x7e]+( [\x21-\x7e]+)*$/.test(acrValues))) fail('configuration', 'Invalid acrValues.');
+            if (maxAge !== undefined && (!Number.isInteger(maxAge) || maxAge < 0)) fail('configuration', 'Invalid maxAge.');
             const challenge = b64(await crypto.subtle.digest('SHA-256', bytes(values.codeVerifier)));
             const url = new URL((await discovery()).authorize);
             const params = { client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope: 'openid email', state: values.state, nonce: values.nonce, code_challenge: challenge, code_challenge_method: 'S256' };
             if (prompt !== undefined) params.prompt = prompt;
             if (loginHint !== undefined) params.login_hint = loginHint;
             if (method !== undefined) params.method = method;
+            if (acrValues !== undefined) params.acr_values = acrValues;
+            if (maxAge !== undefined) params.max_age = String(maxAge);
             for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
             return { url: url.href, ...values };
         },

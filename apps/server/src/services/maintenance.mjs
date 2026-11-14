@@ -24,6 +24,8 @@ async function maintain(env) {
     await env.DB.prepare('DELETE FROM agent_devices WHERE expires_at<=?').bind(now - 86400000).run();
     await env.DB.prepare('DELETE FROM agent_clients WHERE last_used<=?').bind(now - 30 * 86400000).run();
     await sweepGrants(env, now);
+    await env.DB.prepare('DELETE FROM trusted_devices WHERE expires_at<=?').bind(now).run();
+    await env.DB.prepare('DELETE FROM mfa_factors WHERE confirmed=0 AND created<=?').bind(now - 3600000).run();
     const failed = sweeps.find(result => result.status === 'rejected');
     if (failed) throw failed.reason;
 }

@@ -4,7 +4,7 @@ import { readBody, json, tokenShape } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { cookies, BROWSER_COOKIE, assertOrigin, issueSession } from './session.mjs';
 import { requireTurnstile } from './turnstile.mjs';
-import { limitDegradedAddress, passwordLocked, recordPasswordFailure, clearPasswordFailures } from './rate-limit.mjs';
+import { limitDegradedAddress, attempt, clearFailures, passwordKey } from './rate-limit.mjs';
 import { verifyPassword, needsRehash, hashPassword } from './password-hash.mjs';
 import { admitted, normalizeEmail, isAdmin } from '../services/admission.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
@@ -23,16 +23,19 @@ export async function passwordSignIn(request, env) {
     requireMethod(pending.client, 'password');
     const challenge = await requireTurnstile(env, body.turnstile, request);
     if (challenge.mode === 'degraded') invariant(await limitDegradedAddress(env, request), 'rate_limit', 'Too many requests.', 429);
-    invariant(!await passwordLocked(env, email), 'rate_limit', 'Too many attempts for this account. Wait fifteen minutes, or sign in with an email link.', 429);
-    const user = await env.DB.prepare("SELECT * FROM users WHERE realm_id=? AND email=? AND status='active' AND merged_into IS NULL").bind(realmId(env), email).first();
-    const stored = user ? await env.DB.prepare('SELECT * FROM user_passwords WHERE user_id=?').bind(user.id).first() : null;
+    const key = await passwordKey(env, email);
+    invariant(await attempt(env, key), 'rate_limit', 'Too many attempts for this account. Wait fifteen minutes, or sign in with an email link.', 429);
+    // One query whether or not the account or its password exists, so timing reveals neither.
+    const found = await env.DB.prepare(`SELECT u.*,p.algorithm,p.iterations,p.salt,p.hash AS password_hash FROM users u
+        LEFT JOIN user_passwords p ON p.user_id=u.id WHERE u.realm_id=? AND u.email=? AND u.status='active' AND u.merged_into IS NULL`).bind(realmId(env), email).first();
+    const stored = found?.password_hash ? { algorithm: found.algorithm, iterations: found.iterations, salt: found.salt, hash: found.password_hash } : null;
+    const user = found;
     const valid = await verifyPassword(body.password, stored) && !await isAdmin(env, email);
     if (!valid) {
-        await recordPasswordFailure(env, email);
         await audit(env, 'password_failed', user?.id ?? null, {});
         invariant(false, 'invalid_grant', WRONG, 401);
     }
-    await clearPasswordFailures(env, email);
+    await clearFailures(env, key);
     // A password proves knowledge, not current control of the mailbox, so domain rules do not admit by it.
     invariant(await admitted(env, pending.client, email, 'provider'), 'access_denied', 'Account unavailable.', 403);
     if (needsRehash(stored)) {

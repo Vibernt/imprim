@@ -15,7 +15,15 @@ import { clientDelivery } from './delivery.mjs';
 export async function admin(request, env, ctx) {
     const url = new URL(request.url), api = url.pathname.startsWith('/admin/api/');
     if (request.method === 'GET' && !api && !await getSession(request, env)) return redirect(env.ISSUER + '/login');
-    const session = await adminSession(request, env), csrf = cookies(request)[CSRF_COOKIE] || '';
+    let session;
+    try { session = await adminSession(request, env); }
+    catch (error) {
+        // The console sends an admin without a fresh second factor to enrol or verify, then back.
+        if (request.method === 'GET' && !api && ['mfa_enrolment_required', 'mfa_required'].includes(error.code))
+            return redirect(`${env.ISSUER}${error.code === 'mfa_required' ? '/mfa' : '/account/mfa'}?next=${encodeURIComponent(url.pathname)}`);
+        throw error;
+    }
+    const csrf = cookies(request)[CSRF_COOKIE] || '';
     let parts;
     try { parts = url.pathname.slice(api ? 11 : 7).split('/').filter(Boolean).map(decodeURIComponent); }
     catch { invariant(false, 'invalid_request', 'Malformed admin path encoding.'); }
@@ -70,7 +78,7 @@ export async function admin(request, env, ctx) {
                 try {
                     for (const field of ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains',
                         'agent_registration_methods','agent_allowlist','agent_scope_catalogue','agent_resource_prefixes']) if (body[field] !== undefined) body[field] = JSON.parse(body[field]);
-                    for (const field of ['dev','agent_max_grant_days','version']) if (body[field] !== undefined) body[field] = Number(body[field]);
+                    for (const field of ['dev','agent_max_grant_days','version','mfa_trusted_device_days']) if (body[field] !== undefined) body[field] = Number(body[field]);
                 } catch { invariant(false, 'invalid_request', 'List and branding fields must contain valid JSON.'); }
             }
             result = await saveClient(writeEnv, session.user_id, id, body);

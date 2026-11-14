@@ -3,15 +3,15 @@
 Done: email-link, GitHub and Google sign-in per app; per-app admission; agent access (client ID metadata documents,
 dynamic registration, PKCE, resource indicators, device flow, 60-second tokens, rotating refresh tokens with reuse
 detection, `private_key_jwt` agents); signed back-channel logout and revocation events; an admin console;
-per-realm issuers, keys, users, providers, email and admins; passwords (breach-checked, lockout, reset by email link).
+per-realm issuers, keys, users, providers, email and admins; passwords (breach-checked, lockout, reset by email link); TOTP, recovery codes, trusted browsers, per-app MFA
+policy, step-up (`acr_values`, `max_age`) and MFA for admins and agent consent.
 
 Planned, roughly in order. Each item is an issue to discuss before code:
 
 1. **Branding.** Realm defaults and per-client overrides: logo, mark, colours and fonts from an allowlist (checked
    for WCAG AA on save), copy overrides with i18n keys, privacy and terms links, email templates (text plus a fixed
    HTML layout). Assets go through R2 with SVG sanitising. No custom CSS or JS, ever.
-2. **Account security.** TOTP, recovery codes, trusted devices, a per-client MFA policy with step-up (`acr_values`, `max_age`,
-   `prompt=login`), and correct `amr`/`acr` claims. Account page for factors, sessions, connected apps, profile,
+2. **Account page.** Account page for factors, sessions, connected apps, profile,
    email change and deletion.
 3. **Passkeys** (WebAuthn) as a primary method and as a second factor.
 4. **Provider registry.** Microsoft/Entra, Apple and generic OIDC upstreams, with per-realm credentials.

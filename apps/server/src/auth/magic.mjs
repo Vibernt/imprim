@@ -5,7 +5,7 @@ import { invariant } from '../lib/errors.mjs';
 import { cookies, BROWSER_COOKIE, assertOrigin, issueSession } from './session.mjs';
 import { requireTurnstile } from './turnstile.mjs';
 import { limitEmail, limitDegradedAddress } from './rate-limit.mjs';
-import { admitted, ensureUser, normalizeEmail, isAdmin } from '../services/admission.mjs';
+import { admitted, ensureUser, normalizeEmail, isAdmin, admitSession } from '../services/admission.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { requireMethod } from '../oidc/sign-in-methods.mjs';
 import { audit } from '../services/audit.mjs';
@@ -73,6 +73,9 @@ export async function verifyMagic(request, env) {
     if (existing?.status === 'active' && !existing.merged_into) await claimMailbox(env, existing);
     const user = await ensureUser(env, row.email), signed = await issueSession(env, user, 'email', null, !pending);
     await audit(env, 'sign_in', user.id, { method: 'email' });
+    // A 'password' link is mailbox proof: record the admission now, so a domain-admitted newcomer stays admitted when
+    // the sign-in continues as a password session (which is not mailbox proof).
+    if (row.purpose === 'password' && pending) await admitSession(env, pending.client, signed.session);
     const response = row.purpose === 'password'
         ? redirect(`${env.ISSUER}/account/password?request_id=${encodeURIComponent(row.request_id)}`, signed.cookies)
         : pending ? await completeAuthorization(env, request, row.request_id, signed.session, signed.cookies)

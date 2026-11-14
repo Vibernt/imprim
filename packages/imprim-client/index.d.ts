@@ -1,5 +1,6 @@
 export class IdentityError extends Error { readonly code: string; readonly description?: string; constructor(code: string, message?: string, description?: string); }
 export const JWKS_FRESH_MS: number;
+// startLogin also accepts { acrValues?: string; maxAge?: number } for step-up (0.4.0).
 export const JWKS_STALE_MS: number;
 export interface Claims { iss: string; aud: string | string[]; sub: string; exp: number; iat: number; nonce?: string; sid?: string; jti?: string; auth_time?: number; email?: string; email_verified?: boolean; amr?: string[]; [key: string]: unknown; }
 export interface ClientOptions { issuer: string; clientId: string; clientSecret?: string; redirectUri?: string; resourcePrefixes?: string[]; fetch?: typeof globalThis.fetch; }

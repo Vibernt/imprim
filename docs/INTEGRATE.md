@@ -37,6 +37,8 @@ const claims = await identity.handleCallback(request.url, login);   // { sub, em
 - `prompt: 'none'` checks for an identity session without any UI: `login_required` means show your sign-in button.
 - `email` is in the ID token only with the `email` scope, which `startLogin` requests. Treat it as contact data,
   not identity. `email_verified=false` means only a provider vouched for it.
+- Sensitive action? Start a new login with `acr_values: 'urn:imprim:acr:mfa'` (and `max_age`) and require
+  `claims.acr === 'urn:imprim:acr:mfa'` before you proceed.
 - Sign-out: send the person to `await identity.logoutUrl({ idTokenHint, postLogoutRedirectUri, state })`.
 
 ## 3. Receive back-channel events

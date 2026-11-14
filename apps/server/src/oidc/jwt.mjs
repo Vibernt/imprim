@@ -7,7 +7,7 @@ export async function signIdToken(env, session, code) {
         iss: env.ISSUER, aud: code.client_id, azp: code.client_id, sub: session.user_id,
         // Email claims only with the email scope (OIDC Core 5.4).
         ...(code.scope.split(' ').includes('email') ? { email: session.email, email_verified: session.email_verified === 1 } : {}),
-        amr: JSON.parse(session.amr || '[]').length ? JSON.parse(session.amr) : [session.method], auth_time: session.auth_time, sid: session.sid,
+        amr: JSON.parse(session.amr || '[]').length ? JSON.parse(session.amr) : [session.method], auth_time: session.auth_time, acr: session.mfa_at ? 'urn:imprim:acr:mfa' : 'urn:imprim:acr:sf', sid: session.sid,
         nonce: code.nonce, iat: now, exp: now + 600
     };
     const encode = value => b64url(new TextEncoder().encode(JSON.stringify(value)));

@@ -8,6 +8,8 @@ import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { validateAgentRequest } from './authorize.mjs';
 import { workspace } from './uris.mjs';
 import { admitSession, admissionGuard } from '../services/admission.mjs';
+import { mfaGate } from '../auth/mfa.mjs';
+import { redirect } from '../lib/http.mjs';
 // Live grants per person, across apps: each is a consent the person gave, so this only bounds runaway automation (S5).
 export const MAX_LIVE_GRANTS = 50;
 export const hidden = (name, value) => `<input type="hidden" name="${name}" value="${e(value)}">`;
@@ -47,6 +49,8 @@ export async function consent(request, env) {
     invariant(row.agent_client_id, 'invalid_request', 'Agent request required.');
     const context = await validateAgentRequest(env, row, session);
     await admitSession(env, context.app, session);
+    const gate = await mfaGate(env, request, { client: context.app, session, row, agent: true });
+    if (gate) return redirect(`${env.ISSUER}${gate}`);
     if (request.method === 'GET') return consentPage(request, row, context);
     invariant(['approve','deny'].includes(body.decision), 'invalid_request', 'Choose approve or deny.');
     const approve = body.decision === 'approve', now = Date.now(), grantId = crypto.randomUUID();

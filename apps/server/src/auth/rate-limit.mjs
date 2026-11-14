@@ -41,15 +41,18 @@ export async function limitAgentAddress(env, request, action, max = 20) {
     const key = 'agent-' + action + ':' + await sha256(clientAddress(request));
     invariant(await budget(env, key, max), 'rate_limit', 'Too many agent requests.', 429);
 }
-// Per-account password lockout (no enumeration: the key exists for unknown emails too). Ten failures lock the
-// address for fifteen minutes; a success clears the count.
-export const PASSWORD_FAILURE_LIMIT = 10;
-const failureKey = async (env, email) => 'pw-fail:' + await sha256(`${env.REALM.id}\n${email}`);
-export async function passwordLocked(env, email) {
-    const row = await env.DB.prepare('SELECT count FROM rate_limits WHERE key=? AND expires_at>?').bind(await failureKey(env, email), Date.now()).first();
-    return (row?.count ?? 0) >= PASSWORD_FAILURE_LIMIT;
+// Failure lockout (no enumeration: keys exist for unknown accounts too). An attempt is counted atomically before
+// the secret is checked, so parallel guesses cannot pass the limit; the attempt that reaches the limit starts a
+// fifteen-minute lock. A success clears the key.
+export const PASSWORD_FAILURE_LIMIT = 10, FAILURE_WINDOW_MS = 900000;
+export async function attempt(env, key, limit = PASSWORD_FAILURE_LIMIT) {
+    const now = Date.now();
+    const row = await env.DB.prepare(`INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?)
+        ON CONFLICT(key) DO UPDATE SET count=CASE WHEN expires_at<=? THEN 1 ELSE count+1 END,
+        expires_at=CASE WHEN expires_at<=? THEN excluded.expires_at WHEN count+1>=? THEN ? ELSE expires_at END RETURNING count`)
+        .bind(key, now + FAILURE_WINDOW_MS, now, now, limit, now + FAILURE_WINDOW_MS).first();
+    return row.count <= limit;
 }
-export const recordPasswordFailure = async (env, email) => budget(env, await failureKey(env, email), PASSWORD_FAILURE_LIMIT, 900000);
-export async function clearPasswordFailures(env, email) {
-    await env.DB.prepare('DELETE FROM rate_limits WHERE key=?').bind(await failureKey(env, email)).run();
-}
+export const clearFailures = (env, key) => env.DB.prepare('DELETE FROM rate_limits WHERE key=?').bind(key).run();
+export const passwordKey = async (env, email) => 'pw-fail:' + await sha256(`${env.REALM.id}\n${email}`);
+export const mfaFailureKey = userId => 'mfa-fail:' + userId;

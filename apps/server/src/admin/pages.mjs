@@ -14,7 +14,7 @@ export function clientList(rows) {
 export function clientEditor(client, csrf, isNew = false, delivery = null) {
     const value = client || { id: '', redirect_uris: [], post_logout_uris: [], backchannel_uri: '', signup_policy: 'invited',
         sign_in_methods: ['email'], google_hosted_domains: [], allowed_domains: [], branding: { name: '' }, dev: 0,
-        agent_access: 'off', agent_registration_methods: ['metadata_document'], agent_allowlist: [], agent_scope_catalogue: {}, agent_resource_prefixes: [], agent_max_grant_days: 90 };
+        mfa: 'off', mfa_trusted_device_days: 0, agent_consent_mfa: 'off', agent_access: 'off', agent_registration_methods: ['metadata_document'], agent_allowlist: [], agent_scope_catalogue: {}, agent_resource_prefixes: [], agent_max_grant_days: 90 };
     const fields = Object.entries(value).filter(([key]) => key !== 'confidential').map(([key, v]) => {
         if (key === 'version') return hidden(key, v);
         if (key === 'id' && !isNew) return `<p>Client: ${e(v)}</p>`;
