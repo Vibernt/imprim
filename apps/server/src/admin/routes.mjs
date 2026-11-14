@@ -2,6 +2,7 @@ import { deliveryStatus, dispatchDeliveries } from '../services/outbox.mjs';
 import { adminSession, adminMutation, mutationEnvironment, requirePlatform } from './auth.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { listRealms, saveRealm, saveAdmin } from './realms.mjs';
+import { listServices, saveService, deleteService } from './services.mjs';
 import { saveClient, getAdminClient, rotateSecret, publicClient } from './clients.mjs';
 import { revokeSession } from './sessions.mjs';
 import { users, userDetail, changeUser, resetMfa } from './users.mjs';
@@ -56,6 +57,7 @@ export async function admin(request, env, ctx) {
                 .bind(realmId(env), before, actor, actor, target, target).all()).results;
             return api ? json({ audit: rows.slice(0,50), next: rows.length > 50 ? rows[49].id : null }) : pages.auditPage(rows, url.searchParams);
         }
+        if (section === 'services' && !id) { const rows = await listServices(env); return api ? json({ services: rows }) : pages.servicesPage(rows); }
         if (section === 'realms' && !id) { requirePlatform(session); const rows = await listRealms(env); return api ? json({ realms: rows }) : pages.realmsPage(rows, csrf); }
         if (section === 'keys' && !id) { requirePlatform(session); const rows = await keyList(env); return api ? json({ keys: rows }) : pages.keysPage(rows, csrf); }
         if (section === 'settings' && !id) {
@@ -95,6 +97,11 @@ export async function admin(request, env, ctx) {
             ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'admin_dispatch_failed', session.user_id, { pending: true })));
         } else if (section === 'keys' && id === 'rotate' && !action) { requirePlatform(session); result = await rotateNow(writeEnv, session.user_id); }
         else if (section === 'keys' && id && action === 'revoke') { requirePlatform(session); result = await revokeKeyNow(writeEnv, session.user_id, id); }
+        else if (section === 'services' && action === 'delete' && id) result = await deleteService(writeEnv, session.user_id, id);
+        else if (section === 'services' && !action) {
+            if (!api) { try { for (const field of ['jwks', 'scopes', 'resource_prefixes']) if (typeof body[field] === 'string') body[field] = JSON.parse(body[field]); } catch { invariant(false, 'invalid_request', 'jwks, scopes and resource_prefixes must be JSON.'); } }
+            result = await saveService(writeEnv, session.user_id, id, body);
+        }
         else if (section === 'realms' && !action) {
             requirePlatform(session);
             if (!api && typeof body.config === 'string') { try { body.config = JSON.parse(body.config); } catch { invariant(false, 'invalid_request', 'config must be JSON.'); } }

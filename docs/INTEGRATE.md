@@ -97,5 +97,10 @@ An agent connects for a person, never as one. Give it only the app's MCP address
    the whole grant, and the person must approve again.
 7. People see and revoke connected agents at `<issuer>/account`.
 
-Tools that run without a person (CI, scheduled jobs) keep the app's own API tokens for now. Machine identities
-(`client_credentials` with `private_key_jwt`) are a planned milestone.
+Tools that run without a person (CI, scheduled jobs) use a **service client**. A realm admin registers its public
+key, app, scopes and resource prefixes. The tool then signs a `private_key_jwt` assertion and calls
+`/token grant_type=client_credentials`. Your MCP server sees `sub: "service:<id>"` and authorises it like any caller.
+
+Resource servers that can't verify JWTs locally, or that want revocation to take effect at once, call `POST /introspect`
+with the app's credentials. A workspace admin screen in your app can list and revoke connected agents through
+`GET /v1/grants?resource=…` and `POST /v1/grants/revoke`.

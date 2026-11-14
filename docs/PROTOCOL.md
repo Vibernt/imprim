@@ -372,6 +372,30 @@ time and deduplicates `jti`; 2xx acknowledges receipt. Delivery uses a ten-secon
 failures retry until the 24-hour creation bound and may reach the configured DLQ. Delivery is at least once within that bound. This event is not an OIDC logout
 token and does not end all of the person's app sessions. Human back-channel logout uses a separate durable outbox and the same queue; see CONTROL_PLANE.md.
 
+### Machines, introspection, revocation and the app grant API
+
+**Service clients** (`client_credentials`). A realm admin registers a service client (`POST /admin/api/services`) for
+one app. It has a named owner, 1–5 public keys (P-256 or RSA-2048+), scopes from that app's catalogue, and resource
+prefixes under the app's own. It authenticates only with `private_key_jwt`: a single-use assertion signed by one of
+its keys, and never a shared secret. `POST /token grant_type=client_credentials&client_id=&resource=&scope=` returns a
+60-second `at+jwt` with `sub` and `grant_id` both `service:<id>`. Apps recognise machine callers by that prefix and
+authorise them as they choose. Disabling or deleting a service client ends its access within a minute.
+
+**Introspection** (RFC 7662, `POST /introspect`, `client_secret_basic`). An app learns whether an access token for
+one of *its own* resources is live: signed by the realm, unexpired, its grant unrevoked and its person active, or
+its service client active. Any other token gets `{"active":false}`, with no reason.
+
+**Revocation** (RFC 7009, `POST /revoke`) always answers 200. An agent revokes its own grant with its refresh or
+access token and its `client_id`; a key-bound agent also signs an assertion. An app (`client_secret_basic`) revokes
+grants on its own resources. Anything else is ignored without saying why. Revoking an access token revokes its
+whole grant.
+
+**App grant API.** `GET /v1/grants?resource=<workspace resource>` lists the live agent grants on that resource:
+person `sub`, agent, scope, created, last used. `POST /v1/grants/revoke {grant_id}` revokes one, for example when a
+member leaves the workspace; the agent's refresh is refused at once and the revocation event follows. Both use the
+app's client credentials and work only on the app's own resources. Who in the workspace may call them is the app's
+decision.
+
 ### Device state machine
 
 A random device secret and eight-character human code (shown in two groups) are stored only as hashes. Issuance and

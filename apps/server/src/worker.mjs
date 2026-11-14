@@ -17,6 +17,7 @@ import { accountAction } from './account/home.mjs';
 import { registrationOptions, register, assertionOptions, assertionVerify, removePasskey } from './webauthn/ceremonies.mjs';
 import { passkeyScript } from './webauthn/script.mjs';
 import { providerStart, providerCallback, UPSTREAM_COOKIE } from './providers/upstream.mjs';
+import { introspect, revoke, appGrants } from './machines/endpoints.mjs';
 import { githubStart, githubCallback, OAUTH_COOKIE } from './auth/github-sign-in.mjs';
 import { googleStart, googleCallback, GOOGLE_COOKIE } from './auth/google-sign-in.mjs';
 import { cookie, getSession } from './auth/session.mjs';
@@ -59,6 +60,9 @@ async function route(request, env, ctx, url) {
         case 'GET /userinfo': case 'POST /userinfo': return userinfo(request, env);
         case 'GET /logout': case 'POST /logout': return logout(request, env, ctx);
         case 'POST /v1/invitations': return invite(request, env);
+        case 'POST /introspect': return introspect(request, env);
+        case 'POST /revoke': return revoke(request, env, ctx);
+        case 'GET /v1/grants': case 'POST /v1/grants/revoke': return appGrants(request, env, ctx);
         case 'POST /v1/auth/magic/request': return requestMagic(request, env, ctx);
         case 'POST /v1/auth/magic/verify': return verifyMagic(request, env);
         case 'POST /v1/auth/password': return passwordSignIn(request, env);
@@ -86,7 +90,8 @@ async function route(request, env, ctx, url) {
 // Public metadata is unlimited (and memoised); /token, /userinfo and /v1/invitations limit by the authenticated client
 // inside the handler, because Worker-hosted apps share Cloudflare egress addresses (S2).
 const unlimited = new Set(['GET /.well-known/openid-configuration', 'GET /.well-known/oauth-authorization-server', 'GET /.well-known/jwks.json',
-    'GET /assets/page.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations']);
+    'GET /assets/page.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations',
+    'POST /introspect', 'POST /revoke', 'GET /v1/grants', 'POST /v1/grants/revoke']);
 export function limiterFor(method, path) {
     if (unlimited.has(`${method} ${path}`)) return null;
     return path.startsWith('/v1/auth/') || path.startsWith('/login/provider/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';

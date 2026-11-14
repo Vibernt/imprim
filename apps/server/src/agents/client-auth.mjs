@@ -20,7 +20,7 @@ export function validateKeys(document, id) {
     invariant(url.host === new URL(id).host, 'invalid_client_metadata', 'jwks_uri must be on the client ID host.');
     return { token_endpoint_auth_method: 'private_key_jwt', jwks_uri: document.jwks_uri };
 }
-function publicKey(key) {
+export function publicKey(key) {
     invariant(key && typeof key === 'object' && typeof key.kid === 'string' && key.kid.length <= 200 && !key.d && !key.p && !key.k,
         'invalid_client_metadata', 'Each key needs a kid and must be public.');
     invariant((key.kty === 'EC' && key.crv === 'P-256' && typeof key.x === 'string' && typeof key.y === 'string') ||

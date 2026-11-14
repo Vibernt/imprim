@@ -1,4 +1,5 @@
 import { agentToken } from '../agents/token.mjs';
+import { serviceToken } from '../machines/service-token.mjs';
 import { authenticateClient, registeredUri } from './clients.mjs';
 import { readBody, json, tokenShape } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
@@ -22,6 +23,7 @@ export async function authenticatedClient(request, env, body, confidentialOnly =
 }
 export async function token(request, env, ctx) {
     const body = await readBody(request, 'form');
+    if (body.grant_type === 'client_credentials') { await limitAddress(env, request); return serviceToken(request, env, body); }
     if (body.resource !== undefined || body.client_id?.startsWith('https://') || body.client_id?.startsWith('agent_') || ['refresh_token','urn:ietf:params:oauth:grant-type:device_code'].includes(body.grant_type)) {
         // Agents run on people's own machines, not shared Worker egress, so their budget stays per address.
         await limitAddress(env, request);
