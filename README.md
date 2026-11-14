@@ -65,8 +65,8 @@ npm run check
 
 ## Status
 
-Imprim runs in production at `https://id.vibernt.ai`. The latest release work (the security pass of 2026-11-15,
-realms, and the rename) is described in [Security pass](docs/SECURITY_PASS.md) and [Deploying](docs/DEPLOY.md).
+Imprim runs in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`. The current
+release (the security pass of 2026-11-15, realms, and the rename) is described in [Security pass](docs/SECURITY_PASS.md) and [Deploying](docs/DEPLOY.md).
 What has not yet been verified against live Cloudflare is listed in [Security](docs/SECURITY.md). What comes next
 is in the [Roadmap](docs/ROADMAP.md).
 

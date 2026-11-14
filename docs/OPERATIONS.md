@@ -2,7 +2,7 @@
 
 A build of this repository serves `https://id.vibernt.ai`: discovery and JWKS answered on 2026-11-15. This
 repository does not record which commit is deployed or which clients are registered there; check the Worker's
-deployments in Cloudflare before relying on a behavior described here. Migrations `0008` (security pass) and `0009` (realms) are **not yet** deployed there; [Deploying](DEPLOY.md#upgrading-the-existing-vibernt-deployment-to-realms) has the upgrade.
+deployments in Cloudflare before relying on a behavior described here. On 2026-11-15 migrations `0008` (security pass) and `0009` (realms) were applied to `https://id.vibernt.ai` and this code was deployed there, after the same release passed on staging (`https://id-staging.vibernt.ai`). Apps on it still need client 0.3.0 for revocation events.
 
 ## Local verification
 

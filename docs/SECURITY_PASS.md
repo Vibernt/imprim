@@ -1,7 +1,7 @@
 # Security pass, 2026-11-15
 
 Developed on 2026-11-15 on top of the first production release. It fixes the findings of a review brief of 2026-11-15
-(section 8). Migration `0008_security_pass.sql` and client `0.3.0` go together. Nothing here is deployed.
+(section 8). Migration `0008_security_pass.sql` and client `0.3.0` go together. Deployed to staging and production on 2026-11-15 (see Live checks owed).
 
 ## Findings and fixes
 
@@ -71,6 +71,6 @@ and single-use claims. It found six issues, all fixed in a follow-up commit, eac
 
 ## Live checks owed
 
-None of this has run against Cloudflare. Still to prove: per-client rate limits from a deployed app Worker (S2),
+Deployed 2026-11-15: on staging and production, migrations applied cleanly, discovery, JWKS (unchanged key), sign-in pages, `/authorize` redirect validation, cross-origin refusal, magic-link delivery and the scheduled handler were checked. Still to prove: per-client rate limits from a deployed app Worker (S2),
 egress and DNS rebinding for metadata and `jwks_uri` fetches (S10), Queue delivery of `secevent+jwt` events to a
 real app, the D1 migration's backfill on production data, and the trigger's `strftime('now')` on D1.

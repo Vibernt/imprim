@@ -29,12 +29,12 @@
   },
   "triggers": { "crons": ["* * * * *"] },
   "env": {
-    // Every release runs here first. Replace the placeholders with the staging account's resources (docs/DEPLOY.md).
+    // Every release runs here first (docs/DEPLOY.md). Email-link sign-in only until staging OAuth callbacks exist.
     "staging": {
       "name": "imprim-staging",
-      "routes": [{ "pattern": "id.staging.example.com", "custom_domain": true }],
+      "routes": [{ "pattern": "id-staging.vibernt.ai", "custom_domain": true }],
       "vars": {},
-      "d1_databases": [{ "binding": "DB", "database_name": "imprim-staging", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+      "d1_databases": [{ "binding": "DB", "database_name": "imprim-staging", "database_id": "f7739dbe-6427-4659-b7dd-35e9e6803057", "migrations_dir": "migrations" }],
       "send_email": [{ "name": "EMAIL" }],
       "ratelimits": [
         { "name": "AUTH_LIMITER", "namespace_id": "5201", "simple": { "limit": 20, "period": 60 } },
