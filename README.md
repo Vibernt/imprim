@@ -4,8 +4,11 @@
 OAuth 2.1 authorization server that runs on Cloudflare Workers with D1. It has no runtime dependencies and no build
 step.
 
-- **People sign in once** per brand, with an email link, GitHub or Google, chosen per app. SSO across that brand's
-  apps.
+- **People sign in once** per brand, with an email link, a password (breach-checked), a passkey, GitHub, Google,
+  Microsoft, Apple or any OpenID Connect provider, chosen per app. SSO across that brand's apps.
+- **Two-factor where it matters:** authenticator apps, passkeys and recovery codes; per-app MFA policy, step-up
+  (`acr_values`, `max_age`) and MFA for admins and for approving agents. An account page covers sessions, apps,
+  agents, email change and deletion.
 - **Agents connect for a person, never as one.** A person gives their agent (Claude Code, Cursor, Codex, a CLI) an
   app's MCP address. The agent discovers Imprim, the person approves one workspace and named scopes, and the agent
   gets 60-second, audience-bound tokens that the person can revoke at any time.
