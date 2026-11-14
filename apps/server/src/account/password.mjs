@@ -1,0 +1,59 @@
+// Set, change or reset a password from a signed-in session. Reset arrives here from an email link with
+// purpose 'password', which is fresh mailbox proof, so the current password is not asked for.
+import { readBody, redirect, uniqueParams } from '../lib/http.mjs';
+import { invariant } from '../lib/errors.mjs';
+import { getSession, requireCsrf, cookies, CSRF_COOKIE, issueSession, cookie, SESSION_COOKIE } from '../auth/session.mjs';
+import { validatePassword } from '../auth/password-policy.mjs';
+import { assertNotBreached } from '../auth/breach.mjs';
+import { hashPassword, verifyPassword } from '../auth/password-hash.mjs';
+import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
+import { page, escapeHtml as e } from '../pages/layout.mjs';
+import { audit } from '../services/audit.mjs';
+import { notify } from '../services/notify.mjs';
+export const FRESH_MS = 600000;
+const freshMailbox = session => session.method === 'email' && session.auth_time * 1000 > Date.now() - FRESH_MS;
+function form(request, session, values, hasPassword, message = '') {
+    const current = hasPassword && !freshMailbox(session)
+        ? '<label for="current_password">Current password</label><input id="current_password" type="password" name="current_password" autocomplete="current-password" required>' : '';
+    return page(hasPassword ? 'Change password' : 'Set a password', `<h1>${hasPassword ? 'Change your password' : 'Set a password'}</h1>
+${message ? `<p role="alert">${e(message)}</p>` : ''}<p>Use 12 or more characters. A few unrelated words work well. We check new passwords against known breaches.</p>
+<form method="post" action="/account/password"><input type="hidden" name="csrf" value="${e(cookies(request)[CSRF_COOKIE] || '')}">
+<input type="hidden" name="request_id" value="${e(values.request_id || '')}">${current}
+<label for="password">New password</label><input id="password" type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required>
+<button>Save password</button></form>`);
+}
+export async function passwordPage(request, env, ctx) {
+    const session = await getSession(request, env);
+    invariant(session, 'login_required', 'Sign in first.', 401);
+    invariant(session.email_verified === 1, 'access_denied', 'Confirm your email with a sign-in link before setting a password.', 403);
+    const stored = await env.DB.prepare('SELECT * FROM user_passwords WHERE user_id=?').bind(session.user_id).first();
+    if (request.method === 'GET') {
+        const query = uniqueParams(new URL(request.url).searchParams);
+        return form(request, session, query, Boolean(stored), query.done ? 'Password saved.' : '');
+    }
+    const body = await readBody(request, 'form');
+    await requireCsrf(request, env, session, body.csrf);
+    const pending = body.request_id ? await pendingRequest(env, request, body.request_id) : null;
+    if (stored && !freshMailbox(session))
+        invariant(typeof body.current_password === 'string' && await verifyPassword(body.current_password, stored), 'invalid_grant', 'Your current password is incorrect.', 403);
+    validatePassword(body.password, session.email);
+    await assertNotBreached(body.password);
+    const next = await hashPassword(body.password), now = Date.now();
+    // One transaction: the new hash, the end of every other session (a reset must lock out whoever else is signed
+    // in), and the audit record.
+    await env.DB.batch([
+        env.DB.prepare(`INSERT INTO user_passwords(user_id,algorithm,iterations,salt,hash,created,updated) VALUES(?,?,?,?,?,?,?)
+            ON CONFLICT(user_id) DO UPDATE SET algorithm=excluded.algorithm,iterations=excluded.iterations,salt=excluded.salt,hash=excluded.hash,updated=excluded.updated`)
+            .bind(session.user_id, next.algorithm, next.iterations, next.salt, next.hash, now, now),
+        env.DB.prepare('DELETE FROM sessions WHERE user_id=? AND hash<>?').bind(session.user_id, session.hash),
+        env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,'{}',?,?)").bind(stored ? 'password_changed' : 'password_set', session.user_id, now, env.REALM.id)
+    ]);
+    notify(env, ctx, session.email, stored ? 'your password was changed' : 'a password was set on your account',
+        `${stored ? 'Your password was changed' : 'A password was set for your account'} on ${new Date(now).toUTCString()}. Other signed-in sessions were signed out.`);
+    if (!pending) return redirect(`${env.ISSUER}/account/password?done=1`);
+    // Continue to the app as a password sign-in: the person has just proved the mailbox and chosen the password.
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(session.user_id).first();
+    const signed = await issueSession(env, user, 'password');
+    await env.DB.prepare('DELETE FROM sessions WHERE hash=?').bind(session.hash).run();
+    return completeAuthorization(env, request, pending.row.id, signed.session, signed.cookies);
+}

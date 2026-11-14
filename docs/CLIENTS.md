@@ -58,6 +58,9 @@ validates domain and callback settings, and generates SQL only. It accepts a 64-
 applies it. Existing client IDs fail rather than being overwritten. Configure Google credentials as described in
 OPERATIONS.md before enabling Google. Missing provider configuration fails explicitly; no alternate method is chosen.
 
+`sign_in_methods` is an ordered list from `email`, `password`, `github` and `google`. With `password`, the sign-in
+page shows a password field and an "email me a link to set one" action (see PROTOCOL.md).
+
 `allowed_domains` uses exact lowercase email domains, without `@`, wildcards or suffix matching. A domain admits a
 person only when the sign-in proves the mailbox: an email link, or Google with a signed `hd` equal to the domain.
 GitHub's verified flag does not. Under `signup_policy='invited'` a person is admitted once they have reached this

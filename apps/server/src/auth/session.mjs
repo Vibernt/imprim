@@ -39,14 +39,16 @@ export async function requireCsrf(request, env, session, supplied) {
     invariant(session && csrf && cookies(request)[CSRF_COOKIE] === csrf && await safeEqual(await sha256(csrf), session.csrf_hash),
         'csrf', 'A valid CSRF token is required.', 403);
 }
+// RFC 8176 where a value exists ('pwd'); otherwise the method name, as before, so existing apps see no change.
+export const amrFor = method => [method === 'password' ? 'pwd' : method];
 export async function issueSession(env, user, method, googleHd = null, admin = false) {
     invariant(user?.status === 'active' && !user.merged_into, 'access_denied', 'Account unavailable.', 403);
     const token = randomToken(), csrf = randomToken(), hash = await sha256(token);
     const sid = crypto.randomUUID(), now = Date.now();
     invariant(!admin || (method === 'email' && await isAdmin(env, user.email)), 'access_denied', 'Administrator magic link required.', 403);
-    const insert = env.DB.prepare(`INSERT INTO sessions(hash,sid,user_id,csrf_hash,method,auth_time,expires_at,google_hd,admin_until)
-        SELECT ?,?,id,?,?,?,?,?,? FROM users WHERE id=? AND realm_id=? AND status='active' AND merged_into IS NULL`)
-        .bind(hash, sid, await sha256(csrf), method, Math.floor(now / 1000), now + 30 * 86400000, googleHd, admin ? now + 3600000 : null, user.id, realmId(env));
+    const insert = env.DB.prepare(`INSERT INTO sessions(hash,sid,user_id,csrf_hash,method,auth_time,expires_at,google_hd,admin_until,amr)
+        SELECT ?,?,id,?,?,?,?,?,?,? FROM users WHERE id=? AND realm_id=? AND status='active' AND merged_into IS NULL`)
+        .bind(hash, sid, await sha256(csrf), method, Math.floor(now / 1000), now + 30 * 86400000, googleHd, admin ? now + 3600000 : null, JSON.stringify(amrFor(method)), user.id, realmId(env));
     await env.DB.batch([insert, ...(admin ? [env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id)
         SELECT 'admin_sign_in',user_id,user_id,'{"method":"email"}',?,? FROM sessions WHERE hash=?`).bind(now, realmId(env), hash)] : [])]);
     const session = await sessionByHash(env, hash);

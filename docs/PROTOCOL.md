@@ -73,6 +73,22 @@ Only ES256 is emitted/advertised; private key material is never in JWKS. Human a
 
 ## Sign-in and sessions
 
+**Passwords** (client method `password`). A password is set only from a signed-in, email-verified session. New
+people choose "Email me a link to set one": an email link with `purpose: "password"` proves the mailbox and opens
+`/account/password`, and saving continues the original authorization as a password sign-in (`amr: ["pwd"]`).
+`POST /v1/auth/password {request_id, email, password, turnstile}` needs Origin, the browser binding and a pending
+request for a client that offers `password`; administrators never use it. An unknown email, an account without a
+password and a wrong password all return `401 invalid_grant` "Email or password is incorrect.", after the same key
+derivation. Ten failures for one address within 15 minutes lock that address (known or not) for 15 minutes
+(`429`). Hashes are PBKDF2-SHA256 with 100,000 iterations (the Workers maximum), a 16-byte salt and NFKC
+normalisation, with algorithm and parameters stored per hash and upgraded at sign-in. New passwords need 12 to 128
+characters, cannot be the email, and are checked against Have I Been Pwned's range API (only a five-character
+SHA-1 prefix leaves the Worker); if that API is unavailable the password is refused (`503
+breach_check_unavailable`). Changing a password needs the current one unless the session came from an email link
+in the last ten minutes. Setting or changing a password signs out every other session and emails a notice. Proof
+of the mailbox for an unverified account removes any password, with its provider links. A password is not mailbox
+proof, so `allowed_domains` does not admit by it.
+
 Email links live 15 minutes. The token appears only in `/login#token=…`, is removed from history by page script,
 and is sent only after a Sign in click. Link prefetch GETs cannot consume it. Verification checks Origin, browser
 binding, single use, current account state and current admission; invitation expiry/revocation applies at verification.

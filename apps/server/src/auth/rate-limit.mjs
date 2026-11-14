@@ -20,12 +20,12 @@ export async function limitKey(env, binding, key) {
 export const limitAddress = (env, request, binding = 'API_LIMITER') => limitKey(env, binding, 'ip:' + clientAddress(request));
 export const limitClient = (env, clientId) => limitKey(env, 'API_LIMITER', 'client:' + clientId);
 // Admission-independent D1 budget, ported from magic.mjs. This is a separate global budget.
-async function budget(env, key, max) {
+async function budget(env, key, max, windowMs = 3600000) {
     const now = Date.now();
     const row = await env.DB.prepare(`INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?)
         ON CONFLICT(key) DO UPDATE SET count=CASE WHEN expires_at<=? THEN 1 ELSE count+1 END,
         expires_at=CASE WHEN expires_at<=? THEN excluded.expires_at ELSE expires_at END RETURNING count`)
-        .bind(key, now + 3600000, now, now).first();
+        .bind(key, now + windowMs, now, now).first();
     return row.count <= max;
 }
 // Two budgets: per recipient and address, and a global per-recipient cap that rotating addresses cannot avoid (S8).
@@ -40,4 +40,16 @@ export async function limitDegradedAddress(env, request) {
 export async function limitAgentAddress(env, request, action, max = 20) {
     const key = 'agent-' + action + ':' + await sha256(clientAddress(request));
     invariant(await budget(env, key, max), 'rate_limit', 'Too many agent requests.', 429);
+}
+// Per-account password lockout (no enumeration: the key exists for unknown emails too). Ten failures lock the
+// address for fifteen minutes; a success clears the count.
+export const PASSWORD_FAILURE_LIMIT = 10;
+const failureKey = async (env, email) => 'pw-fail:' + await sha256(`${env.REALM.id}\n${email}`);
+export async function passwordLocked(env, email) {
+    const row = await env.DB.prepare('SELECT count FROM rate_limits WHERE key=? AND expires_at>?').bind(await failureKey(env, email), Date.now()).first();
+    return (row?.count ?? 0) >= PASSWORD_FAILURE_LIMIT;
+}
+export const recordPasswordFailure = async (env, email) => budget(env, await failureKey(env, email), PASSWORD_FAILURE_LIMIT, 900000);
+export async function clearPasswordFailures(env, email) {
+    await env.DB.prepare('DELETE FROM rate_limits WHERE key=?').bind(await failureKey(env, email)).run();
 }

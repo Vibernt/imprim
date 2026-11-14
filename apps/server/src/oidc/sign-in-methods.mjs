@@ -1,10 +1,11 @@
 import { invariant } from '../lib/errors.mjs';
-const METHODS = ['email', 'github', 'google'];
+// Ordered per client. 'passkey' is reserved for the passkeys milestone.
+export const METHODS = ['email', 'password', 'github', 'google'];
 const domainPattern = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 export function validateSignInSettings(methods, domains = []) {
-    invariant(Array.isArray(methods) && methods.length > 0 && methods.length <= 3 &&
+    invariant(Array.isArray(methods) && methods.length > 0 && methods.length <= METHODS.length &&
         methods.every(method => METHODS.includes(method)) && new Set(methods).size === methods.length,
-    'client_config', 'sign_in_methods must be a nonempty ordered list of distinct email, github or google methods.', 503);
+    'client_config', `sign_in_methods must be a nonempty ordered list of distinct methods from ${METHODS.join(', ')}.`, 503);
     invariant(Array.isArray(domains) && domains.every(domain => typeof domain === 'string' && domain.length <= 253 && domainPattern.test(domain)) &&
         new Set(domains).size === domains.length, 'client_config', 'google_hosted_domains must contain distinct lowercase domains.', 503);
     return { methods, domains };

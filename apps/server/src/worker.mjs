@@ -8,6 +8,8 @@ import { json } from './lib/http.mjs';
 import { realmFor, realmEnv } from './realms/realm.mjs';
 import { limitAddress } from './auth/rate-limit.mjs';
 import { requestMagic, verifyMagic } from './auth/magic.mjs';
+import { passwordSignIn } from './auth/password.mjs';
+import { passwordPage } from './account/password.mjs';
 import { githubStart, githubCallback, OAUTH_COOKIE } from './auth/github-sign-in.mjs';
 import { googleStart, googleCallback, GOOGLE_COOKIE } from './auth/google-sign-in.mjs';
 import { cookie, getSession } from './auth/session.mjs';
@@ -41,6 +43,8 @@ async function route(request, env, ctx, url) {
         case 'POST /v1/invitations': return invite(request, env);
         case 'POST /v1/auth/magic/request': return requestMagic(request, env, ctx);
         case 'POST /v1/auth/magic/verify': return verifyMagic(request, env);
+        case 'POST /v1/auth/password': return passwordSignIn(request, env);
+        case 'GET /account/password': case 'POST /account/password': return passwordPage(request, env, ctx);
         case 'GET /v1/auth/github/start': return githubStart(request, env);
         case 'GET /auth/github/callback': return githubCallback(request, env);
         case 'GET /v1/auth/google/start': return googleStart(request, env);

@@ -13,7 +13,7 @@ A realm admin registers the client in `<issuer>/admin` (or with `scripts/seed-cl
 | `redirect_uris` | Exact HTTPS callback URLs. `dev=1` allows exact `http://localhost` ones for development. |
 | `post_logout_uris` | Exact URLs you return to after sign-out. |
 | `backchannel_uri` | Required. Receives `logout_token` and `revocation_token` POSTs. |
-| `sign_in_methods` | Ordered subset of `email`, `github`, `google`. Refused at the server, not only hidden. |
+| `sign_in_methods` | Ordered subset of `email`, `password`, `github`, `google`. Refused at the server, not only hidden. |
 | `signup_policy` | `invited` (default) or `open`. Under `invited`, admit people with `POST /v1/invitations` or `allowed_domains`. |
 | `branding.name` | Shown on the sign-in page and in the sign-in email. |
 
