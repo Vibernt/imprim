@@ -45,7 +45,7 @@ for (const [name, patch] of Object.entries(cases)) test(`revocation refuses ${na
     const x = await fixture(t), value = { ...patch };
     if (value.exp === 'too-long') value.exp = x.claims.iat + 901;
     if (value.exp === 'inverted') value.exp = x.claims.iat;
-    if (value.iat === 'future') value.iat = x.claims.iat + 61;
+    if (value.iat === 'future') value.iat = Math.floor(Date.now() / 1000) + 120; // well past the 60-second skew, however long the test took
     await invalid(x.client.verifyRevocationToken(await x.sign(value)));
 });
 

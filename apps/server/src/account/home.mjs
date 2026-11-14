@@ -70,7 +70,7 @@ export async function accountAction(request, env, ctx) {
         const before = await env.DB.prepare('SELECT display_name FROM users WHERE id=?').bind(session.user_id).first();
         if ((before?.display_name || null) !== (name || null))
             await env.DB.batch([env.DB.prepare('UPDATE users SET display_name=? WHERE id=?').bind(name || null, session.user_id),
-                ...userEventStatements(env, session.user_id, 'user-updated', { name: name || null })]);
+                ...userEventStatements(env, session.user_id, 'user-updated', { fields: ['name'] })]);
         ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'event_dispatch_failed', null, { pending: true })));
         await audit(env, 'profile_updated', session.user_id, { fields: ['display_name'] });
         return accountHome(request, env, session, 'Name saved.');
@@ -152,7 +152,7 @@ async function confirmEmailChange(request, env, ctx, session, body) {
     const old = session.email;
     try {
         await env.DB.batch([env.DB.prepare('UPDATE users SET email=?,email_verified=1 WHERE id=?').bind(row.new_email, session.user_id),
-            ...userEventStatements(env, session.user_id, 'user-updated', { email: row.new_email }),
+            ...userEventStatements(env, session.user_id, 'user-updated', { fields: ['email'] }),
             env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES('email_changed',?,'{}',?,?)").bind(session.user_id, Date.now(), env.REALM.id)]);
     } catch (error) {
         invariant(!String(error.message).includes('UNIQUE'), 'conflict', 'That address belongs to another account.', 409);
@@ -170,7 +170,8 @@ async function deleteAccount(request, env, ctx, session, body) {
     const id = session.user_id, now = Date.now();
     // Ends identity and app sessions (back-channel), agent grants (revocation events) and every sign-in method.
     // The deletion event goes first: the statements after it remove the admissions that address it.
-    await env.DB.batch([...userEventStatements(env, id, 'user-deleted'), ...endAccess(env, id),
+    await env.DB.batch([env.DB.prepare("DELETE FROM user_event_outbox WHERE user_id=? AND delivered_at IS NULL AND event='user-updated'").bind(id),
+        ...userEventStatements(env, id, 'user-deleted'), ...endAccess(env, id),
         env.DB.prepare('DELETE FROM user_identities WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM user_passwords WHERE user_id=?').bind(id),
         env.DB.prepare('DELETE FROM mfa_factors WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(id),
         env.DB.prepare('DELETE FROM webauthn_credentials WHERE user_id=?').bind(id),

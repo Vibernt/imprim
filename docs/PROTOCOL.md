@@ -419,13 +419,13 @@ decision.
 - **Limits:** DPoP-bound tokens, service tokens, and exchanges into an app that requires DPoP are refused. B still
   checks the person's membership.
 
-**User lifecycle events** (`event_token` on the back-channel URI). Every app that admitted a person receives one
-signed security event token (RFC 8417, `typ=secevent+jwt`, `aud` = the app, `sub` = the person, a stable `jti`,
-five-minute lifetime) per change. Event types live under `<issuer>/events/`:
+**User lifecycle events** (`event_token` on the back-channel URI; an app opts in with `user_events: on`). Every
+opted-in app that admitted a person receives one signed security event token (RFC 8417, `typ=secevent+jwt`, `aud` = the app, `sub` = the person, a stable `jti`,
+five-minute lifetime, `toe` = when the change happened) per change. Apply events last-writer-wins by `toe`. Event types live under `<issuer>/events/`:
 
 | Event | Payload | When |
 |---|---|---|
-| `user-updated` | `{name}` or `{email}` | The person changed their name or email |
+| `user-updated` | `{fields: ["name"]}` or `{fields: ["email"]}` (what changed, never the value) | The person changed their name or email |
 | `user-blocked` / `user-unblocked` | `{}` | An admin blocked or unblocked them |
 | `user-deleted` | `{}` | They deleted their account, or an admin did |
 | `user-merged` | `{into}` | An admin merged them into another account |

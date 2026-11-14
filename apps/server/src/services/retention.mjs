@@ -6,4 +6,7 @@ export async function cleanDeliveryHistory(env, now = Date.now()) {
         await env.DB.prepare(`DELETE FROM ${table} WHERE id IN (
             SELECT id FROM ${table} WHERE delivered_at<? ORDER BY delivered_at,id LIMIT 500)`)
             .bind(now - deliveredRetentionMs).run();
+    // User events that expired undelivered go after the same 30 days.
+    await env.DB.prepare(`DELETE FROM user_event_outbox WHERE id IN (SELECT id FROM user_event_outbox WHERE delivery_state='expired' AND created<? LIMIT 500)`)
+        .bind(now - deliveredRetentionMs - 86400000).run();
 }

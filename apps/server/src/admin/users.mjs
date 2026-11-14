@@ -26,7 +26,8 @@ export async function changeUser(env, actor, id, action, survivor, confirmSource
             env.DB.prepare("UPDATE users SET status='active' WHERE id=? AND status='blocked' AND merged_into IS NULL RETURNING id").bind(id),
             env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id) SELECT 'admin_unblock',?,?,?,?,? WHERE changes()=1`)
                 .bind(actor, id, '{}', Date.now(), env.REALM?.id ?? null),
-            ...userEventStatements(env, id, 'user-unblocked')
+            // Only if this unblock won: a racing delete leaves the person deleted and no event goes out.
+            ...userEventStatements(env, id, 'user-unblocked', {}, { sql: "EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')", args: [id] })
         ]);
         invariant(result[0].results.length === 1, 'conflict', 'User changed; reload.', 409);
         return { id, status: 'active' };

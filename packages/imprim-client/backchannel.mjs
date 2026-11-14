@@ -33,13 +33,17 @@ export function validateResourcePrefixes(prefixes, fail) {
 // User lifecycle events (0.6.0): one `${issuer}/events/<event>` with a small payload object.
 export const USER_EVENTS = ['user-updated', 'user-blocked', 'user-unblocked', 'user-deleted', 'user-merged', 'mfa-reset'];
 function userEventClaims(header, claims, { issuer, clientId, clockSkewSeconds = 60 }, fail) {
+    if (!Number.isInteger(clockSkewSeconds) || clockSkewSeconds < 0 || clockSkewSeconds > 60) fail('configuration', 'Clock skew must be an integer from 0 to 60 seconds.');
     const now = Math.floor(Date.now() / 1000), keys = claims.events && typeof claims.events === 'object' && !Array.isArray(claims.events) ? Object.keys(claims.events) : [];
     const name = keys.length === 1 && keys[0].startsWith(`${issuer}/events/`) ? keys[0].slice(issuer.length + 8) : null, payload = name && claims.events[keys[0]];
     if (header.typ !== 'secevent+jwt' || claims.iss !== issuer || claims.aud !== clientId || !nonempty(claims.sub) || !nonempty(claims.jti) || claims.nonce !== undefined ||
         !USER_EVENTS.includes(name) || !payload || typeof payload !== 'object' || Array.isArray(payload) ||
-        !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp) || claims.exp <= claims.iat || claims.exp - claims.iat > 900 || claims.exp <= now || claims.iat > now + clockSkewSeconds)
+        !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp) || claims.exp <= claims.iat || claims.exp - claims.iat > 900 || claims.exp <= now || claims.iat > now + clockSkewSeconds ||
+        (claims.nbf !== undefined && (!Number.isInteger(claims.nbf) || claims.nbf > now + clockSkewSeconds)) || !Number.isInteger(claims.toe) || claims.toe > claims.iat + clockSkewSeconds ||
+        (payload.fields !== undefined && !(Array.isArray(payload.fields) && payload.fields.every(f => ['name', 'email'].includes(f)))) || (payload.into !== undefined && !nonempty(payload.into)))
         fail('invalid_token', 'Invalid user event token.');
-    return { sub: claims.sub, jti: claims.jti, event: name, data: payload, iat: claims.iat, exp: claims.exp };
+    // toe orders events: apply the one with the latest toe for each person.
+    return { sub: claims.sub, jti: claims.jti, event: name, data: payload, toe: claims.toe, iat: claims.iat, exp: claims.exp };
 }
 export function validateBackchannelClaims(header, claims, options, kind, fail) {
     if (kind === 'user') return userEventClaims(header, claims, options, fail);
@@ -83,10 +87,10 @@ export function backchannelMethods(verify, fail) {
     }
     return {
         verifyLogoutToken, verifyRevocationToken, verifyUserEventToken, verifyBackchannel,
-        // { sub, event, data, jti }: deduplicate jti; event is one of USER_EVENTS.
+        // { sub, event, data, toe, jti }: deduplicate jti; apply by latest toe; event is one of USER_EVENTS.
         async handleUserEvent(request) {
-            const { sub, event, data, jti } = await readEvent(request, 'user');
-            return { sub, event, data, jti };
+            const { sub, event, data, toe, jti } = await readEvent(request, 'user');
+            return { sub, event, data, toe, jti };
         },
         async handleBackchannelLogout(request) {
             const { sub, sid, jti } = await readEvent(request, 'logout');

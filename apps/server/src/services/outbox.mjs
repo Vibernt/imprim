@@ -33,15 +33,16 @@ export function queueEvent(env, ctx, table, type, id) {
     })().catch(error => console.error(JSON.stringify({ type: 'event_queue_deferred', table, code: error?.code || 'queue_failed' }))));
 }
 export async function deliveryStatus(env) {
-    const [human, agent, missing] = await Promise.all([
+    const [human, agent, missing, user] = await Promise.all([
         env.DB.prepare("SELECT count(*) AS pending,min(created) AS oldest FROM logout_outbox WHERE delivered_at IS NULL AND delivery_state!='expired'").first(),
         env.DB.prepare("SELECT count(*) AS pending,min(created) AS oldest FROM agent_revocation_outbox WHERE delivered_at IS NULL AND delivery_state!='expired'").first(),
         env.DB.prepare(`SELECT o.client_id FROM logout_outbox o LEFT JOIN clients c ON c.id=o.client_id
             WHERE o.delivered_at IS NULL AND o.delivery_state!='expired' AND c.backchannel_uri IS NULL
             UNION SELECT o.app_id AS client_id FROM agent_revocation_outbox o LEFT JOIN clients c ON c.id=o.app_id
-            WHERE o.delivered_at IS NULL AND o.delivery_state!='expired' AND c.backchannel_uri IS NULL ORDER BY client_id`).all()
+            WHERE o.delivered_at IS NULL AND o.delivery_state!='expired' AND c.backchannel_uri IS NULL ORDER BY client_id`).all(),
+        env.DB.prepare("SELECT count(*) AS pending,min(created) AS oldest FROM user_event_outbox WHERE delivered_at IS NULL AND delivery_state!='expired'").first()
     ]);
-    return { human, agent, clients_missing_backchannel: missing.results.map(row => row.client_id) };
+    return { human, agent, user_events: user, clients_missing_backchannel: missing.results.map(row => row.client_id) };
 }
 
 export async function dispatchDeliveries(env) {
