@@ -2,6 +2,8 @@ import { invariant } from '../lib/errors.mjs';
 import { endAccess } from '../services/access.mjs';
 import { auditStatement } from './auth.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { logoutStatements } from '../oidc/backchannel.mjs';
+import { notify } from '../services/notify.mjs';
 export async function changeUser(env, actor, id, action, survivor, confirmSourceEmail) {
     const user = await env.DB.prepare('SELECT * FROM users WHERE id=? AND realm_id=?').bind(id, realmId(env)).first();
     invariant(user && !user.merged_into, 'invalid_request', 'User unavailable.');
@@ -66,4 +68,20 @@ export async function userDetail(env, id) {
         env.DB.prepare('SELECT id,client_id,app_id,resource,scope,created,last_used,expires_at,revoked_at FROM agent_grants WHERE user_id=? ORDER BY created DESC LIMIT 100').bind(id).all()
     ]);
     return { ...user, identities: identities.results, sessions: sessions.results, grants: grants.results };
+}
+// Admin MFA reset (a person lost their authenticator): factors, recovery codes and remembered browsers go, identity
+// sessions end (apps by back-channel), and the person enrols again at their next sign-in. A reason is required and
+// recorded; the person is told by email. Runs inside mutationEnvironment, so it needs a fresh admin second factor.
+export async function resetMfa(env, actor, id, reason) {
+    invariant(typeof reason === 'string' && reason.trim().length >= 5 && reason.length <= 500, 'invalid_request', 'Give a reason (5 to 500 characters); it goes in the audit log.');
+    const user = await env.DB.prepare("SELECT * FROM users WHERE id=? AND realm_id=? AND status='active' AND merged_into IS NULL").bind(id, realmId(env)).first();
+    invariant(user, 'not_found', 'User not found.', 404);
+    invariant(id !== actor, 'invalid_request', 'Administrators cannot reset their own second factor.');
+    await env.DB.batch([
+        env.DB.prepare('DELETE FROM mfa_factors WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(id),
+        env.DB.prepare('DELETE FROM trusted_devices WHERE user_id=?').bind(id),
+        ...logoutStatements(env, id), env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id),
+        auditStatement(env, actor, 'admin_mfa_reset', id, { reason: reason.trim() })]);
+    notify(env, env.CTX, user.email, 'your two-factor authentication was reset', `An administrator reset two-factor authentication on your account (reason: ${reason.trim()}). You were signed out and will set it up again at your next sign-in.`);
+    return { id, mfa_reset: true };
 }

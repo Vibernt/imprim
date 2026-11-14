@@ -79,5 +79,7 @@ export async function userinfo(request, env) {
     if (!session) await limitAddress(env, request);
     invariant(session, 'invalid_token', 'Access token expired or revoked.', 401);
     await limitClient(env, row.client_id);
-    return json({ sub: session.user_id, ...(row.scope.split(' ').includes('email') ? { email: session.email, email_verified: session.email_verified === 1 } : {}) });
+    const scopes = row.scope.split(' ');
+    return json({ sub: session.user_id, ...(scopes.includes('email') ? { email: session.email, email_verified: session.email_verified === 1 } : {}),
+        ...(scopes.includes('profile') && session.display_name ? { name: session.display_name } : {}) });
 }

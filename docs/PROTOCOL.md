@@ -73,6 +73,31 @@ Only ES256 is emitted/advertised; private key material is never in JWKS. Human a
 
 ## Sign-in and sessions
 
+**Account page** (`/account`). A signed-in person manages:
+- **Profile:** a display name, sent as `name` with the `profile` scope.
+- **Email:** changing it needs proof at both ends. That is an email-link sign-in within ten minutes for the current
+  address, then a single-use, browser-bound confirmation (a POST, not the link itself) from the new address. The old
+  address is told at request and at change. An address another account in the realm holds is refused.
+- **Security:** the password, factors and remembered browsers.
+- **Sessions:** identity sessions show device, place and last use. Signing one or all others out sends back-channel
+  logout.
+- **Apps:** sign out of one app (back-channel logout).
+- **Connected agents:** revoke any of them.
+- **Deletion:** needs the typed email, a sign-in within ten minutes and, with a factor, a second factor within ten
+  minutes. It ends identity and app sessions, revokes agent grants with revocation events, and removes every sign-in
+  method.
+
+**Security notices** go to the account's address for:
+- a new device (one not seen in 90 days; never on the first sign-in);
+- password, factor, recovery-code and email changes;
+- a new connected agent;
+- deletion;
+- an admin MFA reset.
+
+**Admin MFA reset** (`POST /admin/api/users/<id>/reset-mfa {reason}`) needs a fresh admin second factor and a reason.
+It removes the person's factors, recovery codes and remembered browsers, and ends their sessions. The reason is
+audited and the person is told by email.
+
 **Two-factor authentication.** Each client sets `mfa`: `off`; `optional` (required once the person has added a
 factor); or `required` (a person without a factor must enrol before the code is issued). A gate in front of every
 code and every agent consent sends the browser to `/mfa?request_id=…` (enter a code) or `/account/mfa?request_id=…`

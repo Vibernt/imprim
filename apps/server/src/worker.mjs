@@ -6,12 +6,14 @@ import { account } from './agents/account.mjs';
 import { AppError } from './lib/errors.mjs';
 import { json } from './lib/http.mjs';
 import { realmFor, realmEnv } from './realms/realm.mjs';
+import { describeDevice } from './lib/device.mjs';
 import { limitAddress } from './auth/rate-limit.mjs';
 import { requestMagic, verifyMagic } from './auth/magic.mjs';
 import { passwordSignIn } from './auth/password.mjs';
 import { passwordPage } from './account/password.mjs';
 import { mfaChallenge } from './auth/mfa-challenge.mjs';
 import { mfaAccount } from './account/mfa.mjs';
+import { accountAction } from './account/home.mjs';
 import { githubStart, githubCallback, OAUTH_COOKIE } from './auth/github-sign-in.mjs';
 import { googleStart, googleCallback, GOOGLE_COOKIE } from './auth/google-sign-in.mjs';
 import { cookie, getSession } from './auth/session.mjs';
@@ -49,6 +51,9 @@ async function route(request, env, ctx, url) {
         case 'GET /account/password': case 'POST /account/password': return passwordPage(request, env, ctx);
         case 'GET /mfa': case 'POST /mfa': return mfaChallenge(request, env, ctx);
         case 'GET /account/mfa': case 'POST /account/mfa': return mfaAccount(request, env, ctx);
+        case 'POST /account/profile': case 'POST /account/sessions': case 'POST /account/apps': case 'POST /account/devices':
+        case 'POST /account/email': case 'GET /account/email/confirm': case 'POST /account/email/confirm': case 'POST /account/delete':
+            return accountAction(request, env, ctx);
         case 'GET /v1/auth/github/start': return githubStart(request, env);
         case 'GET /auth/github/callback': return githubCallback(request, env);
         case 'GET /v1/auth/google/start': return googleStart(request, env);
@@ -77,7 +82,8 @@ export async function handleRequest(request, base, ctx) {
     let env = base;
     try {
         // The host selects the realm before anything else; every module below reads the realm-scoped env.
-        env = realmEnv(base, await realmFor(base, url.origin));
+        // REQUEST and CTX let sign-in record the device and send notices without threading them through every call.
+        env = { ...realmEnv(base, await realmFor(base, url.origin)), REQUEST: describeDevice(request), CTX: ctx };
         const limiter = limiterFor(request.method, url.pathname);
         if (limiter) await limitAddress(env, request, limiter);
         const response = await route(request, env, ctx, url);

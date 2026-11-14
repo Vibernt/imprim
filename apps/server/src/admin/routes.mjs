@@ -4,7 +4,7 @@ import { realmId } from '../realms/realm.mjs';
 import { listRealms, saveRealm, saveAdmin } from './realms.mjs';
 import { saveClient, getAdminClient, rotateSecret, publicClient } from './clients.mjs';
 import { revokeSession } from './sessions.mjs';
-import { users, userDetail, changeUser } from './users.mjs';
+import { users, userDetail, changeUser, resetMfa } from './users.mjs';
 import { rotateNow, keyList, revokeKeyNow } from '../oidc/keys.mjs';
 import { audit } from '../services/audit.mjs';
 import { cookies, CSRF_COOKIE, getSession } from '../auth/session.mjs';
@@ -87,8 +87,9 @@ export async function admin(request, env, ctx) {
             if (!api && body.make_confidential === 'true') body.make_confidential = true;
             result = await rotateSecret(writeEnv, session.user_id, id, body);
         }
-        else if (section === 'users' && id && ['block','unblock','delete','merge','revoke-session'].includes(action)) {
+        else if (section === 'users' && id && ['block','unblock','delete','merge','revoke-session','reset-mfa'].includes(action)) {
             result = action === 'revoke-session' ? await revokeSession(writeEnv, session.user_id, id, body.sid) :
+                action === 'reset-mfa' ? await resetMfa(writeEnv, session.user_id, id, body.reason) :
                 await changeUser(writeEnv, session.user_id, id, action, body.surviving_id, body.confirm_source_email);
             if (action !== 'unblock') result.delivery = { state: 'pending', message: 'Access revoked locally; outbox delivery is asynchronous. See Settings for outstanding events.' };
             ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'admin_dispatch_failed', session.user_id, { pending: true })));

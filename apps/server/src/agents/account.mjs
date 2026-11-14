@@ -1,7 +1,8 @@
 import { invariant } from '../lib/errors.mjs';
 import { readBody, redirect } from '../lib/http.mjs';
 import { getSession, requireCsrf, cookies, CSRF_COOKIE } from '../auth/session.mjs';
-import { page, escapeHtml as e } from '../pages/layout.mjs';
+import { escapeHtml as e } from '../pages/layout.mjs';
+import { accountHome } from '../account/home.mjs';
 import { hidden } from './consent.mjs';
 import { workspace } from './uris.mjs';
 import { revokeGrant, queueRevocation } from './revocation.mjs';
@@ -18,6 +19,10 @@ export async function account(request, env, ctx) {
         queueRevocation(env, ctx, await revokeGrant(env, body.grant_id, session.user_id));
         return redirect(`${env.ISSUER}/account`);
     }
+    return accountHome(request, env, session);
+}
+// The connected-agents section of /account, paged by (created, id) so many grants still give a bounded page (S5).
+export async function agentsSection(request, env, session) {
     // Paged by (created, id) so a person with many grants gets a bounded page (S5).
     const before = new URL(request.url).searchParams.get('before') || '';
     invariant(before === '' || /^\d{1,16}:[0-9a-f-]{36}$/.test(before), 'invalid_request', 'Invalid page cursor.');
@@ -27,9 +32,9 @@ export async function account(request, env, ctx) {
         .bind(session.user_id, Number(created), Number(created), id || '\uffff', PAGE + 1).all();
     const results = rows.slice(0, PAGE), last = results.at(-1);
     const more = rows.length > PAGE ? `<p><a href="/account?before=${e(`${last.created}:${last.id}`)}">Older agents</a></p>` : '';
-    return page('Connected agents', `<h1>Connected agents</h1>${results.length ? results.map(g => `<section><h2>${e(g.client_name)}</h2>
+    return `<h2 id="agents">Connected agents</h2>${results.length ? results.map(g => `<section><h3>${e(g.client_name)}</h3>
 <p>${e(g.registration_method === 'dynamic' ? 'unverified' : new URL(g.client_id).host)}</p>
 <p>App: ${e(JSON.parse(g.branding).name || g.app_id)} · Workspace: ${e(workspace(g.resource))}</p>
 <p>${e(g.resource)}</p><p>Scopes: ${e(g.scope)}</p><p>Created: ${e(new Date(g.created).toISOString())}<br>Last used: ${e(new Date(g.last_used).toISOString())}</p>
-${g.revoked_at ? '<p>Revoked</p>' : g.expires_at <= Date.now() ? '<p>Expired</p>' : `<form method="post" action="/account/revoke">${hidden('grant_id', g.id)}${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}<button>Revoke</button></form>`}</section>`).join('') + more : '<p>No agents connected.</p>'}`);
+${g.revoked_at ? '<p>Revoked</p>' : g.expires_at <= Date.now() ? '<p>Expired</p>' : `<form method="post" action="/account/revoke">${hidden('grant_id', g.id)}${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}<button>Revoke</button></form>`}</section>`).join('') + more : '<p>No agents connected.</p>'}`;
 }

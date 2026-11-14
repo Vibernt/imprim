@@ -9,6 +9,7 @@ import { validateAgentRequest } from './authorize.mjs';
 import { workspace } from './uris.mjs';
 import { admitSession, admissionGuard } from '../services/admission.mjs';
 import { mfaGate } from '../auth/mfa.mjs';
+import { notify } from '../services/notify.mjs';
 import { redirect } from '../lib/http.mjs';
 // Live grants per person, across apps: each is a consent the person gave, so this only bounds runaway automation (S5).
 export const MAX_LIVE_GRANTS = 50;
@@ -82,7 +83,10 @@ export async function consent(request, env) {
         .bind(approve ? 'approved' : 'denied', approve ? grantId : null, row.device_hash, now));
     const result = await env.DB.batch(batch);
     invariant(result[deleteIndex].results.length === 1 && (!approve || result[0].meta.changes === 1), 'invalid_request', 'Request already completed.');
-    if (approve) await env.DB.prepare('UPDATE agent_clients SET last_used=? WHERE id=?').bind(now, row.agent_client_id).run();
+    if (approve) {
+        await env.DB.prepare('UPDATE agent_clients SET last_used=? WHERE id=?').bind(now, row.agent_client_id).run();
+        notify(env, env.CTX, session.email, 'an agent was connected', `"${context.agent.client_name}" can now act for you in ${JSON.parse(context.app.branding).name || context.app.id} (${workspace(row.resource)}) with: ${row.scope}. Review or revoke it at ${env.ISSUER}/account.`);
+    }
     if (row.device_hash) return page(approve ? 'Agent connected' : 'Access denied', `<h1>${approve ? 'Agent connected' : 'Access denied'}</h1><p>Return to your device.</p><a href="/account">Connected agents</a>`);
     return authorizationResponse(env, row, approve ? { code } : { error: 'access_denied' });
 }

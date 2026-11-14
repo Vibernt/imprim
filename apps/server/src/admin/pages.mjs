@@ -39,6 +39,7 @@ export function userPage(user, csrf) {
     return adminPage(user.email, data(user) + '<p>Actions require a sign-in within ten minutes. Merge keeps the surviving id and ends both users’ sessions and grants. App memberships are managed in each app.</p>' +
         user.sessions.map(session => form(path + '/revoke-session', csrf, `<input type="hidden" name="sid" value="${e(session.sid)}"><button>Revoke session ${e(session.sid)}</button>`)).join('') +
         ['block','unblock','delete'].map(action => form(path + '/' + action, csrf, `<button>${e(action)}</button>`)).join('') +
+        form(path + '/reset-mfa', csrf, '<label>Reason for resetting two-factor<input name="reason" required minlength="5" maxlength="500"></label><button>Reset two-factor</button>') +
         `<form method="get" action="${e(path + '/merge')}"><p>Merge this user into another: this user is deleted</p><label>Surviving user id<input name="surviving_id" required></label><button>Review merge</button></form>`);
 }
 export function auditPage(rows, query) {
