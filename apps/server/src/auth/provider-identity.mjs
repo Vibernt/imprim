@@ -13,7 +13,8 @@ export async function providerIdentity(env, client, provider, profile, session =
     invariant(!linked || !matching || linked.id === matching.id || matching.merged_into === linked.id || (matching.status === 'deleted' && !matching.merged_into), 'access_denied', 'Account unavailable.', 403);
     const email = linked ? linked.email : profile.email;
     invariant(!await isAdmin(env, email) && !await isAdmin(env, profile.email), 'access_denied', 'Account unavailable.', 403);
-    const proof = profile.email === email ? mailboxProof(provider, profile.email, profile.hd) : 'provider';
+    // A registry provider marked authoritative for the domain (trusted_domains) proves the mailbox, as Google's hd does.
+    const proof = profile.email !== email ? 'provider' : profile.authoritative ? 'mailbox' : mailboxProof(provider, profile.email, profile.hd);
     if (!linked && matching?.status === 'active' && !matching.merged_into)
         invariant(proof === 'mailbox' || session?.user_id === matching.id, 'link_required',
             'An account already uses this email. Sign in with an email link first, then continue with this provider in the same browser.', 403);
@@ -26,5 +27,8 @@ export async function providerIdentity(env, client, provider, profile, session =
         .bind(realm, provider, profile.providerId, user.id, profile.login ?? null, Date.now()).run();
     const owner = await env.DB.prepare('SELECT user_id FROM user_identities WHERE realm_id=? AND provider=? AND provider_id=?').bind(realm, provider, profile.providerId).first();
     invariant(owner?.user_id === user.id, 'access_denied', 'Account unavailable.', 403);
+    // Admission was just decided with this sign-in's proof; record it, because the session's method alone (a provider
+    // id) does not carry that proof when the authorization completes.
+    if (client) await env.DB.prepare('INSERT OR IGNORE INTO client_admissions(user_id,client_id,created) VALUES(?,?,?)').bind(user.id, client.id, Date.now()).run();
     return user;
 }

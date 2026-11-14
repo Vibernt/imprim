@@ -13,14 +13,14 @@ test('offline client seed validates and preserves method order and hosted domain
     assert.throws(() => w.env.DB.db.exec(clientSeedSql(config)), /UNIQUE/);
     assert.ok(clientSeedSql({ ...config, google_hosted_domains: undefined }).includes("'[]'"));
 });
-for (const methods of [[], ['google','google'], ['sms'], ['Email'], 'google', null, undefined, [1]]) test(`client seed refuses invalid methods ${JSON.stringify(methods)}`, () => {
+for (const methods of [[], ['google','google'], ['SMS'], ['x'], ['Email'], 'google', null, undefined, [1]]) test(`client seed refuses invalid methods ${JSON.stringify(methods)}`, () => {
     assert.throws(() => clientSeedSql({ ...config, sign_in_methods: methods }), /sign_in_methods/);
 });
 for (const domains of [null, 'example.com', ['EXAMPLE.com'], ['*.example.com'], ['a..com'], ['-a.com'], ['a-.com'], ['example.com','example.com'], [1]])
     test(`client seed refuses invalid domains ${JSON.stringify(domains)}`, () => assert.throws(() => clientSeedSql({ ...config, google_hosted_domains: domains }), /google_hosted_domains/));
 for (const field of ['sign_in_methods', 'google_hosted_domains']) test(`SQL rejects malformed ${field} on insert and update`, async t => {
     const w = await world(t);
-    const invalid = field === 'sign_in_methods' ? ['[]','null','{}','["google","google"]','["sms"]','[1]','invalid'] : ['null','{}','["*.example.com"]','[1]','["a.com","a.com"]'];
+    const invalid = field === 'sign_in_methods' ? ['[]','null','{}','["google","google"]','["SMS"]','["x"]','[1]','invalid'] : ['null','{}','["*.example.com"]','[1]','["a.com","a.com"]'];
     for (const value of invalid) {
         assert.throws(() => w.env.DB.db.prepare(`UPDATE clients SET ${field}=? WHERE id='app'`).run(value));
         assert.throws(() => w.env.DB.db.prepare(`INSERT INTO clients(id,redirect_uris,${field}) VALUES('invalid','[]',?)`).run(value));

@@ -17,7 +17,7 @@ export async function githubStart(request, env) {
     const { row, client } = await pendingRequest(env, request, query.request_id);
     requireMethod(client, 'github'); configured(env);
     const state = randomToken(), nonce = randomToken(), verifier = randomToken();
-    await env.DB.prepare('INSERT INTO oauth_states(hash,browser_hash,verifier,request_id,expires_at) VALUES(?,?,?,?,?)')
+    await env.DB.prepare("INSERT INTO oauth_states(hash,browser_hash,verifier,request_id,expires_at,provider) VALUES(?,?,?,?,?,'github')")
         .bind(await sha256(state), await sha256(nonce), verifier, row.id, Date.now() + 600000).run();
     const params = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, redirect_uri: `${env.ISSUER}/auth/github/callback`,
         state, code_challenge: await challengeOf(verifier), code_challenge_method: 'S256', scope: 'read:user user:email' });

@@ -36,6 +36,26 @@ refuses a literal Turnstile secret or provider client secret, so no secret is ev
 }
 ```
 
+**More providers.** Any other key under `providers` is a provider id, with a `type`:
+
+```json
+"providers": {
+  "acme-sso": { "type": "oidc", "issuer": "https://sso.acme.com", "client_id": "…", "client_secret": { "env": "ACME_SSO_SECRET" },
+                "name": "Acme SSO", "scopes": "openid email profile", "token_auth": "client_secret_basic", "trusted_domains": ["acme.com"] },
+  "microsoft": { "type": "microsoft", "tenant": "common", "client_id": "…", "client_secret": { "env": "MS_SECRET" }, "name": "Microsoft" },
+  "apple": { "type": "apple", "client_id": "com.example.web", "team_id": "TEAMID", "key_id": "KEYID", "private_key": { "env": "APPLE_PRIVATE_KEY" }, "name": "Apple" }
+}
+```
+
+A client offers a provider by listing its id in `sign_in_methods`. The callback to register with the provider is
+`<issuer>/login/provider/<id>/callback`.
+- **Email trust:** a provider's email is a provider claim, not proof of the mailbox, unless the provider lists the
+  email's domain in `trusted_domains`. Microsoft also needs a pinned tenant id for that. Only then does the
+  provider's email link an existing account or satisfy `allowed_domains`.
+- **Microsoft:** tokens are checked against the issuer of the token's own tenant, and a pinned `tenant` must match.
+- **Apple:** the provider posts the callback cross-site (`form_post`), so its one state cookie is `SameSite=None`.
+  The client secret is an ES256 JWT that Imprim signs with `private_key` (PKCS#8 PEM).
+
 - The email sender's domain must be enabled for Cloudflare Email sending on the account.
 - Each provider needs its own OAuth app per realm, so its consent screen shows that brand. Register these
   callbacks: `<issuer>/auth/github/callback` and `<issuer>/login/google/callback`.

@@ -73,6 +73,22 @@ Only ES256 is emitted/advertised; private key material is never in JWKS. Human a
 
 ## Sign-in and sessions
 
+**Registry providers** (realm config `providers.<id>` of type `oidc`, `microsoft` or `apple`; client method `<id>`).
+- **Flow:** the authorization code flow with PKCE S256, `state`, `nonce` and a browser-bound cookie. The state is
+  single-use and provider-scoped.
+- **Discovery:** it must name the configured issuer (for Microsoft, a `{tenantid}` template). It is cached for an
+  hour per isolate.
+- **ID token checks:**
+  - RS256 or ES256 only, from the provider's JWKS (refreshed once for an unknown `kid`);
+  - exact issuer (Microsoft: the token's `tid`; a pinned tenant must match) and audience (`azp` if more than one);
+  - nonce, expiry and a subject;
+  - a verified email (`email_verified` true; Microsoft has no such claim, so its email is accepted as a provider
+    claim).
+- **Email trust:** mailbox proof only where the provider lists the domain in `trusted_domains`, with a pinned tenant
+  for Microsoft. Otherwise the S4 rules apply: no auto-link to an existing account, and a new account is unverified
+  until its first email link.
+- **Apple:** `form_post`, a `SameSite=None` state cookie, and a client secret signed with the team key.
+
 **Passkeys** (WebAuthn Level 2; client method `passkey`). The relying-party ID is the realm's host, and the origin
 must equal the issuer. Credentials are discoverable and need user verification (a PIN or biometric).
 - **Algorithms:** ES256, Ed25519 and RS256. Attestation is `none`, so Imprim claims nothing about the authenticator's

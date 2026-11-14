@@ -18,7 +18,8 @@ export function signInPage(env, requestId = '', responseCookies = [], client = n
     const email = methods.includes('email'), password = methods.includes('password');
     const controls = methods.filter(method => method !== 'password' || !email).map(method => ['email', 'password'].includes(method) ? emailForm(env, requestId, { link: email, password })
         : method === 'passkey' ? `<p><button id="passkey-sign-in" type="button" data-request-id="${escapeHtml(requestId)}">Sign in with a passkey</button></p>`
-        : `<p><a href="/v1/auth/${method}/start?request_id=${encodeURIComponent(requestId)}">Sign in with ${method === 'github' ? 'GitHub' : 'Google'}</a></p>`).join('\n');
+        : ['github', 'google'].includes(method) ? `<p><a href="/v1/auth/${method}/start?request_id=${encodeURIComponent(requestId)}">Sign in with ${method === 'github' ? 'GitHub' : 'Google'}</a></p>`
+        : env.PROVIDERS?.[method] ? `<p><a href="/v1/auth/provider/${method}/start?request_id=${encodeURIComponent(requestId)}">Sign in with ${escapeHtml(env.PROVIDERS[method].name || method)}</a></p>` : '').join('\n');
     return page('Sign in', `<h1>Sign in to ${escapeHtml(branding.name || env.REALM.display_name)}</h1>
 <section id="request" data-request-id="${escapeHtml(requestId)}">${controls}${client ? '' : '<p>Operator sign-in uses email only.</p>'}</section>
 <section id="confirm" hidden><h2>Confirm sign-in</h2><p>Choose Sign in to use the emailed link. Keep this in the browser where you started.</p><button id="verify" type="button">Sign in</button></section>
