@@ -1,0 +1,68 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  // The top level is a neutral template for `wrangler dev`. Real deployments are environments:
+  //   wrangler deploy --env staging      wrangler deploy --env production
+  // Realms (issuer hosts, branding, provider credentials, admins) live in D1, not here: see docs/REALMS.md.
+  // Each realm host is added to the environment's "routes" as a custom domain.
+  "name": "imprim",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-11-04",
+  // Back-channel events go to relying parties over the public internet, so a relying party on this account's
+  // workers.dev subdomain is reached (without this flag Cloudflare refuses such subrequests with error 1042).
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": false,
+  "preview_urls": false,
+  // Avoid invocation records containing OAuth callback query credentials. Application logs are structured/redacted.
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+  // Secrets, never vars: SEALING_KEY (64 hex chars) and whatever secret names each realm's config references
+  // (for the default realm: TURNSTILE_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET).
+  "vars": {},
+  "d1_databases": [{ "binding": "DB", "database_name": "imprim", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+  "send_email": [{ "name": "EMAIL" }],
+  "ratelimits": [
+    { "name": "AUTH_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
+    { "name": "API_LIMITER", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } }
+  ],
+  "queues": {
+    "producers": [{ "binding": "LOGOUT_QUEUE", "queue": "imprim-logout" }],
+    "consumers": [{ "queue": "imprim-logout", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 5, "dead_letter_queue": "imprim-logout-dlq" }]
+  },
+  "triggers": { "crons": ["* * * * *"] },
+  "env": {
+    // Every release runs here first. Replace the placeholders with the staging account's resources (docs/DEPLOY.md).
+    "staging": {
+      "name": "imprim-staging",
+      "routes": [{ "pattern": "id.staging.example.com", "custom_domain": true }],
+      "vars": {},
+      "d1_databases": [{ "binding": "DB", "database_name": "imprim-staging", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+      "send_email": [{ "name": "EMAIL" }],
+      "ratelimits": [
+        { "name": "AUTH_LIMITER", "namespace_id": "5201", "simple": { "limit": 20, "period": 60 } },
+        { "name": "API_LIMITER", "namespace_id": "5202", "simple": { "limit": 120, "period": 60 } }
+      ],
+      "queues": {
+        "producers": [{ "binding": "LOGOUT_QUEUE", "queue": "imprim-staging-logout" }],
+        "consumers": [{ "queue": "imprim-staging-logout", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 5, "dead_letter_queue": "imprim-staging-logout-dlq" }]
+      },
+      "triggers": { "crons": ["* * * * *"] }
+    },
+    // The existing Vibernt deployment. Names are kept so the deployed Worker, D1 database and queues stay the same.
+    "production": {
+      "name": "vibernt-identity",
+      "routes": [{ "pattern": "id.vibernt.ai", "custom_domain": true }],
+      // Read by the default realm's config as {"env":"EMAIL_FROM"} and {"env":"TURNSTILE_SITE_KEY"}.
+      "vars": { "EMAIL_FROM": "signin@vibernt.ai", "TURNSTILE_SITE_KEY": "0x4AAAAAAF0OXQdsR3N-CAwj" },
+      "d1_databases": [{ "binding": "DB", "database_name": "vibernt-identity", "database_id": "97962e16-d712-402a-82b8-b81685617809", "migrations_dir": "migrations" }],
+      "send_email": [{ "name": "EMAIL" }],
+      "ratelimits": [
+        { "name": "AUTH_LIMITER", "namespace_id": "5101", "simple": { "limit": 20, "period": 60 } },
+        { "name": "API_LIMITER", "namespace_id": "5102", "simple": { "limit": 120, "period": 60 } }
+      ],
+      "queues": {
+        "producers": [{ "binding": "LOGOUT_QUEUE", "queue": "vibernt-identity-logout" }],
+        "consumers": [{ "queue": "vibernt-identity-logout", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 5, "dead_letter_queue": "vibernt-identity-logout-dlq" }]
+      },
+      "triggers": { "crons": ["* * * * *"] }
+    }
+  }
+}

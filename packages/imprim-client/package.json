@@ -1,0 +1,5 @@
+{
+  "name": "imprim-client", "version": "0.3.0", "private": true, "type": "module",
+  "exports": { ".": { "types": "./index.d.ts", "default": "./index.mjs" } },
+  "types": "./index.d.ts", "engines": { "node": ">=20" }
+}

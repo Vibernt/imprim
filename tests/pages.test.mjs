@@ -1,0 +1,58 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { runInNewContext } from 'node:vm';
+import { world, begin } from './support/world.mjs';
+import { signInPage } from '../apps/server/src/pages/sign-in.mjs';
+for (const path of ['/login', '/check-email', '/error', '/signed-out']) test(`self-contained page smoke: ${path}`, async t => {
+    const w = await world(t), response = await w.call(path), html = await response.text();
+    assert.equal(response.status, path === '/error' ? 400 : 200);
+    // Turnstile's origin appears only on the page that renders the widget.
+    const turnstile = path === '/login' ? " https://challenges.cloudflare.com" : '', frames = path === '/login' ? 'https://challenges.cloudflare.com' : "'none'";
+    assert.equal(response.headers.get('content-security-policy'), `default-src 'self'; script-src 'self'${turnstile}; frame-src ${frames}; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
+    assert.match(html, /<html lang="en">/);
+    if (path !== '/login') assert.ok(!/<(?:script|link|img|iframe)[^>]+(?:src|href)="https?:/i.test(html));
+    assert.equal(response.headers.get('referrer-policy'), 'same-origin', 'no-referrer makes browsers send Origin: null on form POSTs, which the origin check refuses');
+});
+test('every page shows the realm name, escaped, and no product is written into the code', async t => {
+    const w = await world(t), html = await (await w.call('/signed-out')).text();
+    assert.match(html, /<header class="brand">Vibernt<\/header>/);
+    assert.match(html, /<title>Signed out · Vibernt<\/title>/);
+    w.env.DB.db.prepare("UPDATE realms SET display_name=? WHERE id='default'").run('<b>Acme</b>');
+    const { forgetRealms } = await import('../apps/server/src/realms/realm.mjs'); forgetRealms(w.env);
+    const escaped = await (await w.call('/signed-out')).text();
+    assert.ok(escaped.includes('&lt;b&gt;Acme&lt;/b&gt;') && !escaped.includes('<b>Acme'));
+    assert.ok(!escaped.includes('identity:brand'));
+    assert.equal((await w.call('/assets/logo.svg')).status, 404);
+});
+test('sign-in page escapes client branding and holds pending request id', async t => {
+    const w = await world(t);
+    w.env.DB.db.prepare('UPDATE clients SET branding=?').run(JSON.stringify({ name: '<script>alert(1)</script>' }));
+    const flow = await begin(w); assert.ok(flow.request_id);
+    const response = signInPage(w.env, 'id', [], { sign_in_methods: '["email"]', google_hosted_domains: '[]', branding: '{"name":"<img onerror=alert(1)>"}' });
+    const html = await response.text(); assert.ok(!html.includes('<img onerror')); assert.match(html, /&lt;img/);
+});
+test('fragment page never sends token on load; explicit click posts once and navigates via JSON', async t => {
+    const w = await world(t), html = await (await w.call('/login')).text();
+    assert.match(html, /<script src="\/assets\/sign-in.js" defer><\/script>/);
+    const script = await (await w.call('/assets/sign-in.js')).text();
+    const elements = new Map(), requests = [], navigations = [], history = [];
+    const document = { getElementById(id) {
+        if (!elements.has(id)) elements.set(id, { hidden: id === 'confirm', handlers: {}, addEventListener(event, fn) { this.handlers[event] = fn; } });
+        return elements.get(id);
+    } };
+    runInNewContext(script, {
+        document, URLSearchParams, window: {},
+        location: { hash: '#token=' + 'a'.repeat(43), pathname: '/login', assign(url) { navigations.push(url); } },
+        history: { replaceState(...args) { history.push(args); } },
+        async fetch(url, options) { requests.push({ url, options }); return Response.json({ redirect: 'https://app.example/callback?code=issued' }); }
+    });
+    assert.equal(requests.length, 0);
+    assert.equal(document.getElementById('confirm').hidden, false);
+    assert.equal(document.getElementById('request').hidden, true);
+    assert.equal(history[0][2], '/login');
+    await document.getElementById('verify').handlers.click();
+    assert.equal(requests.length, 1); assert.equal(requests[0].url, '/v1/auth/magic/verify');
+    assert.equal(requests[0].options.method, 'POST');
+    assert.equal(JSON.parse(requests[0].options.body).browser_response, true);
+    assert.deepEqual(navigations, ['https://app.example/callback?code=issued']);
+});

@@ -1,0 +1,113 @@
+import { invariant } from '../lib/errors.mjs';
+import { registeredUri } from '../oidc/clients.mjs';
+import { validateSignInSettings } from '../oidc/sign-in-methods.mjs';
+import { validateAgentSettings, settingNames } from '../agents/settings.mjs';
+import { randomToken, sha256 } from '../lib/crypto.mjs';
+import { auditStatement } from './auth.mjs';
+import { realmId } from '../realms/realm.mjs';
+const jsonFields = ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains',
+    ...settingNames.filter(k => !['agent_access','agent_max_grant_days'].includes(k))];
+export function publicClient(row) {
+    const { secret_hash, ...value } = row;
+    for (const field of jsonFields) value[field] = JSON.parse(value[field]);
+    return { ...value, confidential: Boolean(secret_hash) };
+}
+export async function getAdminClient(env, id) {
+    const row = await env.DB.prepare('SELECT * FROM clients WHERE id=? AND realm_id=?').bind(id, realmId(env)).first();
+    invariant(row, 'not_found', 'Client not found.', 404);
+    return publicClient(row);
+}
+function validate(config) {
+    invariant(typeof config.id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(config.id), 'invalid_request', 'Invalid client id.');
+    const { methods, domains } = validateSignInSettings(config.sign_in_methods, config.google_hosted_domains);
+    const agent = validateAgentSettings(config);
+    invariant(['invited','open'].includes(config.signup_policy) && [0,1].includes(config.dev), 'invalid_request', 'Invalid signup policy or dev flag.');
+    for (const name of ['redirect_uris','post_logout_uris']) {
+        invariant(Array.isArray(config[name]) && config[name].length <= 100 && (name !== 'redirect_uris' || config[name].length), 'invalid_request', 'Invalid URI list.');
+        for (const uri of config[name]) registeredUri({ dev: config.dev, [name]: JSON.stringify(config[name]) }, uri, name);
+    }
+    invariant(typeof config.backchannel_uri === 'string' && config.backchannel_uri.length > 0, 'invalid_request', 'A back-channel URI is required for session termination.');
+    registeredUri({ redirect_uris: JSON.stringify([config.backchannel_uri]), dev: 0 }, config.backchannel_uri);
+    validateSignInSettings(methods, config.allowed_domains);
+    invariant(config.branding && typeof config.branding === 'object' && !Array.isArray(config.branding) &&
+        Object.keys(config.branding).every(k => k === 'name') && typeof config.branding.name === 'string' && config.branding.name.length <= 200,
+    'invalid_request', 'Branding requires a name of at most 200 characters.');
+    const value = { ...config, sign_in_methods: methods, google_hosted_domains: domains, ...agent };
+    delete value.confidential;
+    return Object.fromEntries(Object.entries(value).map(([k,v]) => [k, jsonFields.includes(k) ? JSON.stringify(v) : v]));
+}
+export async function saveClient(env, actor, id, input) {
+    const old = id ? await getAdminClient(env, id) : null;
+    const allowed = ['id','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev',
+        'sign_in_methods','google_hosted_domains',...settingNames, ...(old ? ['version'] : [])];
+    invariant(Object.keys(input).every(k => allowed.includes(k)), 'invalid_request', 'Unknown client field; secrets cannot be supplied.');
+    invariant(!id || input.id === undefined || input.id === id, 'invalid_request', 'Client id cannot change.');
+    if (old) {
+        invariant(Number.isSafeInteger(input.version) && input.version >= 0, 'invalid_request', 'The client version is required.');
+        invariant(input.version === old.version, 'conflict', 'Client changed; reload before editing.', 409);
+    }
+    const config = { redirect_uris: [], post_logout_uris: [], backchannel_uri: null, signup_policy: 'invited',
+        allowed_domains: [], branding: { name: '' }, dev: 0, sign_in_methods: ['email'], google_hosted_domains: [], ...old, ...input };
+    let value;
+    try { value = validate(config); }
+    catch (error) {
+        if (error.code || error instanceof TypeError) invariant(false, 'invalid_request', 'Invalid client configuration: ' + (error.code ? error.message : 'malformed field.'));
+        throw error;
+    }
+    value.version = old ? old.version + 1 : 0;
+    delete value.realm_id;
+    if (!old) value.realm_id = realmId(env);
+    const secret = old ? null : randomToken();
+    if (!old) value.secret_hash = await sha256(secret);
+    const fields = Object.keys(value).filter(k => k !== 'id');
+    const statement = old
+        ? env.DB.prepare(`UPDATE clients SET ${fields.map(k => `${k}=?`).join(',')} WHERE id=? AND version=? AND realm_id=?`).bind(...fields.map(k => value[k]), id, old.version, realmId(env))
+        : env.DB.prepare(`INSERT INTO clients(${Object.keys(value).join(',')}) VALUES(${Object.keys(value).map(() => '?').join(',')})`).bind(...Object.values(value));
+    // The detail records field names only: no secrets, hashes, credentials or URI query strings.
+    // Turning agent access off revokes every live grant for the app and notifies it, in the same transaction (S12).
+    // Turning it back on revives nothing: each person connects their agent again.
+    const disabling = old?.agent_access === 'on' && value.agent_access === 'off';
+    try {
+        await env.DB.batch([...(old ? [versionGuard(env, id, old.version)] : []), statement,
+            ...(disabling ? revokeAppGrants(env, id) : []),
+            auditStatement(env, actor, old ? 'admin_client_update' : 'admin_client_create', value.id, { fields: Object.keys(input).filter(k => k !== 'id'), ...(disabling ? { revoked_agent_grants: true } : {}) })]);
+    } catch (error) {
+        if (String(error.message).includes('admin_assertions')) invariant(false, 'conflict', 'Client changed; reload before editing.', 409);
+        if (String(error.message).includes('UNIQUE constraint')) invariant(false, 'conflict', 'Client already exists.', 409);
+        throw error;
+    }
+    return { client: await getAdminClient(env, value.id), ...(secret ? { client_secret: secret } : {}) };
+}
+function revokeAppGrants(env, appId) {
+    const now = Date.now();
+    return [
+        env.DB.prepare(`INSERT INTO agent_revocation_outbox(id,grant_id,app_id,user_id,resource,uri,created)
+            SELECT lower(hex(randomblob(16))),g.id,g.app_id,g.user_id,g.resource,coalesce(c.backchannel_uri,''),?
+            FROM agent_grants g JOIN clients c ON c.id=g.app_id WHERE g.app_id=? AND g.revoked_at IS NULL AND g.expires_at>?`).bind(now, appId, now),
+        env.DB.prepare('UPDATE agent_grants SET revoked_at=? WHERE app_id=? AND revoked_at IS NULL').bind(now, appId),
+        env.DB.prepare("UPDATE agent_devices SET status='denied' WHERE app_id=? AND status IN ('pending','approved')").bind(appId)
+    ];
+}
+function versionGuard(env, id, version) {
+    return env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT CASE WHEN EXISTS(
+        SELECT 1 FROM clients WHERE id=? AND version=?) THEN 1 ELSE 0 END`).bind(id, version);
+}
+export async function rotateSecret(env, actor, id, input = {}) {
+    const old = await getAdminClient(env, id);
+    invariant(Object.keys(input).every(key => key === 'make_confidential') &&
+        (input.make_confidential === undefined || typeof input.make_confidential === 'boolean'),
+    'invalid_request', 'make_confidential must be an explicit boolean.');
+    invariant(old.confidential || input.make_confidential === true, 'invalid_request', 'Public client: explicitly choose make_confidential to change authentication.');
+    const secret = randomToken();
+    try {
+        await env.DB.batch([
+            versionGuard(env, id, old.version),
+            env.DB.prepare('UPDATE clients SET secret_hash=?,version=version+1 WHERE id=? AND version=? AND realm_id=?').bind(await sha256(secret), id, old.version, realmId(env)),
+            auditStatement(env, actor, 'admin_client_secret_rotate', id, { made_confidential: !old.confidential })
+        ]);
+    } catch (error) {
+        if (String(error.message).includes('admin_assertions')) invariant(false, 'conflict', 'Client changed; reload before rotating.', 409);
+        throw error;
+    }
+    return { id, client_secret: secret };
+}

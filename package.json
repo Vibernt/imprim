@@ -1,0 +1,12 @@
+{
+  "name": "imprim", "private": true, "type": "module",
+  "workspaces": ["apps/server", "packages/imprim-client"],
+  "engines": {"node": ">=22.13.0"},
+  "scripts": {
+    "pretest": "node scripts/build-client.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "pretest:quiet": "node scripts/build-client.mjs",
+    "test:quiet": "node --test --test-reporter=./scripts/quiet-reporter.mjs tests/*.test.mjs",
+    "check": "node scripts/check.mjs"
+  }
+}

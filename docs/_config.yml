@@ -1,0 +1,5 @@
+title: Imprim
+description: Identity for people and the agents that act for them. OpenID Connect and OAuth 2.1 on Cloudflare Workers.
+theme: jekyll-theme-cayman
+plugins: [jekyll-relative-links]
+relative_links: { enabled: true, collections: false }
