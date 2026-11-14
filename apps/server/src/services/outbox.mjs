@@ -2,7 +2,7 @@ import { invariant } from '../lib/errors.mjs';
 import { expireBacklog } from './outbox-expiry.mjs';
 // These table/type pairs are internal constants, never request input.
 export async function dispatchOutbox(env, table, type) {
-    invariant(['logout_outbox','agent_revocation_outbox'].includes(table), 'outbox_config', 'Unknown outbox.', 503);
+    invariant(['logout_outbox','agent_revocation_outbox','user_event_outbox'].includes(table), 'outbox_config', 'Unknown outbox.', 503);
     await expireBacklog(env, table);
     const cutoff = Date.now() - 60000;
     let after = '';
@@ -24,7 +24,7 @@ export async function dispatchOutbox(env, table, type) {
 // Queue one new event from a user request. Failures leave it for the cron dispatcher; the request never waits on
 // the system-wide backlog (S13).
 export function queueEvent(env, ctx, table, type, id) {
-    invariant(['logout_outbox','agent_revocation_outbox'].includes(table), 'outbox_config', 'Unknown outbox.', 503);
+    invariant(['logout_outbox','agent_revocation_outbox','user_event_outbox'].includes(table), 'outbox_config', 'Unknown outbox.', 503);
     if (!id) return;
     ctx?.waitUntil((async () => {
         invariant(typeof env.LOGOUT_QUEUE?.send === 'function', 'queue_config', 'LOGOUT_QUEUE is required.', 503);
@@ -47,7 +47,8 @@ export async function deliveryStatus(env) {
 export async function dispatchDeliveries(env) {
     const results = await Promise.allSettled([
         dispatchOutbox(env, 'logout_outbox', 'human_logout'),
-        dispatchOutbox(env, 'agent_revocation_outbox', 'agent_revocation')
+        dispatchOutbox(env, 'agent_revocation_outbox', 'agent_revocation'),
+        dispatchOutbox(env, 'user_event_outbox', 'user_event')
     ]);
     const failed = results.find(result => result.status === 'rejected');
     if (failed) throw failed.reason;

@@ -30,7 +30,19 @@ export function validateResourcePrefixes(prefixes, fail) {
     if (!Array.isArray(prefixes)) fail('configuration', 'resourcePrefixes must be an array.');
     for (const prefix of prefixes) eventResource(prefix, fail, 'configuration');
 }
+// User lifecycle events (0.6.0): one `${issuer}/events/<event>` with a small payload object.
+export const USER_EVENTS = ['user-updated', 'user-blocked', 'user-unblocked', 'user-deleted', 'user-merged', 'mfa-reset'];
+function userEventClaims(header, claims, { issuer, clientId, clockSkewSeconds = 60 }, fail) {
+    const now = Math.floor(Date.now() / 1000), keys = claims.events && typeof claims.events === 'object' && !Array.isArray(claims.events) ? Object.keys(claims.events) : [];
+    const name = keys.length === 1 && keys[0].startsWith(`${issuer}/events/`) ? keys[0].slice(issuer.length + 8) : null, payload = name && claims.events[keys[0]];
+    if (header.typ !== 'secevent+jwt' || claims.iss !== issuer || claims.aud !== clientId || !nonempty(claims.sub) || !nonempty(claims.jti) || claims.nonce !== undefined ||
+        !USER_EVENTS.includes(name) || !payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp) || claims.exp <= claims.iat || claims.exp - claims.iat > 900 || claims.exp <= now || claims.iat > now + clockSkewSeconds)
+        fail('invalid_token', 'Invalid user event token.');
+    return { sub: claims.sub, jti: claims.jti, event: name, data: payload, iat: claims.iat, exp: claims.exp };
+}
 export function validateBackchannelClaims(header, claims, options, kind, fail) {
+    if (kind === 'user') return userEventClaims(header, claims, options, fail);
     eventClaims(header, claims, options, kind, fail);
     if (kind === 'logout') {
         if ((claims.sub !== undefined && !nonempty(claims.sub)) || (claims.sid !== undefined && !nonempty(claims.sid)) ||
@@ -49,14 +61,16 @@ export function validateBackchannelClaims(header, claims, options, kind, fail) {
 export function backchannelMethods(verify, fail) {
     const verifyLogoutToken = (token, options = {}) => verify(token, { logout: true, clockSkewSeconds: options.clockSkewSeconds });
     const verifyRevocationToken = (token, options = {}) => verify(token, { revocation: true, clockSkewSeconds: options.clockSkewSeconds });
+    const verifyUserEventToken = (token, options = {}) => verify(token, { userEvent: true, clockSkewSeconds: options.clockSkewSeconds });
     async function verifyBackchannel(form, options) {
         if (!form || typeof form.getAll !== 'function') fail('invalid_response', 'FormData or URLSearchParams required.');
-        const logout = form.getAll('logout_token'), revocation = form.getAll('revocation_token');
-        if (logout.length + revocation.length !== 1) fail('invalid_response', 'Exactly one back-channel token required.');
-        const token = (logout.length ? logout : revocation)[0];
+        const logout = form.getAll('logout_token'), revocation = form.getAll('revocation_token'), user = form.getAll('event_token');
+        if (logout.length + revocation.length + user.length !== 1) fail('invalid_response', 'Exactly one back-channel token required.');
+        const token = (logout.length ? logout : revocation.length ? revocation : user)[0];
         if (!nonempty(token)) fail('invalid_response', 'A nonempty token string is required.');
         return logout.length ? { kind: 'logout', claims: await verifyLogoutToken(token, options) } :
-            { kind: 'revocation', claims: await verifyRevocationToken(token, options) };
+            revocation.length ? { kind: 'revocation', claims: await verifyRevocationToken(token, options) } :
+            { kind: 'user', claims: await verifyUserEventToken(token, options) };
     }
     async function readEvent(request, kind) {
         if (request.method !== 'POST' || request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/x-www-form-urlencoded')
@@ -68,7 +82,12 @@ export function backchannelMethods(verify, fail) {
         return event.claims;
     }
     return {
-        verifyLogoutToken, verifyRevocationToken, verifyBackchannel,
+        verifyLogoutToken, verifyRevocationToken, verifyUserEventToken, verifyBackchannel,
+        // { sub, event, data, jti }: deduplicate jti; event is one of USER_EVENTS.
+        async handleUserEvent(request) {
+            const { sub, event, data, jti } = await readEvent(request, 'user');
+            return { sub, event, data, jti };
+        },
         async handleBackchannelLogout(request) {
             const { sub, sid, jti } = await readEvent(request, 'logout');
             return { sub, sid, jti };

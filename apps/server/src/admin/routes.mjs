@@ -49,6 +49,14 @@ export async function admin(request, env, ctx) {
             const rows = await users(env, url.searchParams);
             return api ? json({ users: rows.slice(0,50), next: rows.length > 50 ? rows[49].id : null }) : pages.userList(rows, url.searchParams.get('q') || '');
         }
+        // NDJSON export of this realm's audit log, 1,000 rows a page, oldest first; follow x-next-after.
+        if (section === 'audit' && id === 'export' && api) {
+            const after = url.searchParams.get('after') || '0';
+            invariant(/^\d{1,19}$/.test(after), 'invalid_request', 'Invalid page cursor.');
+            const rows = (await env.DB.prepare('SELECT id,event,actor,target,detail,created FROM audit WHERE realm_id=? AND id>? ORDER BY id LIMIT 1000').bind(realmId(env), after).all()).results;
+            return new Response(rows.map(row => JSON.stringify(row)).join('\n') + (rows.length ? '\n' : ''), { headers: { 'content-type': 'application/x-ndjson',
+                'cache-control': 'no-store', ...(rows.length === 1000 ? { 'x-next-after': String(rows.at(-1).id) } : {}) } });
+        }
         if (section === 'audit' && !id) {
             const before = url.searchParams.get('before') || '9223372036854775807';
             invariant(/^\d{1,19}$/.test(before), 'invalid_request', 'Invalid page cursor.');

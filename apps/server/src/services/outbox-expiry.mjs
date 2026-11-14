@@ -1,7 +1,7 @@
 import { invariant } from '../lib/errors.mjs';
 
 export const deliveryWindowMs = 24 * 60 * 60 * 1000;
-const tables = { logout_outbox: ['client_id','human_logout'], agent_revocation_outbox: ['app_id','agent_revocation'] };
+const tables = { logout_outbox: ['client_id','human_logout'], agent_revocation_outbox: ['app_id','agent_revocation'], user_event_outbox: ['client_id','user_event'] };
 
 export async function expireEvent(env, table, row, now = Date.now()) {
     const config = tables[table];

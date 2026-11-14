@@ -43,7 +43,8 @@ for (const action of ['block','delete']) test(`${action} atomically ends all ide
         return new Response(null, { status: 204 });
     });
     let acks = 0, retries = 0;
-    const batch = { messages: w.events.map(body => ({ body, ack() { acks++; }, retry() { retries++; } })) };
+    // User lifecycle events are covered in user-events.test.mjs; this test is about logout and revocation.
+    const batch = { messages: w.events.filter(body => body.type !== 'user_event').map(body => ({ body, ack() { acks++; }, retry() { retries++; } })) };
     await queue(batch, w.env); await queue(batch, w.env);
     assert.equal(acks, 6); assert.equal(retries, 0); assert.equal(ended.length, 2); assert.equal(notifications.length, 1);
     assert.ok(ended.every(c => c.sub === w.user.id));
@@ -76,16 +77,16 @@ test('failed queue and receiver keep durable outbox, scheduled dispatcher retrie
     for (const table of ['logout_outbox','agent_revocation_outbox']) assert.equal(w.env.DB.db.prepare(`SELECT queued_at FROM ${table}`).get().queued_at, null);
     assert.ok(w.env.DB.db.prepare("SELECT 1 FROM audit WHERE event='admin_dispatch_failed'").get());
     w.env.LOGOUT_QUEUE.send = async event => w.events.push(event);
-    await scheduled(w.env); assert.equal(w.events.length, 2);
+    await scheduled(w.env); assert.equal(w.events.filter(e => e.type !== 'user_event').length, 2);
     t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 503 }));
     let retries = 0;
-    await queue({ messages: w.events.map(body => ({ body, ack() { assert.fail('failed receiver was acked'); }, retry({ delaySeconds }) { assert.equal(delaySeconds, 10); retries++; } })) }, w.env);
+    await queue({ messages: w.events.filter(body => body.type !== 'user_event').map(body => ({ body, ack() { assert.fail('failed receiver was acked'); }, retry({ delaySeconds }) { assert.equal(delaySeconds, 10); retries++; } })) }, w.env);
     assert.equal(retries, 2);
     for (const table of ['logout_outbox','agent_revocation_outbox']) {
         assert.equal(w.env.DB.db.prepare(`SELECT delivered_at FROM ${table}`).get().delivered_at, null);
         w.env.DB.db.exec(`UPDATE ${table} SET queued_at=0`);
     }
-    await scheduled(w.env); assert.equal(w.events.length, 4);
+    await scheduled(w.env); assert.equal(w.events.filter(e => e.type !== 'user_event').length, 4);
 });
 
 test('block transaction rolls back status, outbox, sessions and revocations if audit fails', async t => {

@@ -12,7 +12,7 @@ export function createVerifier({ keys, issuerText, clientId, resourcePrefixes, f
         try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(unb64(value))); }
         catch { fail('invalid_token', 'Malformed JWT JSON.'); }
     }
-    async function verify(jwt, { nonce, maxAge, logout = false, access = false, revocation = false, audience, clockSkewSeconds } = {}) {
+    async function verify(jwt, { nonce, maxAge, logout = false, access = false, revocation = false, userEvent = false, audience, clockSkewSeconds } = {}) {
         if (typeof jwt !== 'string') fail('invalid_token', 'JWT required.');
         const parts = jwt.split('.');
         if (parts.length !== 3) fail('invalid_token', 'Malformed JWT.');
@@ -29,7 +29,7 @@ export function createVerifier({ keys, issuerText, clientId, resourcePrefixes, f
         if (!verified) fail('invalid_token', 'Invalid signature.');
         if (!claims || typeof claims !== 'object' || Array.isArray(claims)) fail('invalid_token', 'Invalid JWT claims.');
         if (access) return validateAccessClaims(header, claims, audience, issuerText, fail, clockSkewSeconds);
-        if (logout || revocation) return validateBackchannelClaims(header, claims, { issuer: issuerText, clientId, resourcePrefixes, clockSkewSeconds }, logout ? 'logout' : 'revocation', fail);
+        if (logout || revocation || userEvent) return validateBackchannelClaims(header, claims, { issuer: issuerText, clientId, resourcePrefixes, clockSkewSeconds }, logout ? 'logout' : revocation ? 'revocation' : 'user', fail);
         if (header.typ === 'at+jwt') fail('invalid_token', 'Access tokens cannot be used as ID or logout tokens.');
         const now = Math.floor(Date.now() / 1000), aud = claims.aud;
         if (claims.iss !== issuerText || !(aud === clientId || (Array.isArray(aud) && aud.includes(clientId) && aud.every(x => typeof x === 'string'))) || (Array.isArray(aud) && aud.length > 1 && claims.azp !== clientId) || (claims.azp !== undefined && claims.azp !== clientId)) fail('invalid_token', 'Issuer or audience mismatch.');

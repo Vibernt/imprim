@@ -15,6 +15,7 @@ import { agentsSection } from '../agents/account.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { notify } from '../services/notify.mjs';
 import { audit } from '../services/audit.mjs';
+import { userEventStatements } from '../services/user-events.mjs';
 const FRESH_MS = 600000;
 const hidden = (name, value) => `<input type="hidden" name="${name}" value="${e(value ?? '')}">`;
 const action = (request, path, fields, label) => `<form method="post" action="${path}">${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}${fields}<button>${e(label)}</button></form>`;
@@ -66,7 +67,11 @@ export async function accountAction(request, env, ctx) {
     if (what === 'profile') {
         const name = typeof body.display_name === 'string' ? body.display_name.replace(/[\u0000-\u001f\u007f‪-‮⁦-⁩]/g, '').trim() : '';
         invariant(name.length <= 100, 'invalid_request', 'Use at most 100 characters.');
-        await env.DB.prepare('UPDATE users SET display_name=? WHERE id=?').bind(name || null, session.user_id).run();
+        const before = await env.DB.prepare('SELECT display_name FROM users WHERE id=?').bind(session.user_id).first();
+        if ((before?.display_name || null) !== (name || null))
+            await env.DB.batch([env.DB.prepare('UPDATE users SET display_name=? WHERE id=?').bind(name || null, session.user_id),
+                ...userEventStatements(env, session.user_id, 'user-updated', { name: name || null })]);
+        ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'event_dispatch_failed', null, { pending: true })));
         await audit(env, 'profile_updated', session.user_id, { fields: ['display_name'] });
         return accountHome(request, env, session, 'Name saved.');
     }
@@ -147,11 +152,13 @@ async function confirmEmailChange(request, env, ctx, session, body) {
     const old = session.email;
     try {
         await env.DB.batch([env.DB.prepare('UPDATE users SET email=?,email_verified=1 WHERE id=?').bind(row.new_email, session.user_id),
+            ...userEventStatements(env, session.user_id, 'user-updated', { email: row.new_email }),
             env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES('email_changed',?,'{}',?,?)").bind(session.user_id, Date.now(), env.REALM.id)]);
     } catch (error) {
         invariant(!String(error.message).includes('UNIQUE'), 'conflict', 'That address belongs to another account.', 409);
         throw error;
     }
+    ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'event_dispatch_failed', null, { pending: true })));
     notify(env, ctx, old, 'your email was changed', `Your account's email changed from ${old} to ${row.new_email}. If you did not do this, contact the app you use.`);
     return redirect(`${env.ISSUER}/account?changed=email`);
 }
@@ -162,7 +169,8 @@ async function deleteAccount(request, env, ctx, session, body) {
         invariant(session.mfa_at && session.mfa_at > Date.now() - FRESH_MFA_MS, 'mfa_required', 'Enter a second-factor code at /mfa?next=/account first.', 403);
     const id = session.user_id, now = Date.now();
     // Ends identity and app sessions (back-channel), agent grants (revocation events) and every sign-in method.
-    await env.DB.batch([...endAccess(env, id),
+    // The deletion event goes first: the statements after it remove the admissions that address it.
+    await env.DB.batch([...userEventStatements(env, id, 'user-deleted'), ...endAccess(env, id),
         env.DB.prepare('DELETE FROM user_identities WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM user_passwords WHERE user_id=?').bind(id),
         env.DB.prepare('DELETE FROM mfa_factors WHERE user_id=?').bind(id), env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(id),
         env.DB.prepare('DELETE FROM webauthn_credentials WHERE user_id=?').bind(id),

@@ -5,6 +5,7 @@ import { deliverRevocation } from '../agents/revocation.mjs';
 import { keySweep } from '../oidc/keys.mjs';
 import { recordDeliveryError } from './outbox-expiry.mjs';
 import { cleanExpiredAppSessions } from '../oidc/app-sessions.mjs';
+import { deliverUserEvent } from './user-events.mjs';
 import { configuredRealms, realmEnv } from '../realms/realm.mjs';
 export async function scheduled(env) {
     // Delivery is independent of key maintenance: a bad sealing key must not stop enqueueing.
@@ -42,13 +43,14 @@ export async function sweepGrants(env, now = Date.now()) {
     ]);
     await env.DB.prepare('DELETE FROM audit WHERE id IN (SELECT id FROM audit WHERE created<=? ORDER BY id LIMIT 5000)').bind(now - AUDIT_RETENTION_MS - 86400000).run();
 }
+const DELIVERY = { human_logout: ['logout_outbox', deliverLogout], agent_revocation: ['agent_revocation_outbox', deliverRevocation], user_event: ['user_event_outbox', deliverUserEvent] };
 export async function queue(batch, env) {
     await Promise.all(batch.messages.map(async message => {
-        if (!['agent_revocation','human_logout'].includes(message.body?.type)) { message.retry({ delaySeconds: 3600 }); return; }
-        try { await (message.body.type === 'human_logout' ? deliverLogout : deliverRevocation)(env, message); message.ack(); }
+        const route = DELIVERY[message.body?.type];
+        if (!route) { message.retry({ delaySeconds: 3600 }); return; }
+        try { await route[1](env, message); message.ack(); }
         catch (error) {
-            const table = message.body.type === 'human_logout' ? 'logout_outbox' : 'agent_revocation_outbox';
-            await recordDeliveryError(env, table, message.body.event_id, error);
+            await recordDeliveryError(env, route[0], message.body.event_id, error);
             message.retry({ delaySeconds: 10 });
         }
     }));

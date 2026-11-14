@@ -4,6 +4,7 @@ import { auditStatement } from './auth.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { logoutStatements } from '../oidc/backchannel.mjs';
 import { notify } from '../services/notify.mjs';
+import { userEventStatements } from '../services/user-events.mjs';
 // An admin acts only on people of equal or lower role: a realm admin cannot block, delete, merge or reset the
 // second factor of a platform admin.
 const RANK = { realm: 1, platform: 2 };
@@ -24,7 +25,8 @@ export async function changeUser(env, actor, id, action, survivor, confirmSource
         const result = await env.DB.batch([
             env.DB.prepare("UPDATE users SET status='active' WHERE id=? AND status='blocked' AND merged_into IS NULL RETURNING id").bind(id),
             env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id) SELECT 'admin_unblock',?,?,?,?,? WHERE changes()=1`)
-                .bind(actor, id, '{}', Date.now(), env.REALM?.id ?? null)
+                .bind(actor, id, '{}', Date.now(), env.REALM?.id ?? null),
+            ...userEventStatements(env, id, 'user-unblocked')
         ]);
         invariant(result[0].results.length === 1, 'conflict', 'User changed; reload.', 409);
         return { id, status: 'active' };
@@ -47,6 +49,7 @@ export async function changeUser(env, actor, id, action, survivor, confirmSource
     }
     statements.push(env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT CASE WHEN
         EXISTS(SELECT 1 FROM users WHERE id=? AND status=? AND email=? AND merged_into IS NULL) THEN 1 ELSE 0 END`).bind(id, user.status, user.email));
+    statements.push(...userEventStatements(env, id, action === 'block' ? 'user-blocked' : action === 'merge' ? 'user-merged' : 'user-deleted', action === 'merge' ? { into: survivor } : {}));
     statements.push(...endAccess(env, id));
     if (action === 'merge') {
         // Survivor also reauthenticates: no session/grant silently gains a newly linked identity.
@@ -93,6 +96,7 @@ export async function resetMfa(env, actor, id, reason) {
         env.DB.prepare('DELETE FROM webauthn_credentials WHERE user_id=?').bind(id),
         env.DB.prepare('DELETE FROM trusted_devices WHERE user_id=?').bind(id),
         ...logoutStatements(env, id), env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id),
+        ...userEventStatements(env, id, 'mfa-reset'),
         auditStatement(env, actor, 'admin_mfa_reset', id, { reason: reason.trim() })]);
     notify(env, env.CTX, user.email, 'your two-factor authentication was reset', `An administrator reset two-factor authentication on your account (reason: ${reason.trim()}). You were signed out and will set it up again at your next sign-in.`);
     return { id, mfa_reset: true };

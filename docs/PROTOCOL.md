@@ -415,6 +415,25 @@ decision.
   chains, at most four).
 - **Limits:** DPoP-bound tokens cannot be exchanged. B still checks the person's membership.
 
+**User lifecycle events** (`event_token` on the back-channel URI). Every app that admitted a person receives one
+signed security event token (RFC 8417, `typ=secevent+jwt`, `aud` = the app, `sub` = the person, a stable `jti`,
+five-minute lifetime) per change. Event types live under `<issuer>/events/`:
+
+| Event | Payload | When |
+|---|---|---|
+| `user-updated` | `{name}` or `{email}` | The person changed their name or email |
+| `user-blocked` / `user-unblocked` | `{}` | An admin blocked or unblocked them |
+| `user-deleted` | `{}` | They deleted their account, or an admin did |
+| `user-merged` | `{into}` | An admin merged them into another account |
+| `mfa-reset` | `{}` | An admin reset their second factor |
+
+Delivery uses the same durable outbox, queue, retry, 24-hour window and dead-letter queue as logout. Verify the event
+with `imprim-client` 0.6.0 (`handleUserEvent(request)` or `verifyBackchannel(form)` → `kind: 'user'`) and
+deduplicate `jti`.
+
+**Audit export.** `GET /admin/api/audit/export?after=<id>` returns the realm's audit rows as NDJSON, oldest first,
+1,000 a page, with `x-next-after` while more remain. Audit is kept for 400 days.
+
 ### Device state machine
 
 A random device secret and eight-character human code (shown in two groups) are stored only as hashes. Issuance and
