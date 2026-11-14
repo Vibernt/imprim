@@ -36,6 +36,10 @@ export async function mfaAccount(request, env, ctx) {
     const now = Date.now(), freshMfa = session.mfa_at && session.mfa_at > now - FRESH_MFA_MS;
     const factors = await confirmedFactors(env, session.user_id);
     // Adding a factor needs a fresh sign-in (or a fresh second factor), so a stolen session cookie cannot enrol one.
+    // Someone who already has a factor proves it before adding another; otherwise a sign-in without the second factor
+    // could enrol its own and pass every gate.
+    if (['start', 'confirm'].includes(values.action) && factors.length)
+        invariant(freshMfa, 'mfa_required', 'Enter a code from your current authenticator at /mfa?next=/account/mfa first (within ten minutes).', 403);
     if (values.action === 'start') {
         invariant(session.auth_time * 1000 > now - FRESH_AUTH_MS || freshMfa, 'reauth_required', 'Sign in again (within ten minutes) before adding a second factor.', 403);
         const id = crypto.randomUUID(), secret = newSecret();

@@ -49,7 +49,7 @@ export async function attempt(env, key, limit = PASSWORD_FAILURE_LIMIT) {
     const now = Date.now();
     const row = await env.DB.prepare(`INSERT INTO rate_limits(key,count,expires_at) VALUES(?,1,?)
         ON CONFLICT(key) DO UPDATE SET count=CASE WHEN expires_at<=? THEN 1 ELSE count+1 END,
-        expires_at=CASE WHEN expires_at<=? THEN excluded.expires_at WHEN count+1>=? THEN ? ELSE expires_at END RETURNING count`)
+        expires_at=CASE WHEN expires_at<=? THEN excluded.expires_at WHEN count+1=? THEN ? ELSE expires_at END RETURNING count`)
         .bind(key, now + FAILURE_WINDOW_MS, now, now, limit, now + FAILURE_WINDOW_MS).first();
     return row.count <= limit;
 }

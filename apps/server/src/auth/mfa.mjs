@@ -30,8 +30,8 @@ export async function trustedDevice(env, request, client, session, row, agent) {
     const token = cookies(request)[DEVICE_COOKIE];
     if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
     const now = Date.now(), since = now - client.mfa_trusted_device_days * 86400000;
-    const result = await env.DB.prepare('UPDATE trusted_devices SET last_used=? WHERE hash=? AND user_id=? AND expires_at>? AND created>?')
-        .bind(now, await sha256(token), session.user_id, now, since).run();
+    const result = await env.DB.prepare('UPDATE trusted_devices SET last_used=? WHERE hash=? AND user_id=? AND client_id=? AND expires_at>? AND created>?')
+        .bind(now, await sha256(token), session.user_id, client.id, now, since).run();
     return result.meta.changes === 1;
 }
 // null when the second factor is satisfied; otherwise where to send the person.
@@ -76,12 +76,12 @@ export async function recoveryStatements(env, userId) {
     for (const code of codes) statements.push(env.DB.prepare('INSERT INTO recovery_codes(user_id,hash,created) VALUES(?,?,?)').bind(userId, await sha256(code), now));
     return { codes: codes.map(code => `${code.slice(0, 5)}-${code.slice(5)}`), statements };
 }
-export async function trustBrowser(env, userId, days, request) {
+export async function trustBrowser(env, userId, clientId, days, request) {
     invariant(Number.isInteger(days) && days > 0, 'invalid_request', 'This app does not remember browsers.');
     const token = randomToken(), now = Date.now();
     const agent = (request.headers.get('user-agent') || 'Browser').replace(/[^\x20-\x7e]/g, '').slice(0, 60) || 'Browser';
-    await env.DB.prepare('INSERT INTO trusted_devices(hash,user_id,name,created,last_used,expires_at) VALUES(?,?,?,?,?,?)')
-        .bind(await sha256(token), userId, agent, now, now, now + days * 86400000).run();
+    await env.DB.prepare('INSERT INTO trusted_devices(hash,user_id,client_id,name,created,last_used,expires_at) VALUES(?,?,?,?,?,?,?)')
+        .bind(await sha256(token), userId, clientId, agent, now, now, now + days * 86400000).run();
     return cookie(DEVICE_COOKIE, token, days * 86400);
 }
 // Any password or factor change ends remembered browsers.

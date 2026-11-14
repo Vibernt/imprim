@@ -37,9 +37,9 @@ export async function authorize(request, env) {
     const existing = cookies(request)[BROWSER_COOKIE];
     const browser = tokenShape(existing) ? existing : randomToken(), id = randomToken();
     const responseCookies = [cookie(BROWSER_COOKIE, browser, 1800)];
-    await env.DB.prepare(`INSERT INTO auth_requests(id,client_id,redirect_uri,state,nonce,challenge,scope,browser_hash,expires_at,acr_values,max_age)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?)`).bind(id, client.id, query.redirect_uri, query.state, query.nonce,
-            query.code_challenge, query.scope, await sha256(browser), Date.now() + 1800000, query.acr_values ?? null, query.max_age === undefined ? null : Number(query.max_age)).run();
+    await env.DB.prepare(`INSERT INTO auth_requests(id,client_id,redirect_uri,state,nonce,challenge,scope,browser_hash,expires_at,acr_values,max_age,prompt)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, client.id, query.redirect_uri, query.state, query.nonce,
+            query.code_challenge, query.scope, await sha256(browser), Date.now() + 1800000, query.acr_values ?? null, query.max_age === undefined ? null : Number(query.max_age), query.prompt ?? null).run();
     if (session) {
         // Carry the just-created binding internally for immediate SSO; never trust a caller-supplied request id.
         const headers = new Headers(request.headers);

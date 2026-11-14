@@ -14,8 +14,9 @@ CREATE TABLE recovery_codes (
  PRIMARY KEY(user_id, hash)
 );
 -- "Remember this browser": a hashed device token, revocable, ended by any password or factor change.
+-- Trust is per app: one app's opt-in never lets a browser skip another app's second factor.
 CREATE TABLE trusted_devices (
- hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), name TEXT NOT NULL,
+ hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), client_id TEXT NOT NULL, name TEXT NOT NULL,
  created INTEGER NOT NULL, last_used INTEGER NOT NULL, expires_at INTEGER NOT NULL
 );
 CREATE INDEX trusted_devices_user ON trusted_devices(user_id);
@@ -29,3 +30,4 @@ ALTER TABLE clients ADD COLUMN agent_consent_mfa TEXT NOT NULL DEFAULT 'off' CHE
 -- Step-up requested by the app: acr_values and max_age travel with the authorization request.
 ALTER TABLE auth_requests ADD COLUMN acr_values TEXT;
 ALTER TABLE auth_requests ADD COLUMN max_age INTEGER;
+ALTER TABLE auth_requests ADD COLUMN prompt TEXT;

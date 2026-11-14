@@ -27,6 +27,11 @@ export async function completeAuthorization(env, request, id, session, responseC
     const { row, client } = await pendingRequest(env, request, id);
     requireMethod(client, session.method, session.google_hd, true);
     invariant(await sessionByHash(env, session.hash), 'access_denied', 'Account unavailable.', 403);
+    // prompt=login and max_age hold however the sign-in continues (the MFA and set-password pages included): the
+    // session must be newer than the request, or than max_age.
+    const created = row.expires_at - 1800000, authMs = session.auth_time * 1000;
+    invariant(row.prompt !== 'login' || authMs >= created - 1000, 'login_required', 'This app asked for a fresh sign-in. Sign in again.', 401);
+    invariant(row.max_age == null || authMs >= Date.now() - row.max_age * 1000, 'login_required', 'This app asked for a recent sign-in. Sign in again.', 401);
     await admitSession(env, client, session);
     // The second factor sits in front of every code and every agent consent.
     const gate = await mfaGate(env, request, { client, session, row, agent: Boolean(row.agent_client_id) });

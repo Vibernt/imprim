@@ -105,14 +105,16 @@ code and every agent consent sends the browser to `/mfa?request_id=…` (enter a
 30-second steps, one step of drift; each step is accepted once; secrets are sealed with `SEALING_KEY`), and ten
 single-use recovery codes (shown once, stored as SHA-256). Ten wrong codes within 15 minutes lock the factor, and
 attempts are counted before they are checked, so a parallel burst cannot pass the limit. A client may let a
-**trusted browser** skip the second factor for `mfa_trusted_device_days` (1–90, default 0 = never). Trusted browsers
+**trusted browser** skip that client's second factor (trust is per app) for `mfa_trusted_device_days` (1–90, default 0 = never). Trusted browsers
 are forgotten when a password or factor changes. **Step-up:** `acr_values=urn:imprim:acr:mfa` demands a second
 factor in this session, and a trusted browser does not count. `max_age` (seconds) treats an older primary sign-in as
-none, and also bounds the age of the second factor. The ID token carries `acr` (`urn:imprim:acr:mfa` after a second
+none, and also bounds the age of the second factor. `prompt=login` and `max_age` are enforced again when the code is
+issued, however the sign-in continued. The ID token carries `acr` (`urn:imprim:acr:mfa` after a second
 factor, otherwise `urn:imprim:acr:sf`) and `amr` gains `otp` and `mfa`. Under `prompt=none`, a needed second factor
 returns `error=interaction_required`. **Agents:** `agent_consent_mfa: required` needs a second factor within 15
 minutes before approval. **Administrators** always need a second factor, verified within the hour; the console sends
-them to enrol or verify. Adding a factor needs a sign-in within ten minutes. Removing one, or replacing the recovery
+them to enrol or verify. Adding a factor needs a sign-in within ten minutes and, when the person already has a factor, a second factor
+within ten minutes: a sign-in that skipped the second factor can never enrol its own. Removing one, or replacing the recovery
 codes, needs a second factor within ten minutes. Each change is audited and emailed to the account.
 
 **Passwords** (client method `password`). A first password is set only within ten minutes of an email link (fresh mailbox proof). New
@@ -121,7 +123,8 @@ people choose "Email me a link to set one": an email link with `purpose: "passwo
 `POST /v1/auth/password {request_id, email, password, turnstile}` needs Origin, the browser binding and a pending
 request for a client that offers `password`; administrators never use it. An unknown email, an account without a
 password and a wrong password all return `401 invalid_grant` "Email or password is incorrect.", after the same key
-derivation. Ten failures for one address lock that address (known or not) for 15 minutes from the tenth (`429`); attempts
+derivation. Ten failures for one address lock that address (known or not) for 15 minutes from the tenth, and further refused
+attempts do not extend it (`429`); attempts
 are counted before the password is checked. Hashes are PBKDF2-SHA256 with 100,000 iterations (the Workers maximum), a 16-byte salt and NFKC
 normalisation, with algorithm and parameters stored per hash and upgraded at sign-in. New passwords need 12 to 128
 characters, cannot be the email, and are checked against Have I Been Pwned's range API (only a five-character

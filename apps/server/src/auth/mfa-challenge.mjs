@@ -40,7 +40,7 @@ export async function mfaChallenge(request, env, ctx) {
     await env.DB.batch([mfaStatement(env, session, result.amr),
         env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,'{}',?,?)").bind(result.kind === 'recovery' ? 'recovery_code_used' : 'mfa_verified', session.user_id, Date.now(), env.REALM.id)]);
     if (result.kind === 'recovery') notify(env, ctx, session.email, 'a recovery code was used', 'A recovery code was used to sign in. You have one fewer left; generate a new set at /account/mfa if you are running low.');
-    const responseCookies = values.trust === '1' && trust ? [await trustBrowser(env, session.user_id, trust, request)] : [];
+    const responseCookies = values.trust === '1' && trust ? [await trustBrowser(env, session.user_id, pending.client.id, trust, request)] : [];
     const current = await sessionByHash(env, session.hash);
     if (pending) return completeAuthorization(env, request, pending.row.id, current, responseCookies);
     return redirect(`${env.ISSUER}${safeNext(values.next)}`, responseCookies);

@@ -197,3 +197,67 @@ test('imprim-client passes acr_values and max_age for step-up', async () => {
     assert.equal(url.searchParams.get('max_age'), '300');
     await assert.rejects(client.startLogin({ maxAge: -1 }));
 });
+
+// Review findings on the two-factor milestone.
+test('review 1: a sign-in without the second factor cannot enrol another authenticator', async t => {
+    const w = await mfaWorld(t);
+    const { mfa } = await enrolThroughApp(w, t);
+    w.env.DB.db.exec('DELETE FROM sessions');
+    const again = await login(w, t);
+    const jar = jarOf(again.flow.cookie, again.cookie);
+    const start = await form(w, '/account/mfa', { csrf: csrfOf(jar), action: 'start' }, jar);
+    assert.equal(start.status, 403);
+    assert.equal((await start.json()).error, 'mfa_required');
+    const factor = w.env.DB.db.prepare('SELECT id FROM mfa_factors').get().id;
+    assert.equal((await form(w, '/account/mfa', { csrf: csrfOf(jar), action: 'confirm', factor_id: factor, code: await mfa.code(1) }, jar)).status, 403);
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM mfa_factors').get().n, 1);
+    assert.equal(w.env.DB.db.prepare('SELECT mfa_at FROM sessions').get().mfa_at, null);
+});
+test('review 1: an admin mailbox alone does not open the console when the admin has a factor', async t => {
+    const w = await world(t); turnstile(t);
+    const { adminLogin } = await import('./support/admin.mjs');
+    await adminLogin(w);
+    w.env.DB.db.exec('DELETE FROM sessions');
+    const page = await w.call('/login'), browser = cookieJar(page);
+    await w.post('/v1/auth/magic/request', { email: 'admin@example.com', turnstile: crypto.randomUUID() }, browser);
+    await w.drain();
+    const token = w.mails.at(-1).text.match(/#token=([A-Za-z0-9_-]+)/)[1];
+    const jar = jarOf(browser, cookieJar(await w.post('/v1/auth/magic/verify', { token }, browser)));
+    assert.equal((await form(w, '/account/mfa', { csrf: csrfOf(jar), action: 'start' }, jar)).status, 403);
+    assert.equal((await (await w.call('/admin/api/clients', { headers: { cookie: jar } })).json()).error, 'mfa_required');
+});
+test('review 2: prompt=login and max_age hold through the second-factor continuation', async t => {
+    const w = await world(t);
+    const { flow, cookie } = await login(w, t);
+    const jar = jarOf(flow.cookie, cookie);
+    w.env.DB.db.prepare('UPDATE sessions SET auth_time=?').run(Math.floor(Date.now() / 1000) - 7200);
+    for (const changes of [{ max_age: '60' }, { prompt: 'login' }]) {
+        const page = await w.authorize(changes, jar);
+        assert.equal(page.status, 200);
+        const request_id = (await page.text()).match(/data-request-id="([^"]+)"/)[1];
+        const cont = await form(w, '/account/mfa', { csrf: csrfOf(jar), action: 'continue', request_id }, jar);
+        assert.equal(cont.status, 401, JSON.stringify(changes));
+        assert.equal((await cont.json()).error, 'login_required');
+    }
+});
+test('review 3: refused attempts do not extend the lock', async t => {
+    const w = await world(t);
+    const { attempt, PASSWORD_FAILURE_LIMIT } = await import('../apps/server/src/auth/rate-limit.mjs');
+    for (let i = 0; i < PASSWORD_FAILURE_LIMIT; i++) await attempt(w.env, 'probe');
+    const locked = w.env.DB.db.prepare("SELECT expires_at FROM rate_limits WHERE key='probe'").get().expires_at;
+    assert.equal(await attempt(w.env, 'probe'), false);
+    assert.equal(w.env.DB.db.prepare("SELECT expires_at FROM rate_limits WHERE key='probe'").get().expires_at, locked);
+});
+test('review 4: a browser trusted by one app does not skip another app\'s second factor', async t => {
+    const w = await mfaWorld(t, { mfa_trusted_device_days: 30 });
+    w.env.DB.db.exec("UPDATE clients SET mfa='required', mfa_trusted_device_days=30 WHERE id='other'");
+    const { mfa } = await enrolThroughApp(w, t);
+    w.env.DB.db.exec('DELETE FROM sessions');
+    const again = await login(w, t);
+    const jar = jarOf(again.flow.cookie, again.cookie), request_id = new URL(again.response.headers.get('location'), w.env.ISSUER).searchParams.get('request_id');
+    const trusted = await form(w, '/mfa', { csrf: csrfOf(jar), request_id, code: await mfa.code(1), trust: '1' }, jar);
+    const device = cookieJar(trusted);
+    w.env.DB.db.exec('UPDATE sessions SET mfa_at=NULL');
+    const other = await w.authorize({ client_id: 'other' }, jarOf(jar, device));
+    assert.match(other.headers.get('location'), /\/mfa\?request_id=/);
+});
