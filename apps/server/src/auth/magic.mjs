@@ -11,6 +11,8 @@ import { requireMethod } from '../oidc/sign-in-methods.mjs';
 import { audit } from '../services/audit.mjs';
 import { claimMailbox } from '../services/access.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { brandingFor } from '../branding/tokens.mjs';
+import { emailFooter } from '../services/notify.mjs';
 export async function requestMagic(request, env, ctx) {
     assertOrigin(request, env);
     const body = await readBody(request), email = normalizeEmail(body.email);
@@ -47,11 +49,11 @@ async function deliverMagic(env, request, email, browser, pending, challengeMode
         .bind(hash, email, pending?.row.id || null, await sha256(browser), Date.now() + 900000, realmId(env), purpose).run();
     const link = `${env.ISSUER}/login#token=${token}`;
     try {
-        const name = (pending && JSON.parse(pending.client.branding).name) || env.REALM.display_name;
+        const branding = brandingFor(env, pending?.client), name = branding.name || env.REALM.display_name;
         const subject = purpose === 'password' ? `Set your password for ${name}` : `Sign in to ${name}`;
         const action = purpose === 'password' ? 'choose Continue, then set your password' : 'choose Sign in';
         await env.EMAIL.send({ from: env.EMAIL_FROM, to: email, subject,
-            text: `Open this link in the browser where you started, then ${action}. It expires in 15 minutes.\n\n${link}\n\nIgnore this email if you did not request it.` });
+            text: `Open this link in the browser where you started, then ${action}. It expires in 15 minutes.\n\n${link}\n\nIgnore this email if you did not request it.${emailFooter(branding)}` });
     } catch (error) {
         await env.DB.prepare('DELETE FROM magic_links WHERE hash=?').bind(hash).run();
         throw error;

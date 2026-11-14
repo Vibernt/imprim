@@ -3,7 +3,7 @@ const hidden = (name, value) => `<input type="hidden" name="${e(name)}" value="$
 const link = (url, label) => `<a href="${e(url)}">${e(label)}</a>`;
 const data = value => `<pre>${e(JSON.stringify(value, null, 2))}</pre>`;
 export function adminPage(title, body) {
-    const response = page(title, `<nav>${['clients','services','users','audit','keys','realms','settings'].map(name => link('/admin/' + name, name)).join(' · ')} · ${link('/login', 'Reauthenticate')}</nav><h1>${e(title)}</h1>${body}`);
+    const response = page(title, `<nav>${['clients','services','branding','users','audit','keys','realms','settings'].map(name => link('/admin/' + name, name)).join(' · ')} · ${link('/login', 'Reauthenticate')}</nav><h1>${e(title)}</h1>${body}`, { wide: true });
     response.headers.set('content-security-policy', "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
     return response;
 }
@@ -52,6 +52,8 @@ export function keysPage(keys, csrf) {
         '<h2>Emergency revocation</h2><p>Use only for a compromised key. It leaves JWKS at once, a replacement signs immediately, and every token it signed stops verifying when apps refetch (within 10 minutes).</p>' +
         keys.filter(key => key.status !== 'retired').map(key => form('/admin/keys/' + encodeURIComponent(key.kid) + '/revoke', csrf, `<button>Revoke ${e(key.kid)} now</button>`)).join(''));
 }
+export const brandingPage = ({ branding, version }, csrf) => adminPage('Branding', `<p>Tokens only: colours (#rrggbb), radius (0-24), font (system, humanist, geometric, serif, mono), logos and mark (asset ids from POST /admin/api/branding/assets), links and copy. Contrast is checked against WCAG AA when you save. Apps override these in their own branding.</p>
+<p><a href="/admin/branding/preview">Preview the sign-in page</a></p>` + form('/admin/branding', csrf, hidden('version', version) + `<label>Realm branding<textarea name="branding" rows="14">${e(JSON.stringify(branding, null, 2))}</textarea></label><button>Save branding</button>`));
 export const servicesPage = rows => adminPage('Service clients', '<p>Machines acting as themselves for one app (OAuth client_credentials with private_key_jwt). Manage them with POST /admin/api/services.</p>' + data(rows));
 export function realmsPage(realms, csrf) {
     return adminPage('Realms', data(realms) + '<p>Platform administrators only. Secrets are never stored here: secret fields name a Worker secret as {"env":"NAME"}. A new realm needs its host added as a custom domain on this Worker.</p>' +

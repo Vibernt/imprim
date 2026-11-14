@@ -4,6 +4,8 @@ import { validateSignInSettings } from '../oidc/sign-in-methods.mjs';
 import { validateAgentSettings, settingNames } from '../agents/settings.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { auditStatement } from './auth.mjs';
+import { validateBranding, resolveBranding, assertContrast } from '../branding/tokens.mjs';
+import { assetExists } from '../branding/assets.mjs';
 import { realmId } from '../realms/realm.mjs';
 const jsonFields = ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains','token_exchange_from',
     ...settingNames.filter(k => !['agent_access','agent_max_grant_days'].includes(k))];
@@ -17,7 +19,7 @@ export async function getAdminClient(env, id) {
     invariant(row, 'not_found', 'Client not found.', 404);
     return publicClient(row);
 }
-function validate(config) {
+function validate(config, realmBranding = {}) {
     invariant(typeof config.id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(config.id), 'invalid_request', 'Invalid client id.');
     const { methods, domains } = validateSignInSettings(config.sign_in_methods, config.google_hosted_domains);
     const agent = validateAgentSettings(config);
@@ -38,9 +40,9 @@ function validate(config) {
     invariant(typeof config.backchannel_uri === 'string' && config.backchannel_uri.length > 0, 'invalid_request', 'A back-channel URI is required for session termination.');
     registeredUri({ redirect_uris: JSON.stringify([config.backchannel_uri]), dev: 0 }, config.backchannel_uri);
     validateSignInSettings(methods, config.allowed_domains);
-    invariant(config.branding && typeof config.branding === 'object' && !Array.isArray(config.branding) &&
-        Object.keys(config.branding).every(k => k === 'name') && typeof config.branding.name === 'string' && config.branding.name.length <= 200,
-    'invalid_request', 'Branding requires a name of at most 200 characters.');
+    // App branding overrides the realm's tokens; the merged result must still meet WCAG AA contrast.
+    validateBranding(config.branding, { app: true });
+    assertContrast(resolveBranding(realmBranding, config.branding));
     const value = { ...config, sign_in_methods: methods, google_hosted_domains: domains, ...agent };
     delete value.confidential;
     return Object.fromEntries(Object.entries(value).map(([k,v]) => [k, jsonFields.includes(k) ? JSON.stringify(v) : v]));
@@ -58,7 +60,10 @@ export async function saveClient(env, actor, id, input) {
     const config = { redirect_uris: [], post_logout_uris: [], backchannel_uri: null, signup_policy: 'invited',
         allowed_domains: [], branding: { name: '' }, dev: 0, sign_in_methods: ['email'], google_hosted_domains: [], ...old, ...input };
     let value;
-    try { value = validate(config); }
+    try {
+        value = validate(config, env.REALM?.branding || {});
+        for (const key of ['logo_light', 'logo_dark', 'mark']) if (config.branding?.[key]) invariant(await assetExists(env, config.branding[key]), 'branding', `branding.${key} is not an uploaded asset.`);
+    }
     catch (error) {
         if (error.code || error instanceof TypeError) invariant(false, 'invalid_request', 'Invalid client configuration: ' + (error.code ? error.message : 'malformed field.'));
         throw error;

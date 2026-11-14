@@ -1,4 +1,5 @@
 // Offline configuration to reviewed SQL. Never registers a client or contacts a provider.
+import { validateBranding } from '../apps/server/src/branding/tokens.mjs';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { validateSignInSettings } from '../apps/server/src/oidc/sign-in-methods.mjs';
@@ -26,8 +27,8 @@ export function clientSeedSql(config) {
     assert(Array.isArray(config.post_logout_uris ?? []), 'post_logout_uris must be an array');
     for (const field of ['redirect_uris','post_logout_uris']) for (const uri of JSON.parse(client[field])) registeredUri(client, uri, field);
     validateSignInSettings(methods, config.allowed_domains ?? []);
-    assert(config.branding === undefined || (config.branding && typeof config.branding === 'object' && !Array.isArray(config.branding) &&
-        Object.keys(config.branding).every(key => key === 'name') && (config.branding.name === undefined || typeof config.branding.name === 'string')), 'Invalid branding');
+    // Same token rules as the console; contrast is checked against the realm's branding when the app is saved there.
+    try { validateBranding(config.branding, { app: true }); } catch (error) { assert(false, `Invalid branding: ${error.message}`); }
     if (client.backchannel_uri !== null) registeredUri({ redirect_uris: JSON.stringify([client.backchannel_uri]), dev: 0 }, client.backchannel_uri);
     return `-- Review before applying. No upsert: an existing client requires a deliberate policy edit.\nINSERT INTO clients(${Object.keys(client).join(',')}) VALUES(${Object.values(client).map(sql).join(',')});\n`;
 }

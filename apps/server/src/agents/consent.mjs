@@ -34,12 +34,13 @@ export function consentPage(request, row, context) {
         claimed: `<p>Agent host: ${host} — <strong>claimed, not verified</strong>. Any program can use this name.</p>`,
         none: '<p>This agent registered itself. Its name is not verified.</p>' }[assurance];
     const scopes = row.scope.split(' ').map(scope => `<li><strong>${e(scope)}</strong>: ${e(settings.agent_scope_catalogue[scope])}</li>`).join('');
-    return page('Connect agent', `<h1>${heading}</h1>${identity}${assurance === 'key' || assurance === 'redirect' ? '' : phishing}
+    const intro = context.app && JSON.parse(context.app.branding || '{}').copy?.consent_intro;
+    return page('Connect agent', `<h1>${heading}</h1>${intro ? `<p>${e(intro)}</p>` : ''}${identity}${assurance === 'key' || assurance === 'redirect' ? '' : phishing}
 <p>App: ${e(JSON.parse(app.branding).name || app.id)}</p><p>Workspace: ${e(workspace(row.resource))}</p>
 <p>Resource: ${e(row.resource)}</p><ul>${scopes}</ul><p>Access lasts at most ${settings.agent_max_grant_days} days. The app still checks your permissions on every call.</p>
 <form method="post" action="/agent/consent">${hidden('request_id', row.id)}${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}
 <button name="decision" value="approve">Approve</button><button name="decision" value="deny">Deny</button></form>`,
-        { formTargets: row.device_hash || !row.redirect_uri ? [] : [row.redirect_uri] });
+        { client: app, formTargets: row.device_hash || !row.redirect_uri ? [] : [row.redirect_uri] });
 }
 export async function consent(request, env) {
     const body = request.method === 'POST' ? await readBody(request, 'form') : uniqueParams(new URL(request.url).searchParams);

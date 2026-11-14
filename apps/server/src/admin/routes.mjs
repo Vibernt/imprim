@@ -3,6 +3,7 @@ import { adminSession, adminMutation, mutationEnvironment, requirePlatform } fro
 import { realmId } from '../realms/realm.mjs';
 import { listRealms, saveRealm, saveAdmin } from './realms.mjs';
 import { listServices, saveService, deleteService } from './services.mjs';
+import { realmBranding, saveRealmBranding, uploadAsset, preview } from './branding.mjs';
 import { saveClient, getAdminClient, rotateSecret, publicClient } from './clients.mjs';
 import { revokeSession } from './sessions.mjs';
 import { users, userDetail, changeUser, resetMfa } from './users.mjs';
@@ -65,6 +66,8 @@ export async function admin(request, env, ctx) {
                 .bind(realmId(env), before, actor, actor, target, target).all()).results;
             return api ? json({ audit: rows.slice(0,50), next: rows.length > 50 ? rows[49].id : null }) : pages.auditPage(rows, url.searchParams);
         }
+        if (section === 'branding' && id === 'preview') return preview(env, url.searchParams.get('client'));
+        if (section === 'branding' && !id) { const value = await realmBranding(env); return api ? json(value) : pages.brandingPage(value, csrf); }
         if (section === 'services' && !id) { const rows = await listServices(env); return api ? json({ services: rows }) : pages.servicesPage(rows); }
         if (section === 'realms' && !id) { requirePlatform(session); const rows = await listRealms(env); return api ? json({ realms: rows }) : pages.realmsPage(rows, csrf); }
         if (section === 'keys' && !id) { requirePlatform(session); const rows = await keyList(env); return api ? json({ keys: rows }) : pages.keysPage(rows, csrf); }
@@ -106,6 +109,11 @@ export async function admin(request, env, ctx) {
         } else if (section === 'keys' && id === 'rotate' && !action) { requirePlatform(session); result = await rotateNow(writeEnv, session.user_id); }
         else if (section === 'keys' && id && action === 'revoke') { requirePlatform(session); result = await revokeKeyNow(writeEnv, session.user_id, id); }
         else if (section === 'services' && action === 'delete' && id) result = await deleteService(writeEnv, session.user_id, id);
+        else if (section === 'branding' && id === 'assets') result = await uploadAsset(writeEnv, session.user_id, body);
+        else if (section === 'branding' && !id) {
+            if (!api) { try { body.branding = JSON.parse(body.branding); body.version = Number(body.version); } catch { invariant(false, 'invalid_request', 'branding must be JSON.'); } }
+            result = await saveRealmBranding(writeEnv, session.user_id, body);
+        }
         else if (section === 'services' && !action) {
             if (!api) { try { for (const field of ['jwks', 'scopes', 'resource_prefixes']) if (typeof body[field] === 'string') body[field] = JSON.parse(body[field]); } catch { invariant(false, 'invalid_request', 'jwks, scopes and resource_prefixes must be JSON.'); } }
             result = await saveService(writeEnv, session.user_id, id, body);

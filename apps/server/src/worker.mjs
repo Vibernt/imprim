@@ -29,10 +29,14 @@ import { logout } from './oidc/logout.mjs';
 import { invite } from './services/invitations.mjs';
 import { scheduled, queue } from './services/maintenance.mjs';
 import { loginPage, signInScript } from './pages/sign-in.mjs';
-import { page, pageCss, errorPage, withBrand } from './pages/layout.mjs';
+import { page, pageCss, errorPage, withBrand, escapeHtml } from './pages/layout.mjs';
+import { themeResponse } from './branding/theme.mjs';
+import { serveAsset } from './branding/assets.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
 async function route(request, env, ctx, url) {
     if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return admin(request, env, ctx);
+    const brandAsset = request.method === 'GET' && /^\/assets\/brand\/([0-9a-f]{64})$/.exec(url.pathname);
+    if (brandAsset) return serveAsset(env, brandAsset[1]);
     const start = request.method === 'GET' && PROVIDER_START.exec(url.pathname);
     if (start) return providerStart(request, env, start[1]);
     const callback = ['GET', 'POST'].includes(request.method) && PROVIDER_CALLBACK.exec(url.pathname);
@@ -82,7 +86,8 @@ async function route(request, env, ctx, url) {
             if (!await getSession(request, env)) throw new AppError(401, 'login_required', 'Sign in first.');
             return page('Signed in', '<h1>You are signed in</h1><p>Return to your app or <a href="/admin">open the admin console</a>.</p>');
         }
-        case 'GET /signed-out': return page('Signed out', `<h1>You are signed out</h1><p>Apps may still have their own active sessions.</p>`);
+        case 'GET /signed-out': return page('Signed out', `<h1>You are signed out</h1><p>${escapeHtml(env.REALM.branding?.copy?.signed_out || 'Apps may still have their own active sessions.')}</p>`);
+        case 'GET /assets/theme.css': return themeResponse(env, url);
         case 'GET /error': return errorPage('Return to the app and start again.');
         default: throw new AppError(404, 'not_found', 'Endpoint not found.');
     }
@@ -90,7 +95,7 @@ async function route(request, env, ctx, url) {
 // Public metadata is unlimited (and memoised); /token, /userinfo and /v1/invitations limit by the authenticated client
 // inside the handler, because Worker-hosted apps share Cloudflare egress addresses (S2).
 const unlimited = new Set(['GET /.well-known/openid-configuration', 'GET /.well-known/oauth-authorization-server', 'GET /.well-known/jwks.json',
-    'GET /assets/page.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations',
+    'GET /assets/page.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'GET /assets/theme.css', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations',
     'POST /introspect', 'POST /revoke', 'GET /v1/grants', 'POST /v1/grants/revoke']);
 export function limiterFor(method, path) {
     if (unlimited.has(`${method} ${path}`)) return null;
@@ -112,7 +117,7 @@ export async function handleRequest(request, base, ctx) {
         // codes to apps, still send no referrer.
         response.headers.set('referrer-policy', 'same-origin');
         response.headers.set('strict-transport-security', 'max-age=31536000');
-        return withBrand(response, env.REALM.display_name);
+        return withBrand(response, env);
     } catch (error) {
         const known = error instanceof AppError;
         if (!known) console.error(JSON.stringify({ type: 'request_failed', path: url.pathname, code: 'internal_error' }));
@@ -125,7 +130,7 @@ export async function handleRequest(request, base, ctx) {
         if (url.pathname === '/auth/github/callback') response.headers.append('set-cookie', cookie(OAUTH_COOKIE, '', 0));
         if (url.pathname === '/login/google/callback') response.headers.append('set-cookie', cookie(GOOGLE_COOKIE, '', 0));
         if (PROVIDER_CALLBACK.test(url.pathname)) response.headers.append('set-cookie', `${UPSTREAM_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=None; Max-Age=0`);
-        return withBrand(response, env.REALM?.display_name);
+        return withBrand(response, env);
     }
 }
 export default { fetch: handleRequest, async scheduled(_event, env) { await scheduled(env); }, queue };

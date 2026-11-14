@@ -1,5 +1,6 @@
 import { signInSettings } from '../oidc/sign-in-methods.mjs';
 import { page, escapeHtml } from './layout.mjs';
+import { brandingFor } from '../branding/tokens.mjs';
 import { cookies, cookie, BROWSER_COOKIE } from '../auth/session.mjs';
 import { randomToken } from '../lib/crypto.mjs';
 import { tokenShape } from '../lib/http.mjs';
@@ -13,17 +14,17 @@ ${password ? '<button id="password-sign-in" type="submit" value="password">Sign 
 ${link ? '<button id="send-link" type="submit" value="link">Email a sign-in link</button>' : ''}
 ${password ? '<button id="set-password" type="submit" value="set">New here, or forgot your password? Email me a link to set one</button>' : ''}</form>`;
 export function signInPage(env, requestId = '', responseCookies = [], client = null) {
-    const branding = client ? JSON.parse(client.branding) : {};
+    const branding = brandingFor(env, client);
     const methods = client ? signInSettings(client).methods : ['email'];
     const email = methods.includes('email'), password = methods.includes('password');
     const controls = methods.filter(method => method !== 'password' || !email).map(method => ['email', 'password'].includes(method) ? emailForm(env, requestId, { link: email, password })
         : method === 'passkey' ? `<p><button id="passkey-sign-in" type="button" data-request-id="${escapeHtml(requestId)}">Sign in with a passkey</button></p>`
         : ['github', 'google'].includes(method) ? `<p><a href="/v1/auth/${method}/start?request_id=${encodeURIComponent(requestId)}">Sign in with ${method === 'github' ? 'GitHub' : 'Google'}</a></p>`
         : env.PROVIDERS?.[method] ? `<p><a href="/v1/auth/provider/${method}/start?request_id=${encodeURIComponent(requestId)}">Sign in with ${escapeHtml(env.PROVIDERS[method].name || method)}</a></p>` : '').join('\n');
-    return page('Sign in', `<h1>Sign in to ${escapeHtml(branding.name || env.REALM.display_name)}</h1>
+    return page('Sign in', `<h1>${escapeHtml(branding.copy.sign_in_heading || `Sign in to ${branding.name || env.REALM.display_name}`)}</h1>${branding.copy.sign_in_help ? `<p>${escapeHtml(branding.copy.sign_in_help)}</p>` : ''}
 <section id="request" data-request-id="${escapeHtml(requestId)}">${controls}${client ? '' : '<p>Operator sign-in uses email only.</p>'}</section>
 <section id="confirm" hidden><h2>Confirm sign-in</h2><p>Choose Sign in to use the emailed link. Keep this in the browser where you started.</p><button id="verify" type="button">Sign in</button></section>
-<p id="message" role="status"></p>`, { cookies: responseCookies, script: methods.includes('passkey') ? ['/assets/sign-in.js', '/assets/passkey.js'] : '/assets/sign-in.js', turnstile: (email || password) && challengeConfigured(env) });
+<p id="message" role="status"></p>`, { client, cookies: responseCookies, script: methods.includes('passkey') ? ['/assets/sign-in.js', '/assets/passkey.js'] : '/assets/sign-in.js', turnstile: (email || password) && challengeConfigured(env) });
 }
 export function loginPage(request, env) {
     const existing = cookies(request)[BROWSER_COOKIE], browser = tokenShape(existing) ? existing : randomToken();

@@ -15,7 +15,7 @@ for (const path of ['/login', '/check-email', '/error', '/signed-out']) test(`se
 });
 test('every page shows the realm name, escaped, and no product is written into the code', async t => {
     const w = await world(t), html = await (await w.call('/signed-out')).text();
-    assert.match(html, /<header class="brand">Vibernt<\/header>/);
+    assert.match(html, /<header class="brand"><span>Vibernt<\/span><\/header>/);
     assert.match(html, /<title>Signed out · Vibernt<\/title>/);
     w.env.DB.db.prepare("UPDATE realms SET display_name=? WHERE id='default'").run('<b>Acme</b>');
     const { forgetRealms } = await import('../apps/server/src/realms/realm.mjs'); forgetRealms(w.env);
