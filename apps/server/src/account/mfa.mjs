@@ -38,7 +38,7 @@ export async function mfaAccount(request, env, ctx) {
     const values = await readBody(request, 'form');
     await requireCsrf(request, env, session, values.csrf);
     const now = Date.now(), freshMfa = session.mfa_at && session.mfa_at > now - FRESH_MFA_MS;
-    const factors = await confirmedFactors(env, session.user_id);
+    const all = await confirmedFactors(env, session.user_id), factors = all;
     // Adding a factor needs a fresh sign-in (or a fresh second factor), so a stolen session cookie cannot enrol one.
     // Someone who already has a factor proves it before adding another; otherwise a sign-in without the second factor
     // could enrol its own and pass every gate.
@@ -62,7 +62,8 @@ ${post(request, values, 'confirm', `${hidden('factor_id', id)}<label for="name">
         const step = await matchingStep(await unseal(env, factor.sealed_secret, `totp:${factor.id}`), values.code, -1);
         invariant(step !== null, 'invalid_grant', 'That code did not match. Check the time on your phone and try the newest code.', 400);
         const name = typeof values.name === 'string' && values.name.trim() ? values.name.trim().slice(0, 60) : 'Authenticator app';
-        const first = factors.length === 0, recovery = first ? await recoveryStatements(env, session.user_id) : { codes: [], statements: [] };
+        const unused = (await env.DB.prepare('SELECT count(*) n FROM recovery_codes WHERE user_id=? AND used_at IS NULL').bind(session.user_id).first()).n;
+        const recovery = unused ? { codes: [], statements: [] } : await recoveryStatements(env, session.user_id);
         // Confirming proves possession, so it also counts as this session's second factor.
         await env.DB.batch([
             env.DB.prepare('UPDATE mfa_factors SET confirmed=1,last_step=?,name=?,last_used=? WHERE id=? AND confirmed=0').bind(step, name, now, factor.id),
@@ -85,7 +86,7 @@ ${post(request, values, 'confirm', `${hidden('factor_id', id)}<label for="name">
         const factor = factors.find(f => f.id === values.factor_id && f.type === 'totp');
         invariant(factor, 'not_found', 'Factor not found.', 404);
         await env.DB.batch([env.DB.prepare('DELETE FROM mfa_factors WHERE id=? AND user_id=?').bind(factor.id, session.user_id),
-            ...(factors.length === 1 ? [env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(session.user_id)] : []),
+            ...(all.length === 1 ? [env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(session.user_id)] : []),
             forgetDevices(env, session.user_id), audit(env, 'mfa_factor_removed', session.user_id, { type: factor.type })]);
         notify(env, ctx, session.email, 'a second factor was removed', `The authenticator "${factor.name}" was removed from your account.`);
         return overview(request, env, session, values, 'Removed.');

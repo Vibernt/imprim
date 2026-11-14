@@ -94,3 +94,38 @@ test('a credential cannot be used as another person\'s second factor', async t =
     const mfa = await (await api(w, '/v1/auth/passkey/options', { purpose: 'mfa' }, jar)).json();
     assert.equal((await api(w, '/v1/auth/passkey/verify', { purpose: 'mfa', ...await device.get(mfa.publicKey) }, jar)).status, 400);
 });
+
+// Review findings on the passkeys milestone.
+test('review 1 and 2: a first passkey brings recovery codes; removing the last factor voids them', async t => {
+    const w = await world(t);
+    const { flow, cookie } = await login(w, t);
+    const jar = jarOf(flow.cookie, cookie), device = await authenticator();
+    const options = await (await api(w, '/account/passkeys/options', {}, jar)).json();
+    const added = await (await api(w, '/account/passkeys/register', await device.create(options.publicKey), jar)).json();
+    assert.equal(added.recovery_codes.length, 10);
+    const old = added.recovery_codes[0];
+    const id = w.env.DB.db.prepare('SELECT id FROM webauthn_credentials').get().id;
+    const removed = await w.call('/account/passkeys/remove', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: w.env.ISSUER, cookie: jar }, body: new URLSearchParams({ csrf: csrfOf(jar), id }) });
+    assert.equal(removed.status, 303);
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM recovery_codes').get().n, 0);
+    const again = await (await api(w, '/account/passkeys/options', {}, jar)).json();
+    const second = await (await api(w, '/account/passkeys/register', await (await authenticator()).create(again.publicKey), jar)).json();
+    assert.equal(second.recovery_codes.length, 10);
+    assert.ok(!second.recovery_codes.includes(old));
+});
+test('review 3 and 4: other attestation formats, trailing data and a missing userHandle are refused', async t => {
+    const w = await world(t);
+    const { flow, cookie } = await login(w, t);
+    const jar = jarOf(flow.cookie, cookie), device = await authenticator();
+    for (const overrides of [{ fmt: 'packed' }, { trailing: [0xff, 0xff] }]) {
+        const options = await (await api(w, '/account/passkeys/options', {}, jar)).json();
+        assert.equal((await api(w, '/account/passkeys/register', await device.create(options.publicKey, overrides), jar)).status, 400, JSON.stringify(overrides));
+    }
+    const { device: good } = await registered(w, t);
+    const signIn = await begin(w);
+    const opts = await (await w.post('/v1/auth/passkey/options', { request_id: signIn.request_id }, signIn.cookie)).json();
+    const { userHandle, ...assertion } = await good.get(opts.publicKey);
+    assert.ok(userHandle);
+    assert.equal((await w.post('/v1/auth/passkey/verify', { request_id: signIn.request_id, ...assertion }, signIn.cookie)).status, 400);
+    assert.equal((await w.post('/v1/auth/passkey/options', { request_id: { x: 1 } }, signIn.cookie)).status, 400);
+});

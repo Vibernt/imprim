@@ -11,10 +11,10 @@ export const FLAGS = { UP: 1, UV: 4, BE: 8, BS: 16, AT: 64, ED: 128 };
 // COSE_Key to Web Crypto: ES256 (P-256), RS256 and EdDSA (Ed25519).
 export function coseToJwk(cose) {
     invariant(cose instanceof Map, 'invalid_grant', 'Invalid credential public key.', 400);
-    const kty = cose.get(1), alg = cose.get(3), bytes = key => { const v = cose.get(key); if (!(v instanceof Uint8Array)) fail('Invalid credential public key.'); return b64url(v); };
-    if (kty === 2 && alg === -7 && cose.get(-1) === 1) return { alg: -7, jwk: { kty: 'EC', crv: 'P-256', x: bytes(-2), y: bytes(-3) } };
-    if (kty === 3 && alg === -257) return { alg: -257, jwk: { kty: 'RSA', n: bytes(-1), e: bytes(-2) } };
-    if (kty === 1 && alg === -8 && cose.get(-1) === 6) return { alg: -8, jwk: { kty: 'OKP', crv: 'Ed25519', x: bytes(-2) } };
+    const kty = cose.get(1), alg = cose.get(3), bytes = (key, length) => { const v = cose.get(key); if (!(v instanceof Uint8Array) || (length && v.length !== length)) fail('Invalid credential public key.'); return b64url(v); };
+    if (kty === 2 && alg === -7 && cose.get(-1) === 1) return { alg: -7, jwk: { kty: 'EC', crv: 'P-256', x: bytes(-2, 32), y: bytes(-3, 32) } };
+    if (kty === 3 && alg === -257) { const n = cose.get(-1); if (!(n instanceof Uint8Array) || n.length < 256) fail('RSA keys must be 2048 bits or more.'); return { alg: -257, jwk: { kty: 'RSA', n: b64url(n), e: bytes(-2) } }; }
+    if (kty === 1 && alg === -8 && cose.get(-1) === 6) return { alg: -8, jwk: { kty: 'OKP', crv: 'Ed25519', x: bytes(-2, 32) } };
     fail('Unsupported credential algorithm. Use ES256, RS256 or Ed25519.');
 }
 function parseAuthData(data, expectCredential) {
@@ -26,10 +26,19 @@ function parseAuthData(data, expectCredential) {
         const idLength = (data[53] << 8) | data[54];
         if (idLength < 16 || idLength > 1023 || data.length < 55 + idLength) fail('Invalid credential id.');
         parsed.credentialId = data.slice(55, 55 + idLength);
-        const [cose, end] = decodeCbor(data, 55 + idLength);
-        if (end !== data.length && !(flags & FLAGS.ED)) fail('Trailing authenticator data.');
+        let cose, end;
+        try { [cose, end] = decodeCbor(data, 55 + idLength); } catch { fail('Malformed credential public key.'); }
         parsed.publicKey = coseToJwk(cose);
+        parsed.end = end;
+    } else parsed.end = 37;
+    // Extensions, if flagged, must be one CBOR map that ends the data exactly; nothing else may follow.
+    if (flags & FLAGS.ED) {
+        let extensions;
+        try { [extensions, parsed.end] = decodeCbor(data, parsed.end); } catch { fail('Malformed extensions.'); }
+        if (!(extensions instanceof Map)) fail('Malformed extensions.');
     }
+    if (parsed.end !== data.length) fail('Trailing authenticator data.');
+    if ((flags & FLAGS.BS) && !(flags & FLAGS.BE)) fail('Backup state without backup eligibility.');
     return parsed;
 }
 async function clientData(json, type, challenge, origin) {
@@ -51,6 +60,8 @@ export async function verifyRegistration({ clientDataJSON, attestationObject }, 
     let attestation;
     try { [attestation] = decodeCbor(decode(attestationObject)); } catch { fail('Malformed attestation object.'); }
     if (!(attestation instanceof Map) || !(attestation.get('authData') instanceof Uint8Array)) fail('Malformed attestation object.');
+    // We ask for attestation "none" and claim nothing about the authenticator, so anything else is refused.
+    if (attestation.get('fmt') !== 'none' || !(attestation.get('attStmt') instanceof Map) || attestation.get('attStmt').size !== 0) fail('Only attestation "none" is accepted.');
     const parsed = parseAuthData(attestation.get('authData'), true);
     await checkRp(parsed, rpId, true);
     return { credentialId: b64url(parsed.credentialId), publicKey: parsed.publicKey, counter: parsed.counter,
@@ -58,12 +69,13 @@ export async function verifyRegistration({ clientDataJSON, attestationObject }, 
 }
 // DER ECDSA signature to the raw r||s form Web Crypto verifies.
 function derToRaw(der) {
-    if (der[0] !== 0x30) fail('Malformed signature.');
+    if (der[0] !== 0x30 || der[1] !== der.length - 2 || der[1] > 72) fail('Malformed signature.');
     let at = 2;
     const part = () => { if (der[at] !== 0x02) fail('Malformed signature.'); const length = der[at + 1]; let value = der.slice(at + 2, at + 2 + length); at += 2 + length;
         while (value.length > 32 && value[0] === 0) value = value.slice(1); if (value.length > 32) fail('Malformed signature.');
         const out = new Uint8Array(32); out.set(value, 32 - value.length); return out; };
     const r = part(), s = part(), raw = new Uint8Array(64); raw.set(r); raw.set(s, 32);
+    if (at !== der.length) fail('Malformed signature.');
     return raw;
 }
 const algorithms = { [-7]: [{ name: 'ECDSA', namedCurve: 'P-256' }, { name: 'ECDSA', hash: 'SHA-256' }], [-257]: [{ name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, { name: 'RSASSA-PKCS1-v1_5' }], [-8]: [{ name: 'Ed25519' }, { name: 'Ed25519' }] };

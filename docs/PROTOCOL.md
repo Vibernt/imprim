@@ -95,7 +95,12 @@ must equal the issuer. Credentials are discoverable and need user verification (
   make.
 - **Challenges:** 256-bit, single-use, bound to the browser and to their purpose (register, sign-in, second factor),
   valid for five minutes.
-- **Signature counter:** it must move forward atomically, so a cloned or replayed assertion is refused.
+- **Signature counter:** it must move forward atomically, so a cloned hardware key is refused. Synced passkeys
+  report zero, so they get no clone detection. Replay is stopped by the single-use challenge.
+- **Strict parsing:** attestation must be `none` with an empty statement, and extensions must parse. No trailing
+  bytes are allowed, backup state without eligibility is refused, and EC and Ed25519 keys must be 32 bytes. Sign-in
+  needs `userHandle`.
+- **Recovery codes:** the first factor of any kind comes with them; removing the last factor voids them.
 - **Sign-in:** a passkey sign-in counts as multi-factor: `amr` is `hwk` (or `swk` for a synced passkey), `user` and
   `mfa`, and `acr` is MFA. Administrators sign in by email link and use passkeys only as their second factor.
 - **Second factor:** at `/mfa`, a passkey sits beside authenticator apps.

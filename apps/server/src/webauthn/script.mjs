@@ -18,6 +18,7 @@ wire('passkey-mfa',async b=>{location.assign((await assertWith({purpose:'mfa',re
 wire('passkey-add',async()=>{
  const o=(await post('/account/passkeys/options',{})).publicKey;
  const c=await navigator.credentials.create({publicKey:{...o,challenge:unb64(o.challenge),user:{...o.user,id:unb64(o.user.id)},excludeCredentials:o.excludeCredentials.map(x=>({...x,id:unb64(x.id)}))}});
- await post('/account/passkeys/register',{name:(document.getElementById('passkey-name')||{}).value,clientDataJSON:b64(c.response.clientDataJSON),attestationObject:b64(c.response.attestationObject)});
- location.reload();
+ const added=await post('/account/passkeys/register',{name:(document.getElementById('passkey-name')||{}).value,clientDataJSON:b64(c.response.clientDataJSON),attestationObject:b64(c.response.attestationObject)});
+ if(!added.recovery_codes.length){location.reload();return;}
+ const m=document.getElementById('message');m.textContent='Passkey added. Save these recovery codes; each works once and they will not be shown again: '+added.recovery_codes.join('  ');
 });`;

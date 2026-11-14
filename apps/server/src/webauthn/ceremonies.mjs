@@ -8,7 +8,7 @@ import { verifyRegistration, verifyAssertion } from './verify.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { requireMethod } from '../oidc/sign-in-methods.mjs';
 import { admitted, isAdmin } from '../services/admission.mjs';
-import { confirmedFactors, mfaStatement, forgetDevices, FRESH_MFA_MS } from '../auth/mfa.mjs';
+import { confirmedFactors, mfaStatement, forgetDevices, recoveryStatements, FRESH_MFA_MS } from '../auth/mfa.mjs';
 import { safeNext } from '../auth/mfa-challenge.mjs';
 import { attempt, clearFailures, mfaFailureKey } from '../auth/rate-limit.mjs';
 import { audit } from '../services/audit.mjs';
@@ -65,8 +65,11 @@ export async function register(request, env, ctx) {
     invariant(row.user_id === session.user_id, 'invalid_grant', 'This passkey request belongs to another session.', 400);
     const party = rp(env), result = await verifyRegistration(body, { challenge, origin: party.origin, rpId: party.id });
     const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 60) : 'Passkey';
+    // Whatever the first factor is, the person gets recovery codes with it (shown once).
+    const unused = (await env.DB.prepare('SELECT count(*) n FROM recovery_codes WHERE user_id=? AND used_at IS NULL').bind(session.user_id).first()).n;
+    const recovery = unused ? { codes: [], statements: [] } : await recoveryStatements(env, session.user_id);
     try {
-        await env.DB.batch([
+        await env.DB.batch([...recovery.statements,
             env.DB.prepare('INSERT INTO webauthn_credentials(id,realm_id,user_id,public_key,alg,sign_count,backup_eligible,name,created) VALUES(?,?,?,?,?,?,?,?,?)')
                 .bind(result.credentialId, realmId(env), session.user_id, JSON.stringify(result.publicKey.jwk), result.publicKey.alg, result.counter, result.backupEligible ? 1 : 0, name, Date.now()),
             mfaStatement(env, session, amrFor(result.backupEligible)), forgetDevices(env, session.user_id),
@@ -76,7 +79,7 @@ export async function register(request, env, ctx) {
         throw error;
     }
     notify(env, ctx, session.email, 'a passkey was added', `A passkey ("${name}") was added to your account.`);
-    return json({ added: true, name });
+    return json({ added: true, name, recovery_codes: recovery.codes });
 }
 // Sign-in (purpose 'login', discoverable credentials, from an app that offers passkeys) or second factor ('mfa').
 export async function assertionOptions(request, env) {
@@ -88,10 +91,11 @@ export async function assertionOptions(request, env) {
         await requireCsrf(request, env, session, body.csrf);
         const allow = (await credentials(env, session.user_id)).map(c => ({ type: 'public-key', id: c.id }));
         invariant(allow.length, 'invalid_request', 'You have no passkeys.');
+        invariant(body.request_id === undefined || (typeof body.request_id === 'string' && body.request_id.length <= 100), 'invalid_request', 'Invalid request id.');
         const challenge = await newChallenge(env, request, 'mfa', { userId: session.user_id, requestId: body.request_id || null });
         return json({ publicKey: { challenge, rpId: party.id, userVerification: 'required', timeout: CHALLENGE_MS, allowCredentials: allow } });
     }
-    invariant(typeof body.request_id === 'string', 'invalid_request', 'Passkey sign-in starts from an app.');
+    invariant(typeof body.request_id === 'string' && body.request_id.length <= 100, 'invalid_request', 'Passkey sign-in starts from an app.');
     const pending = await pendingRequest(env, request, body.request_id);
     requireMethod(pending.client, 'passkey');
     const challenge = await newChallenge(env, request, 'login', { requestId: pending.row.id });
@@ -117,6 +121,8 @@ export async function assertionVerify(request, env, ctx) {
     }
     const { challenge, row } = await claimChallenge(env, request, purpose, body.clientDataJSON);
     if (purpose === 'mfa') invariant(row.user_id === session.user_id, 'invalid_grant', 'This passkey request belongs to another session.', 400);
+    // Discoverable sign-in identifies the account by the authenticator's userHandle, which must be present (§7.2 step 6).
+    if (purpose === 'login') invariant(typeof body.userHandle === 'string' && body.userHandle, 'invalid_grant', 'This passkey did not identify an account.', 400);
     const credential = await useCredential(env, body, session?.user_id);
     const result = await verifyAssertion(body, credential, { challenge, origin: party.origin, rpId: party.id });
     // The counter moves forward atomically: a concurrent replay of the same assertion loses.
@@ -157,7 +163,10 @@ export async function removePasskey(request, env, ctx) {
     invariant(session.mfa_at && session.mfa_at > Date.now() - FRESH_MFA_MS, 'mfa_required', 'Enter a second factor at /mfa?next=/account/mfa first (within ten minutes).', 403);
     const gone = await env.DB.prepare('DELETE FROM webauthn_credentials WHERE id=? AND user_id=? AND realm_id=? RETURNING name').bind(body.id || '', session.user_id, realmId(env)).first();
     invariant(gone, 'not_found', 'Passkey not found.', 404);
-    await env.DB.batch([forgetDevices(env, session.user_id), env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES('passkey_removed',?,'{}',?,?)").bind(session.user_id, Date.now(), env.REALM.id)]);
+    // The last factor gone takes the recovery codes with it, so old codes never return with a new factor.
+    const remaining = (await confirmedFactors(env, session.user_id)).length;
+    await env.DB.batch([forgetDevices(env, session.user_id), ...(remaining ? [] : [env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(session.user_id)]),
+        env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES('passkey_removed',?,'{}',?,?)").bind(session.user_id, Date.now(), env.REALM.id)]);
     notify(env, ctx, session.email, 'a passkey was removed', `The passkey "${gone.name}" was removed from your account.`);
     return redirect(`${env.ISSUER}/account/mfa`);
 }

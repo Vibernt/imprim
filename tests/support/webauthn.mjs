@@ -23,12 +23,12 @@ export async function authenticator({ rpId = 'id.vibernt.ai', origin = 'https://
     const counterBytes = n => new Uint8Array([n >>> 24, (n >> 16) & 255, (n >> 8) & 255, n & 255]);
     return {
         id: b64(id),
-        async create(options, { uv = true, originOverride, rpOverride, type = 'webauthn.create' } = {}) {
+        async create(options, { uv = true, originOverride, rpOverride, type = 'webauthn.create', fmt = 'none', trailing = [] } = {}) {
             userHandle = options.user.id;
             const cose = new Map([[1, 2], [3, -7], [-1, 1], [-2, new Uint8Array(Buffer.from(jwk.x, 'base64url'))], [-3, new Uint8Array(Buffer.from(jwk.y, 'base64url'))]]);
-            const authData = new Uint8Array([...await sha(new TextEncoder().encode(rpOverride || rpId)), flags(uv) | 0x40, ...counterBytes(counter), ...new Uint8Array(16), 0, id.length, ...id, ...cbor(cose)]);
+            const authData = new Uint8Array([...await sha(new TextEncoder().encode(rpOverride || rpId)), flags(uv) | 0x40, ...counterBytes(counter), ...new Uint8Array(16), 0, id.length, ...id, ...cbor(cose), ...trailing]);
             const clientData = new TextEncoder().encode(JSON.stringify({ type, challenge: options.challenge, origin: originOverride || origin }));
-            return { clientDataJSON: b64(clientData), attestationObject: b64(new Uint8Array(cbor(new Map([['fmt', 'none'], ['attStmt', new Map()], ['authData', authData]])))) };
+            return { clientDataJSON: b64(clientData), attestationObject: b64(new Uint8Array(cbor(new Map([['fmt', fmt], ['attStmt', new Map()], ['authData', authData]])))) };
         },
         async get(options, { uv = true, counterOverride, originOverride } = {}) {
             counter = counterOverride ?? counter + 1;
