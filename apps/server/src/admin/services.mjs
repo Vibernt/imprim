@@ -49,7 +49,7 @@ export async function saveService(env, actor, id, input) {
             .bind(value.id, realmId(env), value.app_id, value.name, value.owner_email, value.jwks, value.scopes, value.resource_prefixes, value.status, now, now);
     try { await env.DB.batch([statement, auditStatement(env, actor, row ? 'admin_service_update' : 'admin_service_create', value.id, { fields: Object.keys(input) })]); }
     catch (error) { invariant(!String(error.message).includes('UNIQUE'), 'conflict', 'That service client id is taken.', 409); throw error; }
-    return { service: view(await env.DB.prepare('SELECT * FROM service_clients WHERE id=?').bind(value.id).first()) };
+    return { service: view(await env.DB.prepare('SELECT * FROM service_clients WHERE id=? AND realm_id=?').bind(value.id, realmId(env)).first()) };
 }
 export async function deleteService(env, actor, id) {
     const result = await env.DB.batch([env.DB.prepare('DELETE FROM service_clients WHERE id=? AND realm_id=?').bind(id, realmId(env)), auditStatement(env, actor, 'admin_service_delete', id)]);

@@ -19,7 +19,7 @@ export async function verifyDpop(env, request, url, { accessToken } = {}) {
     try { [header, claims] = [h, c].map(p => JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(from64(p)))); } catch { fail('Malformed DPoP proof.'); }
     if (header?.typ !== 'dpop+jwt' || !DPOP_ALGS.includes(header.alg) || !header.jwk || typeof header.jwk !== 'object') fail('DPoP proof needs typ dpop+jwt, a supported alg and a public jwk.');
     const jwk = header.jwk;
-    if (jwk.d || jwk.p || jwk.k || !((header.alg === 'ES256' && jwk.kty === 'EC' && jwk.crv === 'P-256') || (header.alg === 'RS256' && jwk.kty === 'RSA') || (header.alg === 'EdDSA' && jwk.kty === 'OKP' && jwk.crv === 'Ed25519'))) fail('DPoP key must be public and match its alg.');
+    if (jwk.d || jwk.p || jwk.k || !((header.alg === 'ES256' && jwk.kty === 'EC' && jwk.crv === 'P-256') || (header.alg === 'RS256' && jwk.kty === 'RSA' && typeof jwk.n === 'string' && jwk.n.length >= 342) || (header.alg === 'EdDSA' && jwk.kty === 'OKP' && jwk.crv === 'Ed25519'))) fail('DPoP key must be public and match its alg.');
     let valid = false;
     try {
         const { kty, crv, x, y, n, e } = jwk;

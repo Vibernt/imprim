@@ -68,7 +68,7 @@ export async function pollDevice(env, body, jkt = null) {
             WHERE d.hash=? AND d.status='approved' AND d.expires_at>? AND g.revoked_at IS NULL AND g.expires_at>? AND ${guard.sql}
             AND EXISTS(SELECT 1 FROM client_admissions a WHERE a.user_id=g.user_id AND a.client_id=g.app_id)`).bind(material.hash, Date.now(), hash, Date.now(), Date.now(), ...guard.args),
         env.DB.prepare("UPDATE agent_devices SET status='consumed' WHERE hash=? AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=?)").bind(hash, material.hash),
-        ...(bound ? [bindStatement(env, grant, bound)] : [])
+        ...(bound ? [bindStatement(env, grant, bound, material.hash)] : [])
     ]);
     invariant(result[0].meta.changes === 1, 'invalid_grant', 'Device code already used or grant revoked.');
     await env.DB.batch(usageStatements(env, grant, 'agent_token'));

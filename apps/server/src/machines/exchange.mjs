@@ -13,6 +13,8 @@ export async function exchangeToken(env, client, body) {
     invariant(body.actor_token === undefined, 'invalid_request', 'The authenticated app is the actor; actor_token is not used.');
     const subject = await localAccessToken(env, body.subject_token);
     invariant(subject && !subject.cnf, 'invalid_grant', 'The subject token is invalid, expired or sender-constrained.');
+    // Only a person's delegated token can be exchanged: a service token never becomes a token for another app.
+    invariant(typeof subject.grant_id === 'string' && !subject.grant_id.startsWith('service:'), 'invalid_grant', 'Service tokens cannot be exchanged.');
     // The exchanging app must be the audience the token was issued to.
     invariant((await ownerOf(env, subject.aud).catch(() => null))?.id === client.id, 'invalid_grant', 'Only the app a token was issued to can exchange it.');
     invariant(await stillLive(env, subject), 'invalid_grant', 'The grant behind the subject token is no longer live.');
@@ -20,6 +22,7 @@ export async function exchangeToken(env, client, body) {
     invariant(typeof body.resource === 'string', 'invalid_target', 'Exactly one resource is required.');
     const target = await ownerOf(env, body.resource);
     invariant(target.id !== client.id, 'invalid_target', 'Use the original token for your own resources.');
+    invariant(target.agent_dpop !== 'required', 'invalid_target', 'The target app requires DPoP-bound tokens; exchanged tokens are bearer tokens.');
     const allowed = JSON.parse(target.token_exchange_from || '{}')[client.id];
     invariant(Array.isArray(allowed), 'unauthorized_client', 'The target app does not accept exchanges from this app.', 400);
     const catalogue = agentSettings(target).agent_scope_catalogue;

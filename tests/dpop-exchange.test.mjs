@@ -114,3 +114,37 @@ test('discovery lists token exchange and DPoP algorithms', async t => {
     assert.ok(d.grant_types_supported.includes('urn:ietf:params:oauth:grant-type:token-exchange'));
     assert.deepEqual(d.dpop_signing_alg_values_supported, ['ES256', 'RS256', 'EdDSA']);
 });
+
+// Review findings on the machines milestone.
+test('review 1: a service token cannot be exchanged into a token for another app', async t => {
+    const { w } = await exchangeWorld(t);
+    const { signAgentJwt } = await import('../apps/server/src/agents/grants.mjs');
+    w.env.DB.db.prepare(`INSERT INTO service_clients(id,realm_id,app_id,name,owner_email,jwks,scopes,resource_prefixes,created,updated)
+        VALUES('ci-bot','default','app','CI','ops@example.com','{"keys":[]}','["read"]','["https://app.example/w/"]',0,0)`).run();
+    const now = Math.floor(Date.now() / 1000);
+    const machine = await signAgentJwt(w.env, { iss: w.env.ISSUER, aud: resource, sub: 'service:ci-bot', client_id: 'ci-bot', grant_id: 'service:ci-bot', scope: 'read', jti: 'x', iat: now, exp: now + 60 });
+    await error(await w.form('/token', { grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange', subject_token: machine,
+        subject_token_type: 'urn:ietf:params:oauth:token-type:access_token', resource: OTHER }, '', { authorization: basic() }), 'invalid_grant');
+});
+test('review 2: an exchanged or DPoP-bound token cannot be used to revoke the agent without the agent', async t => {
+    const { w, exchange } = await exchangeWorld(t);
+    const exchanged = (await (await exchange()).json()).access_token;
+    assert.equal((await w.form('/revoke', { token: exchanged, client_id: metadataId })).status, 200);
+    assert.equal(w.env.DB.db.prepare('SELECT revoked_at FROM agent_grants').get().revoked_at, null, 'the target app holding the token revoked nothing');
+    const key = await dpopKey();
+    const bound = await (await boundGrant(w, key)).json();
+    const grantId = JSON.parse(Buffer.from(bound.access_token.split('.')[1], 'base64url')).grant_id;
+    assert.equal((await w.form('/revoke', { token: bound.access_token, client_id: metadataId })).status, 200);
+    assert.equal(w.env.DB.db.prepare('SELECT revoked_at FROM agent_grants WHERE id=?').get(grantId).revoked_at, null, 'no proof, no revocation');
+    assert.equal((await w.form('/revoke', { token: bound.access_token, client_id: metadataId }, '', { dpop: await key.proof({ htu: 'https://id.vibernt.ai/revoke' }) })).status, 200);
+    assert.ok(w.env.DB.db.prepare('SELECT revoked_at FROM agent_grants WHERE id=?').get(grantId).revoked_at);
+});
+test('review 4: a failed issuance does not bind the grant to a DPoP key', async t => {
+    const w = await agentWorld(t), key = await dpopKey();
+    const flow = await w.start(); const approved = await w.approve(flow);
+    const code = new URL(approved.headers.get('location')).searchParams.get('code');
+    w.env.DB.db.exec('DELETE FROM client_admissions');
+    const failed = await w.form('/token', { grant_type: 'authorization_code', client_id: metadataId, resource, code, redirect_uri: 'http://127.0.0.1:4567/callback', code_verifier: w.verifier }, '', { dpop: await key.proof() });
+    assert.equal(failed.status, 400);
+    assert.equal(w.env.DB.db.prepare('SELECT dpop_jkt FROM agent_grants').get().dpop_jkt, null);
+});

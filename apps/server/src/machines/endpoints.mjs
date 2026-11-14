@@ -12,6 +12,7 @@ import { revokeGrant, queueRevocation } from '../agents/revocation.mjs';
 import { resourceUrl } from '../agents/uris.mjs';
 import { limitAddress } from '../auth/rate-limit.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { verifyDpop } from './dpop.mjs';
 // Verifies one of this realm's access tokens (at+jwt, ES256) without trusting anything the token says about keys.
 export async function localAccessToken(env, token) {
     if (typeof token !== 'string' || token.length > 8192) return null;
@@ -54,19 +55,24 @@ export async function revoke(request, env, ctx) {
     let app = null;
     if (request.headers.has('authorization')) app = await authenticatedClient(request, env, body, true);
     else await limitAddress(env, request);
-    let grant = null;
+    let grant = null, direct = true;
     if (tokenShape(body.token)) {
         grant = await env.DB.prepare('SELECT g.* FROM agent_refresh_tokens t JOIN agent_grants g ON g.id=t.grant_id WHERE t.hash=?').bind(await sha256(body.token)).first();
     } else {
         const claims = await localAccessToken(env, body.token);
-        if (claims && typeof claims.grant_id === 'string' && !claims.grant_id.startsWith('service:'))
+        if (claims && typeof claims.grant_id === 'string' && !claims.grant_id.startsWith('service:')) {
             grant = await env.DB.prepare('SELECT * FROM agent_grants WHERE id=?').bind(claims.grant_id).first();
+            // An exchanged token (act) or one for another audience is not the agent's own: it revokes nothing.
+            direct = !claims.act && grant?.resource === claims.aud;
+        }
     }
     if (!grant || grant.revoked_at !== null) return new Response(null, { status: 200 });
     if (app) { if (grant.app_id !== app.id) return new Response(null, { status: 200 }); }
     else {
-        if (grant.client_id !== body.client_id) return new Response(null, { status: 200 });
+        if (grant.client_id !== body.client_id || !direct) return new Response(null, { status: 200 });
         await authenticateAgent(env, await resolveAgent(env, grant.client_id), body, '/revoke');
+        // A DPoP-bound grant is revoked only with a proof from its key, so a stolen token cannot cut the agent off.
+        if (grant.dpop_jkt && await verifyDpop(env, request, `${env.ISSUER}/revoke`) !== grant.dpop_jkt) return new Response(null, { status: 200 });
     }
     queueRevocation(env, ctx, await revokeGrant(env, grant.id, grant.user_id, app ? 'app_revoke' : 'agent_self_revoke'));
     return new Response(null, { status: 200 });

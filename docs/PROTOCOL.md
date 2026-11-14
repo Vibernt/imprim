@@ -386,7 +386,8 @@ one of *its own* resources is live: signed by the realm, unexpired, its grant un
 its service client active. Any other token gets `{"active":false}`, with no reason.
 
 **Revocation** (RFC 7009, `POST /revoke`) always answers 200. An agent revokes its own grant with its refresh or
-access token and its `client_id`; a key-bound agent also signs an assertion. An app (`client_secret_basic`) revokes
+access token and its `client_id`. A key-bound agent also signs an assertion, and a DPoP-bound grant needs a proof
+from its key. An exchanged token, or one for another audience, revokes nothing. An app (`client_secret_basic`) revokes
 grants on its own resources. Anything else is ignored without saying why. Revoking an access token revokes its
 whole grant.
 
@@ -413,7 +414,10 @@ decision.
 - **Result:** a 60-second token for B with the same person (`sub`), agent (`client_id`) and `grant_id`, so
   revoking the grant ends the chain. `act` records each app (`{"sub":"app:A","client_id":"A"}`, nested for longer
   chains, at most four).
-- **Limits:** DPoP-bound tokens cannot be exchanged. B still checks the person's membership.
+- **Scopes:** B's allowance for A is independent of the scopes the person consented to on A. B decides what it trusts
+  A to do on the person's behalf there.
+- **Limits:** DPoP-bound tokens, service tokens, and exchanges into an app that requires DPoP are refused. B still
+  checks the person's membership.
 
 **User lifecycle events** (`event_token` on the back-channel URI). Every app that admitted a person receives one
 signed security event token (RFC 8417, `typ=secevent+jwt`, `aud` = the app, `sub` = the person, a stable `jti`,

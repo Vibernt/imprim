@@ -48,4 +48,6 @@ export function dpopFor(app, grant, jkt) {
     invariant(!grant?.dpop_jkt || grant.dpop_jkt === jkt, 'invalid_dpop_proof', 'This grant is bound to another DPoP key.', 400);
     return jkt;
 }
-export const bindStatement = (env, grant, jkt) => env.DB.prepare('UPDATE agent_grants SET dpop_jkt=? WHERE id=? AND (dpop_jkt IS NULL OR dpop_jkt=?)').bind(jkt, grant.id, jkt);
+// Binds only together with a successful issuance: the new refresh token must exist in the same transaction.
+export const bindStatement = (env, grant, jkt, refreshHash) => env.DB.prepare(`UPDATE agent_grants SET dpop_jkt=? WHERE id=? AND (dpop_jkt IS NULL OR dpop_jkt=?)
+    AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=? AND grant_id=agent_grants.id)`).bind(jkt, grant.id, jkt, refreshHash);

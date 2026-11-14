@@ -46,7 +46,7 @@ export async function agentToken(request, env, body, ctx) {
         env.DB.prepare('INSERT INTO agent_consumed_codes(hash,grant_id,expires_at) SELECT hash,grant_id,? FROM agent_codes WHERE hash=? AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=?)')
             .bind(now + 86400000, hash, material.hash),
         env.DB.prepare('DELETE FROM agent_codes WHERE hash=? AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=?)').bind(hash, material.hash),
-        ...(bound ? [bindStatement(env, grant, bound)] : [])
+        ...(bound ? [bindStatement(env, grant, bound, material.hash)] : [])
     ]);
     invariant(results[0].meta.changes === 1, 'invalid_grant', 'Code already used or grant revoked.');
     await env.DB.batch(usageStatements(env, grant, 'agent_token'));
@@ -101,7 +101,7 @@ async function refresh(env, body, ctx, jkt = null) {
             .bind(now, material.hash, spending.grace ? 1 : 0, spending.hash, now, ...admission.args, ...guard.args),
         env.DB.prepare(`INSERT INTO agent_refresh_tokens(hash,grant_id,created) SELECT ?,grant_id,? FROM agent_refresh_tokens WHERE hash=? AND replacement_hash=?`)
             .bind(material.hash, now, spending.hash, material.hash),
-        ...(bound ? [bindStatement(env, grant, bound)] : [])
+        ...(bound ? [bindStatement(env, grant, bound, material.hash)] : [])
     ]);
     if (result[0].meta.changes !== 1) {
         const current = await env.DB.prepare('SELECT spent_at FROM agent_refresh_tokens WHERE hash=?').bind(spending.hash).first();
