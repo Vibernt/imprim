@@ -30,7 +30,7 @@ export async function localAccessToken(env, token) {
     if (claims?.iss !== env.ISSUER || typeof claims.aud !== 'string' || !Number.isInteger(claims.exp) || claims.exp <= now) return null;
     return claims;
 }
-async function stillLive(env, claims) {
+export async function stillLive(env, claims) {
     if (typeof claims.grant_id !== 'string') return false;
     if (claims.grant_id.startsWith('service:')) {
         return Boolean(await env.DB.prepare("SELECT 1 FROM service_clients WHERE id=? AND realm_id=? AND status='active'").bind(claims.grant_id.slice(8), realmId(env)).first());

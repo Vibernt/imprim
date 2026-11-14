@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 // Explicit dependency order keeps the vendored artifact deterministic and dependency-free.
-const modules = ['resources', 'backchannel', 'jwt', 'index'];
+const modules = ['resources', 'backchannel', 'jwt', 'dpop', 'index'];
 const sources = await Promise.all(modules.map(name => readFile(new URL(`../packages/imprim-client/${name}.mjs`, import.meta.url), 'utf8')));
 const body = sources.map((source, index) => {
     const withoutImports = source.replace(/^import .*from '\.\/[^']+';\n/gm, '');

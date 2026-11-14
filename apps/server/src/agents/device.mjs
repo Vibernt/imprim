@@ -7,7 +7,7 @@ import { page } from '../pages/layout.mjs';
 import { checkPolicy } from './policy.mjs';
 import { authenticateAgent } from './client-auth.mjs';
 import { beginAgentSignIn } from './authorize.mjs';
-import { grantContext, tokenMaterial, usageStatements } from './grants.mjs';
+import { grantContext, tokenMaterial, usageStatements, dpopFor, bindStatement } from './grants.mjs';
 const DEVICE = 'urn:ietf:params:oauth:grant-type:device_code';
 export async function deviceAuthorization(request, env) {
     await limitAgentAddress(env, request, 'device');
@@ -39,7 +39,7 @@ export async function devicePage(request, env) {
     const context = await checkPolicy(env, row);
     return beginAgentSignIn(request, env, row, context, row.hash);
 }
-export async function pollDevice(env, body) {
+export async function pollDevice(env, body, jkt = null) {
     invariant(tokenShape(body.device_code), 'invalid_grant', 'Device code required.');
     const hash = await sha256(body.device_code), now = Date.now();
     let row = await env.DB.prepare('SELECT * FROM agent_devices WHERE hash=?').bind(hash).first();
@@ -61,13 +61,14 @@ export async function pollDevice(env, body) {
     invariant(row, 'invalid_grant', 'Device request unavailable.');
     invariant(row.poll_marker === marker, 'slow_down', 'Increase the polling interval by five seconds.');
     invariant(row.status === 'approved', 'authorization_pending', 'Waiting for human consent.');
-    const { grant, app } = await grantContext(env, row.grant_id), material = await tokenMaterial(env, grant);
+    const { grant, app } = await grantContext(env, row.grant_id), bound = dpopFor(app, grant, jkt), material = await tokenMaterial(env, grant, grant.scope, bound);
     const guard = liveGrantGuard(grant, app, Date.now());
     const result = await env.DB.batch([
         env.DB.prepare(`INSERT INTO agent_refresh_tokens(hash,grant_id,created) SELECT ?,d.grant_id,? FROM agent_devices d JOIN agent_grants g ON g.id=d.grant_id
             WHERE d.hash=? AND d.status='approved' AND d.expires_at>? AND g.revoked_at IS NULL AND g.expires_at>? AND ${guard.sql}
             AND EXISTS(SELECT 1 FROM client_admissions a WHERE a.user_id=g.user_id AND a.client_id=g.app_id)`).bind(material.hash, Date.now(), hash, Date.now(), Date.now(), ...guard.args),
-        env.DB.prepare("UPDATE agent_devices SET status='consumed' WHERE hash=? AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=?)").bind(hash, material.hash)
+        env.DB.prepare("UPDATE agent_devices SET status='consumed' WHERE hash=? AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=?)").bind(hash, material.hash),
+        ...(bound ? [bindStatement(env, grant, bound)] : [])
     ]);
     invariant(result[0].meta.changes === 1, 'invalid_grant', 'Device code already used or grant revoked.');
     await env.DB.batch(usageStatements(env, grant, 'agent_token'));

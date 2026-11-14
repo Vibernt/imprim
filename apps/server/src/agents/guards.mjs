@@ -1,6 +1,6 @@
 // SQL predicates fence policy/user changes between network validation and atomic credential issuance.
 import { settingNames } from './settings.mjs';
-const fields = [...settingNames, 'sign_in_methods', 'google_hosted_domains', 'signup_policy', 'allowed_domains', 'mfa', 'mfa_trusted_device_days', 'agent_consent_mfa'];
+const fields = [...settingNames, 'sign_in_methods', 'google_hosted_domains', 'signup_policy', 'allowed_domains', 'mfa', 'mfa_trusted_device_days', 'agent_consent_mfa', 'agent_dpop'];
 export function policyGuard(app, resource) {
     return { sql: `EXISTS(SELECT 1 FROM clients policy WHERE policy.id=? AND ${fields.map(key => `policy.${key}=?`).join(' AND ')})
         AND NOT EXISTS(SELECT 1 FROM clients competing,json_each(competing.agent_resource_prefixes) prefix

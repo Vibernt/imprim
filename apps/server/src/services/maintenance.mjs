@@ -18,7 +18,7 @@ async function maintain(env) {
     const now = Date.now();
     await cleanDeliveryHistory(env, now);
     await cleanExpiredAppSessions(env, now);
-    for (const table of ['magic_links', 'oauth_states', 'auth_requests', 'codes', 'access_tokens', 'consumed_codes', 'sessions', 'invitations', 'rate_limits', 'agent_codes', 'agent_metadata_cache', 'agent_consumed_codes', 'agent_assertions', 'webauthn_challenges', 'email_changes'])
+    for (const table of ['magic_links', 'oauth_states', 'auth_requests', 'codes', 'access_tokens', 'consumed_codes', 'sessions', 'invitations', 'rate_limits', 'agent_codes', 'agent_metadata_cache', 'agent_consumed_codes', 'agent_assertions', 'webauthn_challenges', 'email_changes', 'dpop_proofs'])
         await env.DB.prepare(`DELETE FROM ${table} WHERE expires_at<=?`).bind(now).run();
     // Retain expired device codes for a day so pollers receive expired_token after the sweep.
     await env.DB.prepare('DELETE FROM agent_devices WHERE expires_at<=?').bind(now - 86400000).run();

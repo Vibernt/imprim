@@ -8,6 +8,7 @@ import { agentSettings } from '../agents/settings.mjs';
 import { underPrefix } from '../agents/uris.mjs';
 import { signAgentJwt } from '../agents/grants.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { verifyDpop } from './dpop.mjs';
 export const SERVICE_TOKEN_SECONDS = 60;
 export const serviceSubject = id => `service:${id}`;
 export async function activeService(env, id) {
@@ -27,9 +28,9 @@ export async function serviceToken(request, env, body) {
     const allowed = JSON.parse(service.scopes), catalogue = agentSettings(app).agent_scope_catalogue;
     const asked = body.scope === undefined ? allowed : String(body.scope).split(' ');
     invariant(asked.length && new Set(asked).size === asked.length && asked.every(scope => allowed.includes(scope) && Object.hasOwn(catalogue, scope)), 'invalid_scope', 'Request scopes this service client is allowed.');
-    const now = Math.floor(Date.now() / 1000), scope = asked.join(' ');
+    const jkt = await verifyDpop(env, request, `${env.ISSUER}/token`), now = Math.floor(Date.now() / 1000), scope = asked.join(' ');
     const token = await signAgentJwt(env, { iss: env.ISSUER, aud: body.resource, sub: serviceSubject(service.id), client_id: service.id,
-        grant_id: serviceSubject(service.id), scope, jti: crypto.randomUUID(), iat: now, exp: now + SERVICE_TOKEN_SECONDS });
+        grant_id: serviceSubject(service.id), scope, ...(jkt ? { cnf: { jkt } } : {}), jti: crypto.randomUUID(), iat: now, exp: now + SERVICE_TOKEN_SECONDS });
     await env.DB.prepare('UPDATE service_clients SET last_used=? WHERE id=?').bind(Date.now(), service.id).run();
-    return json({ access_token: token, token_type: 'Bearer', expires_in: SERVICE_TOKEN_SECONDS, scope });
+    return json({ access_token: token, token_type: jkt ? 'DPoP' : 'Bearer', expires_in: SERVICE_TOKEN_SECONDS, scope });
 }

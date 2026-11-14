@@ -5,7 +5,8 @@ import { sha256, challengeOf } from '../lib/crypto.mjs';
 import { sessionByHash } from '../auth/session.mjs';
 import { requireMethod } from '../oidc/sign-in-methods.mjs';
 import { admissionGuard } from '../services/admission.mjs';
-import { grantContext, tokenMaterial, usageStatements } from './grants.mjs';
+import { grantContext, tokenMaterial, usageStatements, dpopFor, bindStatement } from './grants.mjs';
+import { verifyDpop } from '../machines/dpop.mjs';
 import { revokeGrant, queueRevocation } from './revocation.mjs';
 import { authenticateAgent } from './client-auth.mjs';
 import { pollDevice } from './device.mjs';
@@ -18,8 +19,9 @@ export const REFRESH_BUDGET_PER_DAY = 3000;
 export async function agentToken(request, env, body, ctx) {
     invariant(!request.headers.has('authorization') && !Object.hasOwn(body, 'client_secret'), 'invalid_client', 'Agents authenticate with private_key_jwt or not at all.');
     invariant(typeof body.client_id === 'string' && typeof body.resource === 'string', 'invalid_target', 'client_id and exactly one resource required.');
-    if (body.grant_type === 'urn:ietf:params:oauth:grant-type:device_code') return pollDevice(env, body);
-    if (body.grant_type === 'refresh_token') return refresh(env, body, ctx);
+    const jkt = await verifyDpop(env, request, `${env.ISSUER}/token`);
+    if (body.grant_type === 'urn:ietf:params:oauth:grant-type:device_code') return pollDevice(env, body, jkt);
+    if (body.grant_type === 'refresh_token') return refresh(env, body, ctx, jkt);
     invariant(body.grant_type === 'authorization_code', 'unsupported_grant_type', 'Unsupported agent grant type.');
     invariant(tokenShape(body.code) && /^[A-Za-z0-9._~-]{43,128}$/.test(body.code_verifier || ''), 'invalid_grant', 'Code and PKCE verifier required.');
     const hash = await sha256(body.code), challenge = await challengeOf(body.code_verifier);
@@ -34,7 +36,8 @@ export async function agentToken(request, env, body, ctx) {
     const session = await sessionByHash(env, code.session_hash);
     invariant(session && session.user_id === grant.user_id, 'invalid_grant', 'Sign-in session unavailable.');
     requireMethod(app, session.method, session.google_hd, true);
-    const material = await tokenMaterial(env, grant), now = Date.now();
+    const bound = dpopFor(app, grant, jkt);
+    const material = await tokenMaterial(env, grant, grant.scope, bound), now = Date.now();
     const guard = liveGrantGuard(grant, app, now), admission = admissionGuard('g.user_id', app.id);
     const results = await env.DB.batch([
         env.DB.prepare(`INSERT INTO agent_refresh_tokens(hash,grant_id,created) SELECT ?,c.grant_id,? FROM agent_codes c JOIN agent_grants g ON g.id=c.grant_id
@@ -42,7 +45,8 @@ export async function agentToken(request, env, body, ctx) {
             AND EXISTS(SELECT 1 FROM sessions WHERE hash=c.session_hash AND expires_at>?)`).bind(material.hash, now, hash, now, now, ...guard.args, ...admission.args, now),
         env.DB.prepare('INSERT INTO agent_consumed_codes(hash,grant_id,expires_at) SELECT hash,grant_id,? FROM agent_codes WHERE hash=? AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=?)')
             .bind(now + 86400000, hash, material.hash),
-        env.DB.prepare('DELETE FROM agent_codes WHERE hash=? AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=?)').bind(hash, material.hash)
+        env.DB.prepare('DELETE FROM agent_codes WHERE hash=? AND EXISTS(SELECT 1 FROM agent_refresh_tokens WHERE hash=?)').bind(hash, material.hash),
+        ...(bound ? [bindStatement(env, grant, bound)] : [])
     ]);
     invariant(results[0].meta.changes === 1, 'invalid_grant', 'Code already used or grant revoked.');
     await env.DB.batch(usageStatements(env, grant, 'agent_token'));
@@ -67,7 +71,7 @@ function narrowed(grant, requested) {
     invariant(asked.length > 0 && new Set(asked).size === asked.length && asked.every(scope => held.includes(scope)), 'invalid_scope', 'Refresh can only narrow the granted scopes.');
     return asked.join(' ');
 }
-async function refresh(env, body, ctx) {
+async function refresh(env, body, ctx, jkt = null) {
     invariant(tokenShape(body.refresh_token), 'invalid_grant', 'Refresh token required.');
     const hash = await sha256(body.refresh_token), now = Date.now();
     const token = await env.DB.prepare(`SELECT t.*,g.client_id,g.user_id,g.resource FROM agent_refresh_tokens t JOIN agent_grants g ON g.id=t.grant_id WHERE t.hash=?`).bind(hash).first();
@@ -87,7 +91,8 @@ async function refresh(env, body, ctx) {
     const scope = narrowed(grant, body.scope);
     const recent = await env.DB.prepare('SELECT count(*) AS n FROM agent_refresh_tokens WHERE grant_id=? AND created>?').bind(grant.id, now - 86400000).first();
     invariant(recent.n < REFRESH_BUDGET_PER_DAY, 'invalid_grant', 'This grant exceeded its daily refresh budget. Try again later.');
-    const material = await tokenMaterial(env, grant, scope);
+    const bound = dpopFor(app, grant, jkt);
+    const material = await tokenMaterial(env, grant, scope, bound);
     // Qualified: an unqualified user_id inside the client_admissions subquery would resolve to that table's own column.
     const guard = liveGrantGuard(grant, app, now), admission = admissionGuard('agent_grants.user_id', app.id);
     const result = await env.DB.batch([
@@ -95,7 +100,8 @@ async function refresh(env, body, ctx) {
             AND EXISTS(SELECT 1 FROM agent_grants WHERE id=grant_id AND revoked_at IS NULL AND expires_at>? AND ${admission.sql}) AND ${guard.sql}`)
             .bind(now, material.hash, spending.grace ? 1 : 0, spending.hash, now, ...admission.args, ...guard.args),
         env.DB.prepare(`INSERT INTO agent_refresh_tokens(hash,grant_id,created) SELECT ?,grant_id,? FROM agent_refresh_tokens WHERE hash=? AND replacement_hash=?`)
-            .bind(material.hash, now, spending.hash, material.hash)
+            .bind(material.hash, now, spending.hash, material.hash),
+        ...(bound ? [bindStatement(env, grant, bound)] : [])
     ]);
     if (result[0].meta.changes !== 1) {
         const current = await env.DB.prepare('SELECT spent_at FROM agent_refresh_tokens WHERE hash=?').bind(spending.hash).first();

@@ -1,4 +1,4 @@
-# imprim-client 0.4.0
+# imprim-client 0.5.0
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Earlier versions were
 named `imprim-client`; the API is unchanged apart from the 0.3.0 changes listed in [docs/CLIENTS.md](../../docs/CLIENTS.md#client-030-changes-wire-change).

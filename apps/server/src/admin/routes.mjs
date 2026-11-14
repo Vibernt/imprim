@@ -78,7 +78,7 @@ export async function admin(request, env, ctx) {
         if (section === 'clients' && !action) {
             if (!api) {
                 try {
-                    for (const field of ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains',
+                    for (const field of ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains','token_exchange_from',
                         'agent_registration_methods','agent_allowlist','agent_scope_catalogue','agent_resource_prefixes']) if (body[field] !== undefined) body[field] = JSON.parse(body[field]);
                     for (const field of ['dev','agent_max_grant_days','version','mfa_trusted_device_days']) if (body[field] !== undefined) body[field] = Number(body[field]);
                 } catch { invariant(false, 'invalid_request', 'List and branding fields must contain valid JSON.'); }

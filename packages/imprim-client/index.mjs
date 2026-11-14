@@ -1,6 +1,7 @@
 import { resourceMetadata, challengeHeader } from './resources.mjs';
 import { createVerifier } from './jwt.mjs';
 import { backchannelMethods, validateResourcePrefixes } from './backchannel.mjs';
+import { verifyDpopProof } from './dpop.mjs';
 // Zero-dependency OIDC relying-party client for Workers and Node 20+.
 // `message` is always this package's own text. Server-supplied `error_description` is kept apart in `description`:
 // it is untrusted input, so escape it before showing it.
@@ -114,7 +115,14 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
             if (typeof data.id_token !== 'string') fail('invalid_response', 'Token response has no ID token.');
             return verify(data.id_token, { nonce });
         },
-        verifyAccessToken: (jwt, { audience, clockSkewSeconds } = {}) => verify(jwt, { access: true, audience, clockSkewSeconds }),
+        // A DPoP-bound token (cnf.jkt) needs `dpop: { proof, method, url }`; `requireDpop` refuses bearer tokens.
+        // The result carries dpop_jti for the app to deduplicate.
+        async verifyAccessToken(jwt, { audience, clockSkewSeconds, dpop, requireDpop = false } = {}) {
+            const claims = await verify(jwt, { access: true, audience, clockSkewSeconds });
+            if (!claims.cnf?.jkt) { if (requireDpop) fail('invalid_token', 'A DPoP-bound token is required.'); return claims; }
+            if (!dpop) fail('invalid_dpop_proof', 'This token is DPoP-bound: send its proof.');
+            return { ...claims, dpop_jti: await verifyDpopProof(dpop.proof, { accessToken: jwt, jkt: claims.cnf.jkt, method: dpop.method, url: dpop.url, clockSkewSeconds }, fail) };
+        },
         protectedResourceMetadata: options => resourceMetadata(issuerText, options, fail),
         wwwAuthenticate,
         verifyIdToken: (jwt, { nonce, maxAge } = {}) => verify(jwt, { nonce, maxAge }),

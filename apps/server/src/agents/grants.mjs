@@ -18,7 +18,8 @@ export async function signAgentJwt(env, claims, typ = 'at+jwt') {
     return `${input}.${b64url(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(input)))}`;
 }
 // `scope` may narrow the access token (RFC 6749 section 6); the refresh token always keeps the grant's scope.
-export async function tokenMaterial(env, grant, scope = grant.scope) {
+// `jkt` binds the access token to a DPoP key (cnf.jkt, token_type DPoP).
+export async function tokenMaterial(env, grant, scope = grant.scope, jkt = null) {
     const now = Math.floor(Date.now() / 1000), refresh = randomToken();
     // Cap even the final access token at the grant deadline.
     const exp = Math.min(now + 60, Math.floor(grant.expires_at / 1000));
@@ -27,8 +28,8 @@ export async function tokenMaterial(env, grant, scope = grant.scope) {
     // require a fresh approval (one-shot owner approvals) without trusting iat, which every refresh renews.
     const token = await signAgentJwt(env, { iss: env.ISSUER, aud: grant.resource, sub: grant.user_id,
         client_id: grant.client_id, grant_id: grant.id, grant_issued_at: Math.floor(grant.created / 1000), scope,
-        jti: crypto.randomUUID(), iat: now, exp });
-    return { hash: await sha256(refresh), response: { access_token: token, token_type: 'Bearer', expires_in: exp - now, refresh_token: refresh, scope } };
+        ...(jkt ? { cnf: { jkt } } : {}), jti: crypto.randomUUID(), iat: now, exp });
+    return { hash: await sha256(refresh), response: { access_token: token, token_type: jkt ? 'DPoP' : 'Bearer', expires_in: exp - now, refresh_token: refresh, scope } };
 }
 // A refresh updates last_used but writes no audit row: a running agent refreshes every minute, and the audit log
 // would grow without bound (S5). First issuance, revocation and reuse are audited.
@@ -40,3 +41,11 @@ export function usageStatements(env, grant, event) {
         ...(event === 'agent_refresh' ? [] : [env.DB.prepare('INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,?,?,?)').bind(event, grant.user_id, JSON.stringify({ grant_id: grant.id, app_id: grant.app_id }), now, env.REALM?.id ?? null)])
     ];
 }
+// DPoP policy for a token request: the proof's key, or null. A grant bound to a key (dpop_jkt) needs a proof from that
+// key on every request; an app with agent_dpop 'required' needs a proof from the first.
+export function dpopFor(app, grant, jkt) {
+    invariant(app.agent_dpop !== 'required' || jkt, 'invalid_dpop_proof', 'This app requires DPoP-bound tokens.', 400);
+    invariant(!grant?.dpop_jkt || grant.dpop_jkt === jkt, 'invalid_dpop_proof', 'This grant is bound to another DPoP key.', 400);
+    return jkt;
+}
+export const bindStatement = (env, grant, jkt) => env.DB.prepare('UPDATE agent_grants SET dpop_jkt=? WHERE id=? AND (dpop_jkt IS NULL OR dpop_jkt=?)').bind(jkt, grant.id, jkt);

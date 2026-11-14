@@ -5,7 +5,7 @@ import { validateAgentSettings, settingNames } from '../agents/settings.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { auditStatement } from './auth.mjs';
 import { realmId } from '../realms/realm.mjs';
-const jsonFields = ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains',
+const jsonFields = ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains','token_exchange_from',
     ...settingNames.filter(k => !['agent_access','agent_max_grant_days'].includes(k))];
 export function publicClient(row) {
     const { secret_hash, ...value } = row;
@@ -25,6 +25,11 @@ function validate(config) {
     invariant(['off','optional','required'].includes(config.mfa ?? 'off') && ['off','required'].includes(config.agent_consent_mfa ?? 'off') &&
         Number.isInteger(config.mfa_trusted_device_days ?? 0) && (config.mfa_trusted_device_days ?? 0) >= 0 && (config.mfa_trusted_device_days ?? 0) <= 90,
         'invalid_request', 'mfa is off, optional or required; agent_consent_mfa is off or required; mfa_trusted_device_days is 0 to 90.');
+    invariant(['optional', 'required'].includes(config.agent_dpop ?? 'optional'), 'invalid_request', 'agent_dpop is optional or required.');
+    const exchange = config.token_exchange_from ?? {};
+    invariant(exchange && typeof exchange === 'object' && !Array.isArray(exchange) && Object.keys(exchange).length <= 20 &&
+        Object.entries(exchange).every(([id, scopes]) => /^[A-Za-z0-9_-]{1,200}$/.test(id) && id !== config.id && Array.isArray(scopes) && scopes.length > 0 &&
+            scopes.every(scope => Object.hasOwn(agent.agent_scope_catalogue, scope))), 'invalid_request', 'token_exchange_from maps other client ids to scopes from this app\'s catalogue.');
     for (const name of ['redirect_uris','post_logout_uris']) {
         invariant(Array.isArray(config[name]) && config[name].length <= 100 && (name !== 'redirect_uris' || config[name].length), 'invalid_request', 'Invalid URI list.');
         for (const uri of config[name]) registeredUri({ dev: config.dev, [name]: JSON.stringify(config[name]) }, uri, name);
@@ -42,7 +47,7 @@ function validate(config) {
 export async function saveClient(env, actor, id, input) {
     const old = id ? await getAdminClient(env, id) : null;
     const allowed = ['id','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev',
-        'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa',...settingNames, ...(old ? ['version'] : [])];
+        'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa','agent_dpop','token_exchange_from',...settingNames, ...(old ? ['version'] : [])];
     invariant(Object.keys(input).every(k => allowed.includes(k)), 'invalid_request', 'Unknown client field; secrets cannot be supplied.');
     invariant(!id || input.id === undefined || input.id === id, 'invalid_request', 'Client id cannot change.');
     if (old) {

@@ -396,6 +396,25 @@ member leaves the workspace; the agent's refresh is refused at once and the revo
 app's client credentials and work only on the app's own resources. Who in the workspace may call them is the app's
 decision.
 
+**DPoP** (RFC 9449, header `DPoP` on `/token`).
+- **Proofs:** an ES256, RS256 or EdDSA proof, public key only, for this method and URL, issued within the last five
+  minutes, with a single-use `jti`.
+- **Binding:** the access token then carries `cnf.jkt` and `token_type` is `DPoP`. An agent grant's first proof binds
+  the grant to that key; every later exchange or refresh needs a proof from the same key, so a stolen refresh token
+  is useless. An app sets `agent_dpop: required` to refuse unbound agent tokens. Service clients may send proofs too.
+- **Resource servers:** `imprim-client` 0.5.0 verifies the request's proof against the token:
+  `verifyAccessToken(token, { audience, dpop: { proof, method, url } })` checks the key, method, URL, freshness and
+  `ath`. Deduplicate the returned `dpop_jti`.
+
+**Token exchange** (RFC 8693, `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`).
+- **Request:** app A authenticates with its client secret and presents an agent's access token that was issued for
+  A's own resource (`subject_token`, type `access_token`), with `resource` naming app B's resource.
+- **Opt-in:** B lists A in `token_exchange_from` with the most scopes A may obtain.
+- **Result:** a 60-second token for B with the same person (`sub`), agent (`client_id`) and `grant_id`, so
+  revoking the grant ends the chain. `act` records each app (`{"sub":"app:A","client_id":"A"}`, nested for longer
+  chains, at most four).
+- **Limits:** DPoP-bound tokens cannot be exchanged. B still checks the person's membership.
+
 ### Device state machine
 
 A random device secret and eight-character human code (shown in two groups) are stored only as hashes. Issuance and
