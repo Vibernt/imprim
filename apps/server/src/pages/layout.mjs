@@ -31,6 +31,9 @@ export const localCss = `/* Fire stopgaps for Imprim. Classes use the x- prefix 
 .x-screen { display: flex; flex-direction: column; justify-content: center; }
 .x-screen :is(.fd-h1, .fd-h1 + .fd-muted), .x-center { text-align: center; }
 `;
+// Browsers keep /assets/local.css for an hour, so its link carries a hash of the rules: a release that changes them is
+// picked up at once.
+const localCssHref = `/assets/local.css?v=${[...localCss].reduce((hash, c) => Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261).toString(36)}`;
 // The document around either layout. formTargets: origins a form on this page redirects to after it posts. Chrome applies
 // form-action to those redirects, so the logout confirmation (to the app's post-logout URI) and the agent consent (to
 // its callback) name them. client: the app whose branding this page wears; otherwise the realm's.
@@ -47,7 +50,7 @@ export function htmlResponse(title, inner, { script = '', modules = [], turnstil
     const scripts = [script].flat().filter(Boolean).map(src => `<script src="${escapeHtml(src)}" defer></script>`).join('') +
         modules.map(src => `<script type="module" src="${escapeHtml(src)}"></script>`).join('');
     return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-${client?.id && /^[A-Za-z0-9_-]{1,200}$/.test(client.id) ? marker(`client:${client.id}`) : ''}<title>${escapeHtml(title)} · ${BRAND}</title><link rel="stylesheet" href="/fire/fire.css"><link rel="stylesheet" href="/assets/local.css">${HEAD}</head>
+${client?.id && /^[A-Za-z0-9_-]{1,200}$/.test(client.id) ? marker(`client:${client.id}`) : ''}<title>${escapeHtml(title)} · ${BRAND}</title><link rel="stylesheet" href="/fire/fire.css"><link rel="stylesheet" href="${localCssHref}">${HEAD}</head>
 <body>${inner}${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ''}${scripts}</body></html>`, { status, headers });
 }
 // The centred screen: the brand, one card, "Powered by", then the legal footer. `size` is the card's column (sm or md).

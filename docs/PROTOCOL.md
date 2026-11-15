@@ -33,7 +33,7 @@ identity; apps keep workspace admission, memberships, roles, local sessions and 
 | `GET /account`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, security, sessions and apps, connected agents, and the password, factor and email-change pages (below). |
 | `POST /account/{profile,sessions,apps,devices,email,email/confirm,delete,password,mfa,revoke}` | Account changes; same Origin and CSRF. |
 | `POST /account/passkeys/{options,register,remove}` | Passkey registration and removal. |
-| `GET /assets/local.css`, `/assets/sign-in.js`, `/assets/passkey.js` | Imprim's stopgap CSS and its two page scripts; one-hour cache. |
+| `GET /assets/local.css`, `/assets/sign-in.js`, `/assets/passkey.js` | Imprim's stopgap CSS and its two page scripts; one-hour cache. Pages link the CSS with a hash of its content (`?v=`), so a release that changes it shows at once. |
 | `GET /assets/theme.css[?client=id]` | The brand's Fire look as `<html>`-level custom properties for the realm, or an app in it; five-minute cache ([Branding](BRANDING.md)). |
 | `GET /assets/brand/<sha256>` | An uploaded logo or mark of this realm, sandboxed (`CSP: default-src 'none'; style-src 'unsafe-inline'; sandbox`, `nosniff`); 404 otherwise. |
 | `GET /fire/*`, `/imprim/*` | Static assets (Fire, and the console's branding editor module), served before the Worker with `nosniff` and `Cross-Origin-Resource-Policy: same-origin`. |

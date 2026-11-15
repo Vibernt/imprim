@@ -20,6 +20,9 @@ test('every page shows the realm name, escaped, and no product is written into t
     assert.match(html, /<div class="fd-row" data-justify="center"><div class="fd-brand"><span class="fd-brand-mark"><svg viewBox="-1 0 7 7"[^>]*>[\s\S]*?<\/svg><\/span><span class="fd-brand-name">Vibernt<\/span><\/div><\/div>/);
     assert.match(html, /<span>Powered by<\/span><svg class="x-wordmark" data-size="sm"[^>]*aria-label="Imprim">/);
     assert.match(html, /<title>Signed out · Vibernt<\/title>/);
+    // The stopgap stylesheet is cached for an hour, so its link changes when its rules do.
+    const href = /<link rel="stylesheet" href="(\/assets\/local\.css\?v=[0-9a-z]+)">/.exec(html)?.[1];
+    assert.ok(href, 'versioned link'); assert.match(await (await w.call(href)).text(), /\.x-screen/);
     w.env.DB.db.prepare("UPDATE realms SET display_name=? WHERE id='default'").run('<b>Acme</b>');
     const { forgetRealms } = await import('../apps/server/src/realms/realm.mjs'); forgetRealms(w.env);
     const escaped = await (await w.call('/signed-out')).text();
