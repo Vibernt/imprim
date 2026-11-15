@@ -50,8 +50,12 @@ Worker's deployments in Cloudflare before relying on a behaviour described here.
   token exchange, introspection, revocation, DPoP and `acr` values), JWKS, the theme and page assets, the branded
   sign-in page, and a logo's byte-for-byte round trip through D1 with its sandbox headers were checked.
 - **The Fire interface** (every page rebuilt with Fire, static assets and `_headers`, branding as a Fire look, the
-  console's Tweaks panel and logo upload) and migration `0019` came after that staging deployment and have not run on
-  Cloudflare yet.
+  console's Tweaks panel and logo upload) and migration `0019` were deployed to staging later on 2026-11-15. There,
+  the Fire files, fonts and editor module are served as static assets with `nosniff`, same-origin resource policy and
+  a sandbox policy on SVG; Worker routes are not shadowed; the sign-in, check-email, signed-out and signed-out account
+  pages render in Fire with the page policy unchanged; and discovery lists only the `query` response mode. Signing in,
+  the account and two-factor pages, and the console's Branding page with Tweaks and logo upload have not been tried
+  there by a person yet.
 
 Node tests use a real SQLite adapter and controlled provider, mail, rate and queue responses. They do not prove:
 
