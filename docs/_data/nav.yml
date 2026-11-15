@@ -26,7 +26,8 @@
 - label: Design system
   items:
     - { title: Fire in Imprim, path: fire/README.md, url: fire/, desc: "How every Imprim screen is built with Fire." }
+    - { title: Rules for agents, path: fire/AGENT-RULES.md, url: fire/AGENT-RULES.html, desc: "What an AI agent follows when it builds an interface with Fire." }
     - { title: Building screens, path: fire/GUIDE.md, url: fire/GUIDE.html, desc: "Layout, components, theming, and what to do when Fire lacks something." }
     - { title: Writing, path: fire/WRITING.md, url: fire/WRITING.html, desc: "How to write the words on a screen." }
     - { title: Vocabulary, path: fire/VOCABULARY.md, url: fire/VOCABULARY.html, desc: "Every Fire class and attribute." }
-    - { title: Requests, path: fire/REQUESTS.md, url: fire/REQUESTS.html, desc: "Gaps Imprim fills with stopgaps until Fire has them." }
+    - { title: Requests, path: fire/REQUESTS.md, url: fire/REQUESTS.html, desc: "Gaps found in Fire while building Imprim, and what shipped for each." }

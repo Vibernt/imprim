@@ -7,6 +7,7 @@ its icons are Lucide (ISC).
 
 | Read | For |
 |---|---|
+| [AGENT-RULES.md](AGENT-RULES.md) | The rules an AI agent follows when it builds an interface with Fire; it names the files below |
 | [GUIDE.md](GUIDE.md) | Building screens: layout, components, theming, what to do when Fire lacks something |
 | [WRITING.md](WRITING.md) | Every word on a screen: labels, buttons, hints, errors, empty states |
 | [VOCABULARY.md](VOCABULARY.md) | Every class and attribute Fire defines |
