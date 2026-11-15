@@ -109,7 +109,9 @@ must equal the issuer. Credentials are discoverable and need user verification (
 - **Adding and removing:** adding one follows the rule for any factor (a fresh sign-in, or a fresh second factor when
   one exists). Removing one needs a fresh second factor. Each change is audited and emailed.
 
-**Account page** (`/account`). A signed-in person manages:
+**Account page** (`/account`). A signed-out visit to `/account…` or `/mfa` gets a 401 page explaining that
+the account opens from an app's sign-in (administrators can use `/login`); POSTs to those paths answer JSON
+`login_required`. A signed-in person manages:
 - **Profile:** a display name, sent as `name` with the `profile` scope.
 - **Email:** changing it needs proof at both ends. That is an email-link sign-in within ten minutes for the current
   address, then a single-use, browser-bound confirmation (a POST, not the link itself) from the new address. The old

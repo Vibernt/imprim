@@ -169,3 +169,20 @@ test('review 3 and 4: a held address gets no email, and email changes are capped
     for (let i = 0; i < 4; i++) await form(w, '/account/email', { csrf: csrfOf(jar), new_email: `n${i}@example.com` }, jar);
     assert.equal((await form(w, '/account/email', { csrf: csrfOf(jar), new_email: 'n9@example.com' }, jar)).status, 429);
 });
+test('a signed-out visit to the account or second-factor pages gets a page that says how to sign in; POSTs stay JSON', async t => {
+    const w = await world(t);
+    for (const path of ['/account', '/account/mfa', '/account/password', '/mfa']) {
+        const response = await w.call(path);
+        assert.equal(response.status, 401, path);
+        assert.match(response.headers.get('content-type'), /^text\/html/, path);
+        const html = await response.text();
+        assert.match(html, /<h1>Sign in to see your account<\/h1>/, path);
+        assert.match(html, /Your Vibernt account opens from the apps that use it/, path);
+        assert.match(html, /<a href="\/login">sign in here<\/a>/, path);
+        assert.ok(!html.includes('<!--identity:'), 'brand markers are filled');
+    }
+    const post = await w.call('/account/profile', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: w.env.ISSUER }, body: 'display_name=x' });
+    assert.equal(post.status, 401);
+    assert.equal((await post.json()).error, 'login_required');
+    assert.equal((await w.call('/accounting')).status, 404, 'only the account paths');
+});

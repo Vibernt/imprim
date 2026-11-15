@@ -29,7 +29,7 @@ import { logout } from './oidc/logout.mjs';
 import { invite } from './services/invitations.mjs';
 import { scheduled, queue } from './services/maintenance.mjs';
 import { loginPage, signInScript } from './pages/sign-in.mjs';
-import { page, pageCss, errorPage, withBrand, escapeHtml } from './pages/layout.mjs';
+import { page, pageCss, errorPage, signedOutPage, withBrand, escapeHtml } from './pages/layout.mjs';
 import { themeResponse } from './branding/theme.mjs';
 import { serveAsset } from './branding/assets.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
@@ -124,7 +124,10 @@ export async function handleRequest(request, base, ctx) {
         const code = known ? error.code : 'server_error', status = known ? error.status : 500;
         const message = known ? error.message : 'The request could not be completed.';
         const html = request.method === 'GET' && request.headers.get('accept')?.includes('text/html');
-        const response = html ? errorPage(message, status) : json({ error: code, error_description: message }, status);
+        // A person who opens their account page while signed out gets a page that says how to sign in, whatever
+        // the request's Accept header; API clients of the same paths use POST and still get JSON.
+        const signedOut = code === 'login_required' && request.method === 'GET' && /^\/(account(\/|$)|mfa$)/.test(url.pathname);
+        const response = signedOut ? signedOutPage() : html ? errorPage(message, status) : json({ error: code, error_description: message }, status);
         if (code === 'invalid_client' && status === 401) response.headers.set('www-authenticate', `Basic realm="${(env.REALM?.display_name || 'identity').replace(/[^\x20-\x7e]|["\\]/g, '')}"`);
         if (code === 'invalid_token') response.headers.set('www-authenticate', 'Bearer error="invalid_token"');
         if (url.pathname === '/auth/github/callback') response.headers.append('set-cookie', cookie(OAUTH_COOKIE, '', 0));

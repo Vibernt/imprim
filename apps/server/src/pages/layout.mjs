@@ -37,6 +37,11 @@ export function page(title, body, { script = '', turnstile = false, cookies = []
     return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 ${client?.id && /^[A-Za-z0-9_-]{1,200}$/.test(client.id) ? `<!--identity:client:${client.id}-->` : ''}<title>${escapeHtml(title)} · ${BRAND}</title><link rel="stylesheet" href="/assets/page.css">${HEAD}${HEADER}<main${wide ? ' class="wide"' : ''}>${body}</main>${FOOTER}${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ''}${[script].flat().filter(Boolean).map(src => `<script src="${escapeHtml(src)}" defer></script>`).join('')}</html>`, { status, headers });
 }
+// A signed-out visit to the account or second-factor pages. Only administrators can start a sign-in here (/login);
+// everyone else signs in through an app, which leaves a session this page can use.
+export const signedOutPage = () => page('Sign in to continue', `<h1>Sign in to see your account</h1>
+<p>Your ${BRAND} account opens from the apps that use it. Sign in to one of them in this browser, then come back to this page.</p>
+<p>Administrators can <a href="/login">sign in here</a>.</p>`, { status: 401 });
 export const errorPage = (message, status = 400) => page('Sign-in error', `<h1>Sign-in could not finish</h1><p>${escapeHtml(message)}</p><p>Return to the app and start again.</p>`, { status });
 // Fills the brand markers for the request's realm and, if the page names one, its app: name, logo or mark (with a
 // dark variant), favicon, theme stylesheet and footer links. Everything inserted is escaped or an asset id.
