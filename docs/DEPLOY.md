@@ -153,7 +153,8 @@ Follow [Releases](#releases): staging first, then production with a backup. Thre
   Choose a `look` on the console's Branding page afterwards ([Branding](BRANDING.md)); until then pages use Fire's
   default look.
 - **Apps** can stay on client `0.3.0`. Upgrade to `0.6.0` to use step-up (`acrValues`, `maxAge`), DPoP
-  verification or user events ([Clients](CLIENTS.md)).
+  verification or user events. An app still on `identity-client` `0.2.0` keeps signing people in, but refuses agent
+  revocation events until it upgrades ([Clients](CLIENTS.md#upgrading-from-identity-client-020)).
 
 ## Bindings reference
 

@@ -42,9 +42,14 @@ This repository does not record which commit a deployment runs or which clients 
 Worker's deployments in Cloudflare before relying on a behaviour described here. The reference deployment's state
 (see the README's Status) is:
 
-- **Production** runs migrations up to `0009` (security pass and realms), applied and deployed on 2026-11-15 after
-  the same release passed on staging. Discovery and JWKS answered that day. Apps on it need client 0.3.0 or later
-  for revocation events.
+- **Production** runs every migration, `0001`–`0019`. Migrations `0010`–`0019` and the Fire interface were applied
+  and deployed on 2026-11-15, after a backup and a rehearsal of the migrations on a copy of it, and after the same
+  release ran on staging. That day: discovery answered with DPoP and the new grant types; JWKS still listed the
+  existing key, so tokens issued before the upgrade keep verifying; users, clients, agent grants and refresh tokens
+  kept their counts; the Fire files and Imprim's modules are served as static assets; the sign-in page rendered for
+  each registered app; and a scheduled run finished without an exception. Not tried there by a person yet: a
+  complete sign-in, an agent connection, a back-channel delivery, or the console (its administrators must first add
+  a second factor). Apps on it need client 0.3.0 or later for revocation events.
 - **Staging** also runs migrations `0010`–`0018` (passwords, two-factor, account page, passkeys, providers,
   machines, DPoP and exchange, user events, branding), applied on 2026-11-15. There, discovery (client credentials,
   token exchange, introspection, revocation, DPoP and `acr` values), JWKS, the theme and page assets, the branded

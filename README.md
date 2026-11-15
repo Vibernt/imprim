@@ -82,10 +82,9 @@ fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (IS
 ## Status
 
 Vibernt runs Imprim in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`.
-Production runs the 2026-11-15 release (the security pass, realms and the rename; see
-[Security pass](docs/SECURITY_PASS.md)). Staging also runs passwords, two-factor, the account page, passkeys, the
-provider registry, machines, DPoP, user events, branding and the Fire interface (migrations `0010`–`0019`), deployed
-on 2026-11-15; production follows after the staging checks ([Deploying](docs/DEPLOY.md)).
+Both run the same release, deployed on 2026-11-15: the security pass, realms, passwords, two-factor, the account
+pages, passkeys, the provider registry, machines, DPoP, user events, branding and the Fire interface (migrations
+`0001`–`0019`; see [Deploying](docs/DEPLOY.md)).
 What has not been verified against live Cloudflare is listed in [Security](docs/SECURITY.md#not-yet-verified-live).
 What comes next is in the [Roadmap](docs/ROADMAP.md).
 

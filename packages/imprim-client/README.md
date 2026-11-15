@@ -1,9 +1,11 @@
 # imprim-client 0.6.0
 
-Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Earlier versions were
-named `imprim-client`; the API is unchanged apart from the 0.3.0 changes listed in [docs/CLIENTS.md](../../docs/CLIENTS.md#client-030-changes-wire-change).
+Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
+named `@vibernt/identity-client`. To move an app from that version, follow
+[Upgrading from identity-client 0.2.0](../../docs/CLIENTS.md#upgrading-from-identity-client-020); what each version
+changed is listed there.
 
-Zero-dependency native ESM OIDC client for Workers and Node 20+. `index.mjs` and `index.d.ts` are the package
+Native ESM for Workers and Node 20+. `index.mjs` and `index.d.ts` are the package
 entry points. Apps retain authorization, memberships, their own sessions and CSRF, and single-use browser-bound
 login transactions. See [client integration](../../docs/CLIENTS.md#worker-app-using-the-client).
 
@@ -21,28 +23,36 @@ The issuer retains each app-session association for 30 days after creation. Bloc
 send human logout events only to clients with an unexpired association. A local session renewal does not extend
 the association; use a new identity sign-in before creating a session beyond this limit.
 
-Both events use ES256 signatures against the issuer's discovery JWKS. An unknown `kid` triggers one refresh,
+Imprim posts three kinds of event to an app's back-channel URI: `logout_token` (someone signed out, or was
+blocked, deleted or merged), `revocation_token` (an agent grant was revoked) and, when the app sets
+`user_events: on`, `event_token` (a person's account changed). All use ES256 signatures against the issuer's discovery JWKS. An unknown `kid` triggers one refresh,
 rate-limited to once per minute per client instance. Verification requires exact issuer and scalar client-id audience,
 integer `iat`/`exp`, `0 < exp - iat <= 900`, and exactly one empty event object. Expired tokens are refused at `exp`
 with no expiration leeway. `clockSkewSeconds` (integer 0–60, default 60) bounds future `iat`/`nbf` acceptance only.
-Neither kind accepts `nonce`. Neither verifier accepts the other token kind.
+No kind accepts `nonce`, and no verifier accepts another kind's token.
 
 - `client.verifyLogoutToken(token, { clockSkewSeconds? })` requires `typ: logout+jwt`, event
   `http://schemas.openid.net/event/backchannel-logout`, nonempty `jti`, and `sub` or `sid` (each nonempty if present).
   Returns `{ sub, sid, jti, iat, exp }`. Identity emits `sub` always, `sid` when session-scoped, and a 120-second lifetime.
-- `client.verifyRevocationToken(token, { clockSkewSeconds? })` requires `typ: JWT`, event
-  `<issuer>/events/agent-revoked` (typ `secevent+jwt`), nonempty `sub`, `jti`, `grant_id`, and `resource`. The canonical resource
+- `client.verifyRevocationToken(token, { clockSkewSeconds? })` requires `typ: secevent+jwt` (RFC 8417), event
+  `<issuer>/events/agent-revoked`, nonempty `sub`, `jti`, `grant_id`, and `resource`. The canonical resource
   must match `resourcePrefixes` when configured. Returns `{ sub, jti, grantId, resource, iat, exp }`.
   Identity emits a 300-second lifetime; the verifier's interoperability cap is 900 seconds.
+- `client.verifyUserEventToken(token, { clockSkewSeconds? })` (0.6.0) requires `typ: secevent+jwt`, exactly one event
+  under `<issuer>/events/` from `user-updated`, `user-blocked`, `user-unblocked`, `user-deleted`, `user-merged` and
+  `mfa-reset`, nonempty `sub` and `jti`, and an integer `toe` (when the change happened). Returns
+  `{ sub, jti, event, data, toe, iat, exp }`; `data` is `{ fields }` for `user-updated` (which of `name` and `email`
+  changed, never the value) and `{ into }` for `user-merged`. Apply the event with the latest `toe` for each person.
 - `client.verifyBackchannel(form, options?)` accepts `URLSearchParams` or `FormData`, requires exactly one string
-  `logout_token` **or** `revocation_token` (rejecting duplicates, both fields, missing tokens and files), and returns
-  `{ kind: 'logout' | 'revocation', claims }` with the corresponding shape above.
+  `logout_token`, `revocation_token` **or** `event_token` (rejecting duplicates, two fields, missing tokens and
+  files), and returns `{ kind: 'logout' | 'revocation' | 'user', claims }` with the corresponding shape above. An app
+  that has not turned `user_events` on never receives `kind: 'user'`.
 
 All three are also named exports taking client configuration plus optional `clockSkewSeconds` as their second
 argument, for example `verifyRevocationToken(token, { issuer, clientId, resourcePrefixes, fetch })`. These one-shot
-calls create a new client; use the instance methods for shared caches. The old `handleBackchannelLogout(request)`
-and `handleAgentRevocation(request)` remain available and require a form-encoded POST. Their return shapes remain
-`{ sub, sid, jti }` and `{ sub, grant_id, resource, jti }` respectively; the stricter validation applies to them too.
+calls create a new client; use the instance methods for shared caches. `handleBackchannelLogout(request)`,
+`handleAgentRevocation(request)` and `handleUserEvent(request)` take a form-encoded POST and accept only their own
+kind. They return `{ sub, sid, jti }`, `{ sub, grant_id, resource, jti }` and `{ sub, event, data, toe, jti }`.
 
 A single receiver URI can handle both kinds:
 
@@ -70,6 +80,7 @@ export async function backchannel(request, appStore) {
   // App-provided durable transaction: insert jti only if unseen and apply its effect atomically.
   // logout: end sessions for sub + sid, or ALL sessions for sub if sid is absent.
   // revocation: deny exactly (sub, resource, grantId), without ending human sessions.
+  // user (only with user_events: on): refresh or remove what you hold about sub; keep the latest toe.
   // Authenticated duplicate jti: no effect, successful return. Storage failures must throw.
   await appStore.applyBackchannelOnce(event);
   return new Response(null, { status: 204 });
@@ -100,6 +111,23 @@ logout delivery; access-token expiry does not end them.
 
 Resource servers also use `client.protectedResourceMetadata({ resource, scopes })` and
 `client.wwwAuthenticate({ resourceMetadataUrl, error? })`; `wwwAuthenticate` is a named export.
+
+**DPoP-bound tokens (0.5.0).** An agent may bind its tokens to a key. Such a token carries `cnf.jkt`, arrives as
+`Authorization: DPoP <token>` and comes with a `DPoP` header holding a proof for this request. Pass the proof:
+
+```js
+const [scheme, token] = (request.headers.get('authorization') || '').split(' ');
+const claims = await identity.verifyAccessToken(token, { audience: resource,
+  dpop: scheme === 'DPoP' ? { proof: request.headers.get('dpop'), method: request.method, url: request.url } : undefined });
+// claims.dpop_jti is set for a bound token: refuse one you have seen in the last five minutes.
+```
+
+A bound token verified without `dpop` fails with `invalid_dpop_proof`; a bearer token still verifies as before.
+`requireDpop: true` refuses bearer tokens, for an app whose client sets `agent_dpop: required`.
+
+**Step-up (0.4.0).** `startLogin({ acrValues: 'urn:imprim:acr:mfa', maxAge })` asks for a second factor in this
+session, or a sign-in no older than `maxAge` seconds. Check `claims.acr === 'urn:imprim:acr:mfa'` and
+`claims.auth_time` after the callback before you allow the sensitive action.
 
 **Vendoring.** An app without a package manager can copy `dist/imprim-client.mjs`, built by
 `node scripts/build-client.mjs` with a version and body SHA-256 header. Check the header when you update it, and route

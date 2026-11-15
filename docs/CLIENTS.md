@@ -301,6 +301,47 @@ Agent revocations POST a signed `revocation_token` to the app's registered back-
 OIDC `logout_token`; see PROTOCOL.md for the event contract. `handleBackchannelLogout` deliberately does not accept
 agent revocation events. Apps must verify the dedicated event and persist its `jti` before acknowledging delivery.
 
+## Upgrading from identity-client 0.2.0
+
+Apps that vendored `@vibernt/identity-client` 0.2.0 keep working against a current server for sign-in, sign-out and
+back-channel logout: the issuer, client ids, secrets, callback URLs and every person's `sub` are unchanged. One thing
+does not work until the app upgrades: **0.2.0 refuses agent revocation events**, because the server signs them as
+`typ=secevent+jwt` and 0.2.0 accepts only `typ=JWT`. A revoked grant still stops refreshing at once and its access
+token expires within 60 seconds; what the app loses is the earlier, event-driven denial.
+
+To upgrade:
+
+1. Build the client: `node scripts/build-client.mjs` writes `dist/imprim-client.mjs`. Its first line is
+   `// imprim-client <version> body-sha256 <digest>`. Copy it over the vendored file and update any check that pins
+   the old header (`// @vibernt/identity-client 0.2.0 …`), in the same commit.
+2. Keep your code as it is: `createClient`, `startLogin`, `handleCallback`, `verifyBackchannel`, `verifyAccessToken`,
+   `logoutUrl`, `inviteEmail` and the named exports have the same signatures.
+3. Check these three places, which behave differently:
+   - **Error text.** `IdentityError.message` is now always the package's own text. The server's
+     `error_description` is in `error.description`: untrusted, escape it before display. If you showed or matched
+     `error.message`, switch.
+   - **DPoP-bound agent tokens.** If your resource server reads `Authorization`, accept the `DPoP` scheme as well as
+     `Bearer` and pass the proof to `verifyAccessToken` (the package README shows how). Until you do, a bound token
+     fails with `invalid_dpop_proof`; agents that send no proof are unaffected.
+   - **Back-channel kinds.** `verifyBackchannel` can return `kind: 'user'`, but only for an app that turns
+     `user_events` on. A handler that switches on `kind` needs no change while that is off.
+4. Run your own tests, then `IMPRIM_CLIENT_PATH=/path/to/your/vendored/file node --test tests/server-backchannel.test.mjs`
+   in this repository, which checks your copy against the server's logout wire contract.
+5. If your app links people to their connected agents, the page is now `<issuer>/account/agents` (it was on
+   `<issuer>/account`, which is now the profile page).
+
+What each version changed:
+
+| Version | Change |
+|---|---|
+| 0.3.0 | Wire change: agent revocation events are `secevent+jwt`. `iss` is required on the authorization response. Error text handling, JWKS refresh after 10 minutes, a failed discovery is not cached. Details below. |
+| 0.4.0 | Step-up: `startLogin({ acrValues, maxAge })`; ID tokens carry `acr`. |
+| 0.5.0 | `verifyAccessToken` checks a DPoP proof for a bound token (`dpop`, `requireDpop`) and returns `dpop_jti`. |
+| 0.6.0 | User lifecycle events: `event_token`, `verifyUserEventToken`, `handleUserEvent`, and `kind: 'user'` from `verifyBackchannel`. The package is named `imprim-client`. |
+
+Nothing new is on until an app's client turns it on: second factor, passwords, passkeys, DPoP, token exchange and
+user events all default to off.
+
 ## Client 0.3.0 changes (wire change)
 
 - Agent revocation events are RFC 8417 security events: `typ=secevent+jwt`, event type `<issuer>/events/agent-revoked`.
