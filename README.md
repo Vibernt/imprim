@@ -71,10 +71,11 @@ npm run check
 
 ## Status
 
-Imprim runs in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`. Both run
-the 2026-11-15 release (the security pass, realms and the rename; see [Security pass](docs/SECURITY_PASS.md)).
-Passwords, two-factor, the account page, passkeys, the provider registry, machines, DPoP, user events and branding
-(migrations `0010`–`0018`) are in this repository and tested, but not yet deployed; upgrade with [Deploying](docs/DEPLOY.md).
+Imprim runs in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`. Production
+runs the 2026-11-15 release (the security pass, realms and the rename; see [Security pass](docs/SECURITY_PASS.md)).
+Staging also runs passwords, two-factor, the account page, passkeys, the provider registry, machines, DPoP, user
+events and branding (migrations `0010`–`0018`), deployed on 2026-11-15; production follows after the staging
+checks ([Deploying](docs/DEPLOY.md)).
 What has not yet been verified against live Cloudflare is listed in [Security](docs/SECURITY.md). What comes next
 is in the [Roadmap](docs/ROADMAP.md).
 

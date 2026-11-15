@@ -41,7 +41,10 @@ Report a suspected vulnerability privately through GitHub's private vulnerabilit
 A build of this repository serves `https://id.vibernt.ai`: discovery and JWKS answered on 2026-11-15. This repository does not record which commit is deployed or which clients are registered there; check the Worker's deployments in Cloudflare before relying on a behavior described here. On 2026-11-15 migrations `0008` (security pass) and `0009` (realms) were applied to `https://id.vibernt.ai` and that release was deployed there, after the same release passed on staging (`https://id-staging.vibernt.ai`). Apps on it still need client 0.3.0 for revocation events. Node tests use a real SQLite adapter and controlled provider, mail, rate and queue responses. They do not prove native Safari/Chrome cookie flows, real Gmail/Outlook/iCloud delivery, GitHub/Google credential acceptance, Cloudflare rate behavior, deployed D1 migration and concurrency, Worker egress and DNS rebinding boundary, Queue receipt/retry/deduplication, `/token` regional latency or OpenID conformance. The Assay switch and Touchstone integration have not occurred. M4 human back-channel logout and the admin console are implemented locally; deployed block propagation remains unverified.
 
 Migrations `0010`–`0018` (passwords, two-factor, account page, passkeys, providers, machines, DPoP and exchange,
-user events, branding) are tested here but not yet deployed. Not yet proven live: Have I Been Pwned range calls
+user events, branding) were applied to staging on 2026-11-15 and this code deployed there; production does not
+have them yet. On staging, discovery (client credentials, token exchange, introspection, revocation, DPoP and
+`acr` values), JWKS, the theme and page assets, the branded sign-in page, and a logo's byte-for-byte round trip
+through D1 with its sandbox headers were checked. Not yet proven live: Have I Been Pwned range calls
 from Workers egress, passkey ceremonies in Safari, Chrome and Firefox with platform and roaming authenticators,
 authenticator apps reading the in-house QR code, Microsoft and Apple sign-in with real tenants, DPoP proofs from
 real agents, and user events reaching a real app. See [Control plane](CONTROL_PLANE.md). See [Operations](OPERATIONS.md) for release gates.
