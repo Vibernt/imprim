@@ -110,7 +110,7 @@ test('connected grants are person-scoped and revocation is CSRF protected', asyn
     const grant = w.env.DB.db.prepare('SELECT * FROM agent_grants').get();
     const other = await issueSession(w.env, await ensureUser(w.env, 'other@example.com'), 'email');
     const cookie = other.cookies.map(c => c.split(';')[0]).join('; '), csrf = cookie.match(/__Host-vi_csrf=([^;]+)/)[1];
-    assert.doesNotMatch(await (await w.call('/account', { headers: { cookie } })).text(), /Example Agent/);
+    assert.doesNotMatch(await (await w.call('/account/agents', { headers: { cookie } })).text(), /Example Agent/);
     await error(await w.form('/account/revoke', { grant_id: grant.id, csrf }, cookie), 'access_denied');
     await error(await w.form('/account/revoke', { grant_id: grant.id, csrf: 'bad' }, w.cookie), 'csrf');
     await error(await w.form('/account/revoke', { grant_id: grant.id, csrf: w.csrf }, w.cookie, { origin: 'https://evil.example' }), 'origin');

@@ -4,6 +4,34 @@ Gaps found while building Imprim's screens with Fire v0.2.0 (GUIDE.md section 7)
 `localCss` (`apps/server/src/pages/layout.mjs`), served as `/assets/local.css`, with `x-` classes and Fire tokens only.
 Delete the stopgap when Fire ships the request.
 
+## 7. The app shell without the demo's script (new pattern)
+
+- **Kind:** new pattern
+- **What you were building:** the admin console and the account pages, rendered on the server in Fire's app shell.
+- **What is missing:** the shell exists only as `templates/shell.js`, written for the Ember demo and run in the
+  browser. A product has to re-derive the sidebar, top bar, hero and phone-menu markup from it. The phone menu's
+  close icon also draws from the icon sprite, which only `fire.js` injects, so a page that loads `js/shell.js` alone
+  gets an empty button until it also calls `initIcons()`.
+- **Proposed shape:** a documented shell specimen in `docs/` with copyable markup for each part, a
+  `templates/shell.html` with no script, and `js/shell.js` injecting the sprite it needs.
+- **Where else it applies:** every product that renders pages on a server.
+- **Stopgap in use:** `apps/server/src/pages/shell.mjs` renders the markup; `public/imprim/shell.js` loads Fire's
+  `icons.js`, `shell.js` and `texture.js` and calls `initIcons()`. No CSS.
+
+## 6. A centred screen (new pattern)
+
+- **Kind:** new pattern
+- **What you were building:** sign-in, second factor, consent and result screens: the brand, then one card, centred
+  on the page.
+- **What is missing:** `templates/auth.html` is a split layout. Nothing centres a band's content top to bottom, and
+  nothing centres a heading's text (`fd-stack[data-align="center"]` centres boxes, not wrapped lines).
+- **What you tried:** `fd-empty` (centres, but is an empty state with its own padding), `fd-row` with `fd-grow`
+  spacers (side to side only).
+- **Proposed shape:** `fd-band[data-align="center"]` to centre its content in a grown band, and a text-alignment
+  attribute such as `data-text="center"`; a `templates/auth-centered.html` built from them.
+- **Where else it applies:** onboarding steps, not-found and error pages, any single-task screen.
+- **Stopgap in use:** `.x-screen` and `.x-center`.
+
 ## 5. Tweaks panel under a strict CSP (bug)
 
 - **Kind:** bug
@@ -37,18 +65,20 @@ Delete the stopgap when Fire ships the request.
 ## 2. Uploaded logo in `fd-brand`
 
 - **Kind:** new variant
-- **What you were building:** the header of every sign-in page, showing a brand's uploaded logo.
-- **What is missing:** `fd-brand-mark` is a square icon box; a logo is often wide.
+- **What you were building:** the brand at the top of every sign-in screen and in the shell's sidebar, showing a
+  brand's uploaded logo or square mark.
+- **What is missing:** `fd-brand-mark` is a square icon box that sizes an inline SVG; a logo is often wide, and an
+  uploaded mark is an `<img>`.
 - **What you tried:** `fd-brand-mark` (crops wide logos), `fd-tile` (square).
 - **Proposed shape:** `<img class="fd-brand-logo">` inside `fd-brand`, height `--fd-brand-mark`, width auto, capped.
 - **Where else it applies:** any product that lets customers brand Fire screens.
-- **Stopgap in use:** `.x-logo`.
+- **Stopgap in use:** `.x-logo` and `.x-mark`.
 
 ## 1. Wordmark beside the brand name
 
 - **Kind:** new variant
-- **What you were building:** the default IMPRIM dot-matrix logo, shown before a brand uploads its own.
-- **What is missing:** a wide SVG wordmark in `fd-brand`, coloured like the brand name.
+- **What you were building:** the IMPRIM dot-matrix wordmark in the "Powered by" line at the foot of every page.
+- **What is missing:** a wide SVG wordmark, in `fd-brand` or in a line of caption text, coloured like the text.
 - **What you tried:** `fd-brand-mark` (square, accent colour).
 - **Proposed shape:** `<svg class="fd-brand-wordmark">` in `fd-brand`, height `--fd-icon-lg`, `currentColor`.
 - **Where else it applies:** Fire's own templates for products with a wordmark rather than a mark.

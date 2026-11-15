@@ -30,6 +30,8 @@ export async function getSession(request, env) {
     // Last seen, for the sessions list: at most one write per session every five minutes.
     if (session && (!session.last_seen || session.last_seen < Date.now() - 300000))
         await env.DB.prepare('UPDATE sessions SET last_seen=? WHERE hash=?').bind(Date.now(), session.hash).run();
+    // The page shell shows who is signed in (pages/layout.mjs).
+    if (session && env.SEEN) env.SEEN.email = session.email;
     return session;
 }
 export async function sessionByHash(env, hash) {

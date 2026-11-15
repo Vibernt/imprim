@@ -29,8 +29,8 @@ import { logout } from './oidc/logout.mjs';
 import { invite } from './services/invitations.mjs';
 import { scheduled, queue } from './services/maintenance.mjs';
 import { loginPage, signInScript } from './pages/sign-in.mjs';
-import { page, localCss, errorPage, signedOutPage, withBrand } from './pages/layout.mjs';
-import { heading, linkButton } from './pages/ui.mjs';
+import { page, localCss, errorPage, signedOutPage, withBrand, only } from './pages/layout.mjs';
+import { result, linkButton } from './pages/ui.mjs';
 import { themeResponse } from './branding/theme.mjs';
 import { serveAsset } from './branding/assets.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
@@ -59,7 +59,7 @@ async function route(request, env, ctx, url) {
         case 'POST /device_authorization': return deviceAuthorization(request, env);
         case 'GET /device': return devicePage(request, env);
         case 'GET /agent/consent': case 'POST /agent/consent': return consent(request, env);
-        case 'GET /account': case 'POST /account/revoke': return account(request, env, ctx);
+        case 'GET /account': case 'GET /account/security': case 'GET /account/sessions': case 'GET /account/agents': case 'POST /account/revoke': return account(request, env, ctx);
         case 'GET /authorize': return authorize(request, env);
         case 'POST /token': return token(request, env, ctx);
         case 'GET /userinfo': case 'POST /userinfo': return userinfo(request, env);
@@ -82,13 +82,14 @@ async function route(request, env, ctx, url) {
         case 'GET /v1/auth/google/start': return googleStart(request, env);
         case 'GET /login/google/callback': return googleCallback(request, env);
         case 'GET /login': return loginPage(request, env);
-        case 'GET /check-email': return page('Check your email', heading('Check your email', 'If this address can sign in here, a link arrives within a minute.') +
-            '<p class="fd-small fd-muted">Open it in this browser. The link works once and expires in 15 minutes.</p>');
+        case 'GET /check-email': return page('Check your email', result('mail', 'accent', 'Check your email', 'If this address can sign in here, a link arrives within a minute.') +
+            '<p class="fd-small fd-muted x-center">Open it in this browser. The link works once and expires in 15 minutes.</p>');
         case 'GET /signed-in': {
             if (!await getSession(request, env)) throw new AppError(401, 'login_required', 'Sign in first.');
-            return page('Signed in', heading('You’re signed in', 'Go back to your app to continue.') + `<div class="fd-row" data-gap="3">${linkButton('Your account', '/account')}${linkButton('Admin console', '/admin', { variant: 'ghost' })}</div>`);
+            return page('Signed in', result('circle-check', 'success', 'You’re signed in', 'Go back to your app to continue.') +
+                `<div class="fd-stack" data-gap="2-5">${only('admin', linkButton('Open the admin console', '/admin', { variant: 'primary', size: 'lg', block: true }))}${linkButton('Your account', '/account', { size: 'lg', block: true })}</div>`);
         }
-        case 'GET /signed-out': return page('Signed out', heading('You’re signed out', env.REALM.branding?.copy?.signed_out || 'Apps you used keep their own sessions until you sign out there.'));
+        case 'GET /signed-out': return page('Signed out', result('log-out', 'neutral', 'You’re signed out', env.REALM.branding?.copy?.signed_out || 'Apps you used keep their own sessions until you sign out there.'));
         case 'GET /assets/theme.css': return themeResponse(env, url);
         case 'GET /error': return errorPage('This sign-in request is missing or has expired.');
         default: throw new AppError(404, 'not_found', 'Endpoint not found.');
@@ -108,8 +109,9 @@ export async function handleRequest(request, base, ctx) {
     let env = base;
     try {
         // The host selects the realm before anything else; every module below reads the realm-scoped env.
-        // REQUEST and CTX let sign-in record the device and send notices without threading them through every call.
-        env = { ...realmEnv(base, await realmFor(base, url.origin)), REQUEST: describeDevice(request), CTX: ctx };
+        // REQUEST and CTX let sign-in record the device and send notices without threading them through every call;
+        // SEEN is who the request's session belongs to, for the shell's account row (auth/session.mjs fills it).
+        env = { ...realmEnv(base, await realmFor(base, url.origin)), REQUEST: describeDevice(request), CTX: ctx, SEEN: {} };
         const limiter = limiterFor(request.method, url.pathname);
         if (limiter) await limitAddress(env, request, limiter);
         const response = await route(request, env, ctx, url);

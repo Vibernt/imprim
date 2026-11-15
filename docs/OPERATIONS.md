@@ -58,7 +58,7 @@ expired state:
 | Expired device codes | One more day, so polling agents get `expired_token` |
 | Dynamic agent registrations | 30 days after last use |
 | Spent agent refresh tokens | 7 days (the reuse-detection window) |
-| Revoked or expired agent grants | 30 days, still listed at `/account`, then deleted with their tokens |
+| Revoked or expired agent grants | 30 days, still listed at `/account/agents`, then deleted with their tokens |
 | Delivered outbox rows | 30 days, at most 500 rows per outbox per run |
 | App-session associations | 30 days after creation, at most 500 per run |
 | Unconfirmed authenticator enrolments | One hour |

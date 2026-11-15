@@ -30,7 +30,7 @@ identity; apps keep workspace admission, memberships, roles, local sessions and 
 | `GET`/`POST /mfa` | Second-factor challenge for a pending authorization, agent consent or the console. |
 | `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. |
 | `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; the signed-in page requires a current identity session. |
-| `GET /account`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account page and its password, factor and email-change pages (below). |
+| `GET /account`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, security, sessions and apps, connected agents, and the password, factor and email-change pages (below). |
 | `POST /account/{profile,sessions,apps,devices,email,email/confirm,delete,password,mfa,revoke}` | Account changes; same Origin and CSRF. |
 | `POST /account/passkeys/{options,register,remove}` | Passkey registration and removal. |
 | `GET /assets/local.css`, `/assets/sign-in.js`, `/assets/passkey.js` | Imprim's stopgap CSS and its two page scripts; one-hour cache. |
@@ -126,7 +126,7 @@ must equal the issuer. Credentials are discoverable and need user verification (
 - **Adding and removing:** adding one follows the rule for any factor (a fresh sign-in, or a fresh second factor when
   one exists). Removing one needs a fresh second factor. Each change is audited and emailed.
 
-**Account page** (`/account`). A signed-out visit to `/account…` or `/mfa` gets a 401 page explaining that
+**Account pages** (`/account`, `/account/security`, `/account/sessions`, `/account/agents`). A signed-out visit to `/account…` or `/mfa` gets a 401 page explaining that
 the account opens from an app's sign-in (administrators can use `/login`); POSTs to those paths answer JSON
 `login_required`. A signed-in person manages:
 - **Profile:** a display name, sent as `name` with the `profile` scope.
@@ -311,7 +311,7 @@ rules apply to the separate public-agent registry and OAuth grants.
 | `POST /device_authorization` | Form-encoded public client/resource/scopes; device secret, human code, verification URLs, ten-minute expiry, five-second interval. |
 | `GET /device` | Code-entry form; matching live code starts app sign-in, then the same consent page. GET never grants access. |
 | `POST /token` | Code + S256 verifier, refresh token, or device code; exact client and resource required on every exchange. |
-| `GET /account` | Current person's grants, including creation/last-use times and revoked/expired status. |
+| `GET /account/agents` | Current person's grants, including creation/last-use times and revoked/expired status. |
 | `POST /account/revoke` | Same Origin + CSRF + grant ownership; durable revocation and back-channel outbox. |
 
 Agent IDs do not replace imported subjects. `auth_requests.client_id` remains the owning app for sign-in/admission;

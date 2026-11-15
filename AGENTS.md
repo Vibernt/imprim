@@ -16,6 +16,10 @@ Read README.md, docs/ARCHITECTURE.md and docs/ROADMAP.md first. Read docs/PROTOC
   `docs/fire/WRITING.md` before writing any text that appears in it, and look up classes in
   `docs/fire/VOCABULARY.md`. Render components with `apps/server/src/pages/ui.mjs`; copy any other markup from the
   Fire docs, never from memory.
+- Two layouts only. A single task (sign in, approve, a result) is a centred screen: `page()` in
+  `apps/server/src/pages/layout.mjs`. Anything a person returns to (the console, the account pages) sits in the app
+  shell: `shellPage()` in `apps/server/src/pages/shell.mjs`, with its navigation listed there. Sign-in and consent
+  screens load no Fire JavaScript.
 - Use only `fd-` classes that exist in the vocabulary. No custom CSS, no `<style>` blocks, no `style` attributes (the
   CSP forbids them), no pixel values and no widths or heights in markup. Lay out with `fd-stack`, `fd-row`,
   `fd-grid`, `fd-column`, `data-gap`, `data-cols` and `data-span`.

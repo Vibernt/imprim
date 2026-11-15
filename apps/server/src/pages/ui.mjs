@@ -7,25 +7,10 @@ const attrs = (pairs = {}) => Object.entries(pairs).filter(([, v]) => v !== unde
     .map(([k, v]) => v === true ? ` ${k}` : ` ${k}="${e(v)}"`).join('');
 // Lucide icons from Fire's set, inline (Fire's own <i data-icon> needs its JavaScript).
 export const icon = (name, size) => ICONS[name] ? `<svg class="fd-icon" viewBox="0 0 24 24"${size ? ` data-size="${size}"` : ''} aria-hidden="true">${ICONS[name]}</svg>` : '';
-// IMPRIM in a 5×7 dot matrix: lit dots in the accent colour, unlit ones faint. The default logo until a brand uploads one.
-const GLYPHS = {
-    I: ['###', '.#.', '.#.', '.#.', '.#.', '.#.', '###'],
-    M: ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
-    P: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
-    R: ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#']
-};
-export const dotLogo = (() => {
-    let x = 0; const lit = [], unlit = [];
-    // Each dot is a circle of radius .36 drawn as two arcs, so the whole mark is two short paths.
-    const dot = (cx, cy) => `M${cx - 0.42} ${cy}a.42 .42 0 1 0 .84 0a.42 .42 0 1 0-.84 0`;
-    for (const letter of 'IMPRIM') {
-        const rows = GLYPHS[letter];
-        rows.forEach((row, y) => [...row].forEach((cell, dx) => (cell === '#' ? lit : unlit).push(dot(x + dx + 0.5, y + 0.5))));
-        x += rows[0].length + 1;
-    }
-    return `<svg class="x-wordmark" viewBox="0 0 ${x - 1} 7" fill="currentColor" role="img" aria-label="Imprim"><path opacity=".14" d="${unlit.join('')}"/><path d="${lit.join('')}"/></svg>`;
-})();
+export { dotLogo, dotMark } from './dots.mjs';
 export const heading = (title, description = '') => `<div class="fd-stack" data-gap="1-5"><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${e(description)}</p>` : ''}</div>`;
+// The top of a result screen (link sent, signed out, stopped): an icon tile, then the heading, centred.
+export const result = (name, tone, title, description = '') => `<div class="fd-stack" data-gap="4" data-align="center"><span class="fd-tile" data-size="44" data-tone="${tone}">${icon(name)}</span>${heading(title, description)}</div>`;
 export const section = (title, description, body) => `<section class="fd-stack" data-gap="3"><div class="fd-stack" data-gap="1"><h2 class="fd-h3">${e(title)}</h2>${description ? `<p class="fd-small fd-muted">${e(description)}</p>` : ''}</div>${body}</section>`;
 // A button. `html` is already-safe inner markup (an icon plus escaped text); otherwise `label` is escaped.
 export function button(label, { variant, size, block, type = 'submit', icon: name, html, ...rest } = {}) {

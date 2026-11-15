@@ -12,6 +12,7 @@ export async function adminSession(request, env) {
     // Administrators always use a second factor, verified within the hour.
     invariant((await confirmedFactors(env, session.user_id)).length, 'mfa_enrolment_required', 'Administrators need a second factor: add one at /account/mfa.', 403);
     invariant(session.mfa_at && session.mfa_at > Date.now() - ADMIN_MFA_MS, 'mfa_required', 'Enter your second-factor code at /mfa?next=/admin.', 403);
+    if (env.SEEN) env.SEEN.role = role;
     return { ...session, role };
 }
 // Platform admins manage realms and signing keys; realm admins manage their realm's clients, users and audit.

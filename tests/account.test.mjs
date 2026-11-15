@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { world, login, turnstile, cookieJar, begin } from './support/world.mjs';
-import { adminLogin, enrolMfa } from './support/admin.mjs';
+import { adminLogin, enrolMfa, assertFireMarkup } from './support/admin.mjs';
 import { agentWorld } from './support/agents.mjs';
 const jarOf = (...parts) => parts.filter(Boolean).join('; ');
 const csrfOf = jar => jar.match(/__Host-vi_csrf=([^;]+)/)[1];
@@ -15,8 +15,19 @@ test('the account page shows profile, security, sessions, apps and agents; the n
     const w = await world(t);
     const { jar, code } = await signedIn(w, t);
     await w.exchange(code);
-    const html = await (await w.call('/account', { headers: { cookie: jar } })).text();
-    for (const heading of ['Profile', 'Security', 'Signed-in sessions', 'Apps', 'Connected agents', 'Delete account']) assert.ok(html.includes(`>${heading}</h2>`), heading);
+    const read = async path => (await w.call(path, { headers: { cookie: jar } })).text();
+    const html = await read('/account');
+    for (const [path, title, sections] of [['/account', 'Profile', ['Delete account']], ['/account/security', 'Security', ['Remembered browsers']],
+        ['/account/sessions', 'Sessions and apps', ['Signed-in sessions', 'Apps']], ['/account/agents', 'Connected agents', []]]) {
+        const page = await read(path);
+        assert.ok(page.includes(`<h1 class="fd-display">${title}</h1>`), title);
+        for (const heading of sections) assert.ok(page.includes(`>${heading}</h2>`), heading);
+        assert.match(page, new RegExp(`<a class="fd-nav-item" href="${path}" aria-current="page">`), `${path} is the current nav item`);
+        assertFireMarkup(page);
+    }
+    // The shell names who is signed in; someone who is not an administrator gets no link to the console.
+    assert.match(html, /<span class="fd-account-email">person@example\.com<\/span>/);
+    assert.ok(!html.includes('href="/admin"') && !html.includes('identity:'), 'no console link, no marker left behind');
     assert.equal((await form(w, '/account/profile', { csrf: csrfOf(jar), display_name: '  Ada ‮Lovelace  ' }, jar)).status, 200);
     assert.equal(w.env.DB.db.prepare('SELECT display_name FROM users').get().display_name, 'Ada Lovelace');
     const next = await (await w.exchange(new URL((await w.authorize({ scope: 'openid profile' }, jar)).headers.get('location')).searchParams.get('code'))).json();

@@ -9,6 +9,7 @@ import { qrSvg } from '../lib/qr.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { safeNext } from '../auth/mfa-challenge.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
+import { accountPage } from '../pages/shell.mjs';
 import { heading, section, button, linkButton, field, hidden, callout, list, empty, setting, badge, small } from '../pages/ui.mjs';
 import { credentials } from '../webauthn/ceremonies.mjs';
 import { notify } from '../services/notify.mjs';
@@ -26,6 +27,9 @@ const overviewHref = values => {
     const query = new URLSearchParams(Object.entries({ request_id: values.request_id, next: values.next }).filter(([, v]) => typeof v === 'string' && v));
     return `/account/mfa${query.size ? `?${query}` : ''}`;
 };
+// Mid sign-in (an app is waiting) each step is a centred screen; otherwise it sits in the account pages, under Security.
+const show = (values, title, description, body, options = {}) => values.request_id ? page(title, heading(title, description) + body, { size: 'md', ...options })
+    : accountPage(title, body, { active: 'security', description, back: ['Security', '/account/security'], ...options });
 const audit = (env, event, userId, detail = {}) => env.DB.prepare('INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,?,?,?)').bind(event, userId, JSON.stringify(detail), Date.now(), env.REALM.id);
 async function overview(request, env, session, values, message = '') {
     const all = await confirmedFactors(env, session.user_id), factors = all.filter(f => f.type === 'totp'), passkeys = await credentials(env, session.user_id);
@@ -45,10 +49,10 @@ async function overview(request, env, session, values, message = '') {
     const addKey = `<div class="fd-row" data-align="end" data-wrap data-gap="3"><div class="fd-grow">${field({ id: 'passkey-name', label: 'Passkey name', maxlength: 60, placeholder: 'Work laptop', hint: 'Leave blank to name it “Passkey”.' })}</div>${button('Add passkey', { id: 'passkey-add', type: 'button', variant: 'outline', icon: 'key-round' })}</div>`;
     const codes = all.length ? section('Recovery codes', 'Each code works once, for when you can’t use your app or passkey.',
         setting(left ? `${left} unused ${left === 1 ? 'code' : 'codes'}` : 'No unused codes', 'New codes replace every old one.', post(request, values, 'recovery', '', button('Generate new codes', { variant: 'outline', size: 'sm', icon: 'refresh-cw' })))) : '';
-    return page('Two-factor authentication', heading('Two-factor authentication', 'Ask for a code or a passkey each time you sign in.') + required + notice +
+    return show(values, 'Two-factor authentication', 'Ask for a code or a passkey each time you sign in.', required + notice +
         section('Authenticator apps', 'Apps that show a new 6-digit code every 30 seconds.', apps) +
         section('Passkeys', 'Sign in with this device’s screen lock instead of a code.', keys + addKey + '<p class="fd-small" id="message" role="status" aria-live="polite"></p>') +
-        codes, { script: '/assets/passkey.js', wide: true });
+        codes, { script: '/assets/passkey.js' });
 }
 export async function mfaAccount(request, env, ctx) {
     const session = await getSession(request, env);
@@ -76,7 +80,7 @@ export async function mfaAccount(request, env, ctx) {
             field({ id: 'name', label: 'Name', name: 'name', value: 'Authenticator app', maxlength: 60, required: true, hint: 'Shown in your list, so you can tell your apps apart.' }) +
             field({ id: 'code', label: 'Code', name: 'code', size: 'lg', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, required: true, placeholder: '123456' }),
             `<div class="fd-form-actions">${linkButton('Cancel', overviewHref(values), { variant: 'ghost' })}${button('Add authenticator app', { variant: 'primary' })}</div>`, ' class="fd-form"');
-        return page('Add authenticator app', heading('Add an authenticator app', 'Scan the code, then enter the 6-digit code your app shows.') +
+        return show(values, 'Add an authenticator app', 'Scan the code, then enter the 6-digit code your app shows.',
             `<div class="fd-stack" data-gap="4"><figure class="x-qr">${qrSvg(uri, { label: 'Authenticator setup code' })}</figure>${key}</div>` + confirm);
     }
     if (values.action === 'confirm') {
@@ -95,8 +99,8 @@ export async function mfaAccount(request, env, ctx) {
         notify(env, ctx, session.email, 'a second factor was added', `An authenticator app ("${name}") was added to your account. Remembered browsers were signed out of their second-factor exemption.`);
         const saved = recovery.codes.length ? callout('Save these recovery codes now', 'They are shown once. Each code signs you in one time if you lose your authenticator app.', { tone: 'warning' }) +
             recoveryCodes(recovery.codes) + small('Keep them in a password manager or somewhere offline. Anyone with a code can pass this step.') : '';
-        return page('Two-factor authentication on', heading('Two-factor authentication is on', 'Sign-ins now ask for a code from this app.') +
-            saved + post(request, values, 'continue', '', button('Continue', { variant: 'primary', size: 'lg', block: true })));
+        return show(values, 'Two-factor authentication is on', 'Sign-ins now ask for a code from this app.',
+            saved + post(request, values, 'continue', '', values.request_id ? button('Continue', { variant: 'primary', size: 'lg', block: true }) : `<div class="fd-row">${button('Continue', { variant: 'primary' })}</div>`));
     }
     if (values.action === 'continue') {
         if (values.request_id) {
@@ -121,7 +125,7 @@ export async function mfaAccount(request, env, ctx) {
         const recovery = await recoveryStatements(env, session.user_id);
         await env.DB.batch([...recovery.statements, audit(env, 'recovery_codes_regenerated', session.user_id)]);
         notify(env, ctx, session.email, 'new recovery codes were generated', 'Your recovery codes were replaced. The old ones no longer work.');
-        return page('New recovery codes', heading('New recovery codes', 'Your old codes stopped working. Save these before you leave.') +
+        return show(values, 'New recovery codes', 'Your old codes stopped working. Save these before you leave.',
             callout('Save these codes now', 'They are shown once. Each code signs you in one time.', { tone: 'warning' }) + recoveryCodes(recovery.codes) +
             small('Keep them in a password manager or somewhere offline. Anyone with a code can pass this step.') + `<div class="fd-row">${linkButton('Done', '/account/mfa', { variant: 'primary' })}</div>`);
     }

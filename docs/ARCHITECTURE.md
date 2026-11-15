@@ -7,7 +7,7 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 | Component | Work |
 |---|---|
 | Worker routes | OIDC and agent OAuth endpoints, sign-in pages, account page, admin console, machine endpoints. |
-| Pages | Server-rendered HTML built from [Fire](fire/README.md) components (`pages/ui.mjs`, `pages/layout.mjs`). Every text is escaped; pages that handle credentials load no Fire JavaScript. |
+| Pages | Server-rendered HTML built from [Fire](fire/README.md) components (`pages/ui.mjs`, `pages/layout.mjs`, `pages/shell.mjs`). Every text is escaped; sign-in and consent screens load no Fire JavaScript. |
 | Static assets | Fire's CSS, modules, fonts and icons at `/fire/*`, and the branding editor at `/imprim/*`, from `apps/server/public/`. Served by Workers Static Assets before the Worker runs, with headers from `public/_headers`. |
 | Realms | The request host selects a realm; every query is scoped to it ([Realms](REALMS.md)). |
 | D1 | Users, client policy, short-lived requests, sessions, keys, grants, audit. |
@@ -87,10 +87,13 @@ session is issued; `acr_values` and `max_age` force a fresh or stronger sign-in.
 its app as `service:<id>`. Agents may bind tokens to a DPoP key, and an app may exchange a token it received for one
 aimed at another app that trusts it (RFC 8693).
 
-**Pages and branding.** Pages are server-rendered Fire markup with fixed markers that `withBrand` fills from the
-realm's and the app's branding: the name, the look's `<html>` attributes, the `/assets/theme.css` link, the
-favicon, the header logo (the IMPRIM dot-matrix wordmark until a logo is uploaded) and the footer. Everything
-inserted is escaped or an asset id. Fire's own files come from static assets; Imprim's stopgap classes are
+**Pages and branding.** Pages are server-rendered Fire markup in two layouts. Sign-in, consent and result screens
+are a centred card under the brand (`pages/layout.mjs`). The admin console and the account pages sit in Fire's app
+shell: a sidebar, a top bar, a page hero and a phone menu (`pages/shell.mjs`). Both carry fixed markers that
+`withBrand` fills from the realm's and the app's branding: the name, the look's `<html>` attributes, the
+`/assets/theme.css` link, the favicon, the logo or mark (the brand's initial in a dot matrix until one is uploaded),
+the footer, and who is signed in. Navigation that only administrators use is dropped for everyone else. Every page
+ends with "Powered by Imprim". Everything inserted is escaped or an asset id. Fire's own files come from static assets; Imprim's stopgap classes are
 `/assets/local.css` ([Branding](BRANDING.md), [Fire](fire/README.md)).
 
 ## Keys and maintenance

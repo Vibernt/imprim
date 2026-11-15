@@ -6,8 +6,10 @@ Each realm has default branding, and each app can override it. Every page is bui
 CSS, HTML or JavaScript, so a brand can never weaken the Content Security Policy or put script on a page that
 handles credentials.
 
-Branding shows on the sign-in page, second-factor, consent and device pages, the account page, signed-out and
-error pages, the admin console, and in the footer of every email.
+Branding shows on the sign-in page, second-factor, consent and device pages, the account pages, signed-out and
+error pages, the admin console, and in the footer of every email. Sign-in and consent screens put the brand centred
+above one card; the console and the account pages show it at the top of the sidebar. Every page ends with a small
+"Powered by Imprim" line.
 
 ## Edit it in the console
 
@@ -16,8 +18,9 @@ Open **Branding** in the admin console (`/admin/branding`).
 - **Look:** *Open tweaks* opens Fire's Tweaks panel. Pick a palette, bend its tone, choose a type set, density,
   corners, lines, text size, contrast, motion and texture, or force light or dark. The console itself changes as you
   go, and a sample sign-in card shows the result. Nothing reaches people until you choose *Save branding*.
-- **Logo:** upload a logo, an optional dark-mode logo and a square mark (the browser-tab icon). Until a logo is
-  uploaded, pages show the **IMPRIM dot-matrix logo** beside the realm's name.
+- **Logo:** upload a logo, an optional dark-mode logo and a square mark. The logo leads sign-in and consent
+  screens. The mark is the browser-tab icon, sits beside the name when there is no logo, and leads the console and
+  account sidebar. Until a mark is uploaded, pages draw the **first letter of the name in a dot matrix**.
 - **Name and links**, and **Words** (sign-in heading and line, agent consent line, signed-out line, footer line).
   An empty field uses the default.
 - *Open the sign-in page* previews it with your apps' sign-in methods.
@@ -30,7 +33,7 @@ admin write, and the version the page loaded, so two admins cannot overwrite eac
 | Field | Value |
 |---|---|
 | `look` | Fire tweak state; see below. Merged key by key over the realm's (and `tone` per key). |
-| `name` | Shown in the header, page titles, email subjects and text. Up to 200 characters, escaped. |
+| `name` | Shown beside the mark, in page titles, email subjects and text. Up to 200 characters, escaped. |
 | `legal_name` | Footer `© <legal_name>` on pages and emails. |
 | `support_url`, `privacy_url`, `terms_url` | `https://` links in the footer. |
 | `support_email` | Footer "Help" link (when there is no `support_url`) and the email footer. |

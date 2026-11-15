@@ -96,7 +96,7 @@ An agent connects for a person, never as one. Give it only the app's MCP address
 6. Refresh before the 60-second access token expires. Store the new refresh token atomically: every refresh
    rotates it. If a response is lost, retry the same token within 10 seconds. After that, a spent token revokes
    the whole grant, and the person must approve again.
-7. People see and revoke connected agents at `<issuer>/account`.
+7. People see and revoke connected agents at `<issuer>/account/agents`.
 
 Tools that run without a person (CI, scheduled jobs) use a **service client**. A realm admin registers its public
 key, app, scopes and resource prefixes. The tool then signs a `private_key_jwt` assertion and calls

@@ -31,7 +31,7 @@ async function maintain(env) {
     if (failed) throw failed.reason;
 }
 export const SPENT_REFRESH_KEEP_MS = 7 * 86400000, ENDED_GRANT_KEEP_MS = 30 * 86400000, AUDIT_RETENTION_MS = 400 * 86400000;
-// Bounded growth (S5): spent refresh tokens keep reuse detection for a week; ended grants stay listed at /account for
+// Bounded growth (S5): spent refresh tokens keep reuse detection for a week; ended grants stay listed at /account/agents for
 // 30 days; audit rows are kept 400 days (the migration's trigger refuses younger deletes). Each pass is batched.
 export async function sweepGrants(env, now = Date.now()) {
     await env.DB.prepare(`DELETE FROM agent_refresh_tokens WHERE rowid IN (SELECT rowid FROM agent_refresh_tokens

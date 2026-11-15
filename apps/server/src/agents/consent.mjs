@@ -5,7 +5,7 @@ import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { cookies, getSession, requireCsrf, CSRF_COOKIE } from '../auth/session.mjs';
 import { pendingRequest, authorizationResponse } from '../oidc/requests.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
-import { heading, section, button, linkButton, hidden, callout, kv, code, actions, icon } from '../pages/ui.mjs';
+import { heading, result, section, button, linkButton, hidden, callout, kv, code, actions, icon } from '../pages/ui.mjs';
 import { brandingFor } from '../branding/tokens.mjs';
 import { validateAgentRequest } from './authorize.mjs';
 import { workspace } from './uris.mjs';
@@ -47,7 +47,7 @@ function consentPage(request, env, row, context) {
         section('What it can do', `Access lasts at most ${days} day${days === 1 ? '' : 's'}. The app checks your permissions on every call.`, scopes) +
         `<form method="post" action="/agent/consent">${hidden('request_id', row.id)}${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}
 ${actions(button('Deny', { name: 'decision', value: 'deny', variant: 'outline' }), button('Approve', { name: 'decision', value: 'approve', variant: 'primary' }))}</form>`,
-        { client: app, formTargets: row.device_hash || !row.redirect_uri ? [] : [row.redirect_uri] });
+        { size: 'md', client: app, formTargets: row.device_hash || !row.redirect_uri ? [] : [row.redirect_uri] });
 }
 export async function consent(request, env) {
     const body = request.method === 'POST' ? await readBody(request, 'form') : uniqueParams(new URL(request.url).searchParams);
@@ -89,14 +89,14 @@ export async function consent(request, env) {
     const deleteIndex = batch.length - 1;
     if (row.device_hash) batch.push(env.DB.prepare(`UPDATE agent_devices SET status=?,grant_id=? WHERE hash=? AND status='pending' AND expires_at>? AND changes()=1`)
         .bind(approve ? 'approved' : 'denied', approve ? grantId : null, row.device_hash, now));
-    const result = await env.DB.batch(batch);
-    invariant(result[deleteIndex].results.length === 1 && (!approve || result[0].meta.changes === 1), 'invalid_request', 'This request was already answered or has expired. Start again from the agent.');
+    const written = await env.DB.batch(batch);
+    invariant(written[deleteIndex].results.length === 1 && (!approve || written[0].meta.changes === 1), 'invalid_request', 'This request was already answered or has expired. Start again from the agent.');
     if (approve) {
         await env.DB.prepare('UPDATE agent_clients SET last_used=? WHERE id=?').bind(now, row.agent_client_id).run();
-        notify(env, env.CTX, session.email, 'an agent was connected', `"${context.agent.client_name}" can now act for you in ${JSON.parse(context.app.branding).name || context.app.id} (${workspace(row.resource)}) with: ${row.scope}. Review or revoke it at ${env.ISSUER}/account.`);
+        notify(env, env.CTX, session.email, 'an agent was connected', `"${context.agent.client_name}" can now act for you in ${JSON.parse(context.app.branding).name || context.app.id} (${workspace(row.resource)}) with: ${row.scope}. Review or revoke it at ${env.ISSUER}/account/agents.`);
     }
     if (row.device_hash) return approve
-        ? page('Agent connected', heading('Agent connected', 'Go back to your device to continue.') + `<div class="fd-row" data-gap="3">${linkButton('See connected agents', '/account', { variant: 'outline' })}</div>`)
-        : page('Connection denied', heading('Connection denied', 'The agent gets no access. Go back to your device.'));
+        ? page('Agent connected', result('circle-check', 'success', 'Agent connected', 'Go back to your device to continue.') + linkButton('See connected agents', '/account/agents', { variant: 'outline', size: 'lg', block: true }))
+        : page('Connection denied', result('ban', 'neutral', 'Connection denied', 'The agent gets no access. Go back to your device.'));
     return authorizationResponse(env, row, approve ? { code } : { error: 'access_denied' });
 }

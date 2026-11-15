@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
-import { world, begin } from './support/world.mjs';
+import { world, begin, turnstile } from './support/world.mjs';
+import { adminLogin, assertFireMarkup } from './support/admin.mjs';
 import { signInPage } from '../apps/server/src/pages/sign-in.mjs';
 for (const path of ['/login', '/check-email', '/error', '/signed-out']) test(`self-contained page smoke: ${path}`, async t => {
     const w = await world(t), response = await w.call(path), html = await response.text();
@@ -15,7 +16,9 @@ for (const path of ['/login', '/check-email', '/error', '/signed-out']) test(`se
 });
 test('every page shows the realm name, escaped, and no product is written into the code', async t => {
     const w = await world(t), html = await (await w.call('/signed-out')).text();
-    assert.match(html, /<div class="fd-brand fd-row" data-gap="3"><svg class="x-wordmark"[^>]*aria-label="Imprim">[\s\S]*?<\/svg><span class="fd-brand-name">Vibernt<\/span><\/div>/);
+    // The brand leads, centred: its initial in dots (no mark is uploaded) and its name. Imprim signs the page below.
+    assert.match(html, /<div class="fd-row" data-justify="center"><div class="fd-brand"><span class="fd-brand-mark"><svg viewBox="-1 0 7 7"[^>]*>[\s\S]*?<\/svg><\/span><span class="fd-brand-name">Vibernt<\/span><\/div><\/div>/);
+    assert.match(html, /<span>Powered by<\/span><svg class="x-wordmark" data-size="sm"[^>]*aria-label="Imprim">/);
     assert.match(html, /<title>Signed out · Vibernt<\/title>/);
     w.env.DB.db.prepare("UPDATE realms SET display_name=? WHERE id='default'").run('<b>Acme</b>');
     const { forgetRealms } = await import('../apps/server/src/realms/realm.mjs'); forgetRealms(w.env);
@@ -55,4 +58,31 @@ test('fragment page never sends token on load; explicit click posts once and nav
     assert.equal(requests[0].options.method, 'POST');
     assert.equal(JSON.parse(requests[0].options.body).browser_response, true);
     assert.deepEqual(navigations, ['https://app.example/callback?code=issued']);
+});
+test('the console wears the app shell: scripts only from this origin, and navigation by role', async t => {
+    const w = await world(t); turnstile(t);
+    const a = await adminLogin(w), read = async path => { const response = await w.call(path, { headers: { cookie: a.cookie } }); return { response, html: await response.text() }; };
+    const { response, html } = await read('/admin/clients');
+    assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+    assert.match(html, /<div class="fd-app" data-sidebar="expanded"><aside class="fd-sidebar" aria-label="Admin console">/);
+    assert.match(html, /<a class="fd-nav-item" href="\/admin\/clients" aria-current="page">/);
+    assert.match(html, /<span class="fd-account-email">admin@example\.com<\/span>/);
+    assert.deepEqual([...html.matchAll(/<script[^>]*>/g)].map(m => m[0]), ['<script type="module" src="/imprim/shell.js">'], 'one same-origin module, nothing inline');
+    assertFireMarkup(html);
+    // A platform administrator sees the platform pages; a realm administrator is not shown them.
+    assert.ok(html.includes('href="/admin/keys"') && html.includes('href="/admin/realms"') && !html.includes('identity:'));
+    w.env.DB.db.exec("UPDATE admins SET role='realm'");
+    const realm = (await read('/admin/clients')).html;
+    assert.ok(!realm.includes('href="/admin/keys"') && !realm.includes('href="/admin/realms"') && !realm.includes('Platform') && !realm.includes('identity:'));
+    assert.equal((await read('/admin/keys')).response.status, 403, 'hiding the link is not the control: the page itself refuses');
+    // The same person's account pages link to the console.
+    assert.match((await read('/account')).html, /<a class="fd-nav-item" href="\/admin">/);
+    // Only the Branding page may call the admin API.
+    assert.match((await read('/admin/branding')).response.headers.get('content-security-policy'), /script-src 'self'; connect-src 'self';/);
+});
+test('the shell script loads three Fire modules and makes no request of its own', async () => {
+    const { readFileSync } = await import('node:fs');
+    const script = readFileSync(new URL('../apps/server/public/imprim/shell.js', import.meta.url), 'utf8');
+    assert.deepEqual([...script.matchAll(/import\('([^']+)'\)/g)].map(m => m[1]), ['/fire/js/icons.js', '/fire/js/shell.js', '/fire/js/texture.js']);
+    assert.ok(!/fetch\(|XMLHttpRequest|https?:/.test(script));
 });

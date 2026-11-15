@@ -271,7 +271,7 @@ returned `user_code` and `verification_uri` (or open `verification_uri_complete`
 `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`, `client_id`, and the same `resource` after the
 returned interval. `authorization_pending` means wait; `slow_down` adds five seconds to all later polling intervals;
 `expired_token` and `access_denied` end the flow. Device authorization uses its device secret and explicit human
-approval; S256 applies to the authorization-code flow, not RFC 8628 polling. `/account` lists and revokes grants.
+approval; S256 applies to the authorization-code flow, not RFC 8628 polling. `/account/agents` lists and revokes grants.
 
 ### Resource server helpers
 

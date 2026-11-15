@@ -6,7 +6,7 @@ import { attempt, clearFailures, mfaFailureKey } from './rate-limit.mjs';
 import { verifySecondFactor, mfaStatement, trustBrowser, confirmedFactors, ACR_MFA } from './mfa.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { page } from '../pages/layout.mjs';
-import { heading, field, checkbox, hidden, button, orDivider as or } from '../pages/ui.mjs';
+import { result, field, checkbox, hidden, button, orDivider as or } from '../pages/ui.mjs';
 import { notify } from '../services/notify.mjs';
 // Where a finished second factor may send the person when there is no authorization request.
 export const safeNext = value => typeof value === 'string' && /^\/(admin|account)(\/[A-Za-z0-9/_.-]*)?(\?[A-Za-z0-9=&%_.-]*)?$/.test(value) ? value : '/account';
@@ -17,8 +17,8 @@ ${field({ id: 'code', label: 'Code', name: 'code', size: 'lg', inputmode: 'text'
         hint: message ? undefined : 'Lost your authenticator? Enter a recovery code instead.' })}
 ${trust ? checkbox('trust', `Trust this browser for ${trust} days`) : ''}${button('Continue', { variant: 'primary', size: 'lg', block: true })}</form>`;
     const alternative = passkey ? or + button('Use a passkey instead', { id: 'passkey-mfa', type: 'button', 'data-request-id': values.request_id || '', 'data-next': values.next || '', variant: 'outline', size: 'lg', block: true, icon: 'key-round' }) : '';
-    return page('Second step', heading('Enter your code', 'Open your authenticator app and enter the 6-digit code.') +
-        `<section class="fd-stack" data-gap="3">${form}${alternative}</section><p class="fd-small" id="message" role="status" aria-live="polite"></p>`,
+    return page('Second step', result('shield-check', 'accent', 'Enter your code', 'Open your authenticator app and enter the 6-digit code.') +
+        `<section class="fd-stack" data-gap="3">${form}${alternative}</section><p class="fd-small x-center" id="message" role="status" aria-live="polite"></p>`,
         { status: message ? 401 : 200, script: passkey ? '/assets/passkey.js' : '', client });
 }
 async function context(env, request, values) {

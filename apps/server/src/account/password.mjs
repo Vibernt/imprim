@@ -8,7 +8,8 @@ import { assertNotBreached } from '../auth/breach.mjs';
 import { hashPassword, verifyPassword } from '../auth/password-hash.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { page } from '../pages/layout.mjs';
-import { heading, field, hidden, button, linkButton, callout, small } from '../pages/ui.mjs';
+import { accountPage } from '../pages/shell.mjs';
+import { heading, field, hidden, button, linkButton, callout, small, actions } from '../pages/ui.mjs';
 import { audit } from '../services/audit.mjs';
 import { notify } from '../services/notify.mjs';
 import { logoutStatements, flushLogouts } from '../oidc/backchannel.mjs';
@@ -19,13 +20,15 @@ function form(request, session, values, hasPassword, saved = false) {
     const current = hasPassword && !freshMailbox(session)
         ? field({ id: 'current_password', label: 'Current password', type: 'password', name: 'current_password', autocomplete: 'current-password', required: true }) : '';
     const title = hasPassword ? 'Change password' : 'Set a password';
-    return page(title, `${heading(title, 'Use it to sign in to apps that offer passwords.')}
-${saved ? callout('Password saved', 'Your other sessions were signed out.', { tone: 'success', role: 'status' }) : ''}
-<form class="fd-stack" data-gap="4" method="post" action="/account/password">${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}${hidden('request_id', values.request_id || '')}
+    const description = 'Use it to sign in to apps that offer passwords.';
+    const body = `${saved ? callout('Password saved', 'Your other sessions were signed out.', { tone: 'success', role: 'status' }) : ''}
+<form class="fd-form" method="post" action="/account/password">${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}${hidden('request_id', values.request_id || '')}
 ${current}${field({ id: 'password', label: 'New password', type: 'password', name: 'password', autocomplete: 'new-password', minlength: 12, maxlength: 128, required: true, hint: '12 to 128 characters. A few unrelated words work well.' })}
 ${small('We check new passwords against known data breaches. Saving signs out your other sessions and forgets remembered browsers.')}
-${button('Save password', { variant: 'primary', block: true })}</form>
-${values.request_id ? '' : `<div class="fd-row" data-justify="center">${linkButton('Back to your account', '/account', { variant: 'ghost' })}</div>`}`);
+${values.request_id ? button('Save password', { variant: 'primary', size: 'lg', block: true }) : actions(linkButton('Cancel', '/account/security', { variant: 'ghost' }), button('Save password', { variant: 'primary' }))}</form>`;
+    // Mid sign-in (an app is waiting) this is a centred screen; otherwise it sits in the account pages.
+    return values.request_id ? page(title, heading(title, description) + body)
+        : accountPage(title, body, { active: 'security', description, back: ['Security', '/account/security'] });
 }
 export async function passwordPage(request, env, ctx) {
     const session = await getSession(request, env);

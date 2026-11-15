@@ -4,7 +4,7 @@ import { readBody, json, uniqueParams, tokenShape } from '../lib/http.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { limitAgentAddress } from '../auth/rate-limit.mjs';
 import { page } from '../pages/layout.mjs';
-import { heading, field, button } from '../pages/ui.mjs';
+import { result, field, button } from '../pages/ui.mjs';
 import { checkPolicy } from './policy.mjs';
 import { authenticateAgent } from './client-auth.mjs';
 import { beginAgentSignIn } from './authorize.mjs';
@@ -31,7 +31,7 @@ export async function deviceAuthorization(request, env) {
 }
 export async function devicePage(request, env) {
     const query = uniqueParams(new URL(request.url).searchParams);
-    if (!query.user_code) return page('Connect a device', heading('Connect a device', 'Enter the code your agent shows you.') +
+    if (!query.user_code) return page('Connect a device', result('bot', 'accent', 'Connect a device', 'Enter the code your agent shows you.') +
         `<form class="fd-stack" data-gap="4" method="get" action="/device">${field({ id: 'user_code', label: 'Device code', name: 'user_code', required: true, autocomplete: 'off',
             spellcheck: 'false', size: 'lg', placeholder: 'BCDF-GHJK', hint: 'Only enter a code from an agent you started yourself.' })}${button('Continue', { variant: 'primary', size: 'lg', block: true })}</form>`);
     await limitAgentAddress(env, request, 'user-code');

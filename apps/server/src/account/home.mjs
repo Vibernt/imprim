@@ -1,5 +1,5 @@
-// /account: one page for everything a person controls. Profile, security, sessions, connected apps and agents,
-// email change and deletion. Every change is a CSRF-checked POST; sensitive ones need fresh proof.
+// The account pages, for everything a person controls: Profile (/account), Security, Sessions and apps, and Agents.
+// Every change is a CSRF-checked POST; sensitive ones need fresh proof.
 import { readBody, redirect, uniqueParams, tokenShape } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
@@ -11,8 +11,9 @@ import { appSessionLifetimeMs } from '../oidc/app-sessions.mjs';
 import { endAccess } from '../services/access.mjs';
 import { logoutStatements, flushLogouts } from '../oidc/backchannel.mjs';
 import { dispatchDeliveries } from '../services/outbox.mjs';
-import { agentsSection } from '../agents/account.mjs';
+import { agentsList } from '../agents/account.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
+import { accountPage } from '../pages/shell.mjs';
 import { heading, button, linkButton, field, hidden, callout, setting, kv, badge, status, empty, actions, small } from '../pages/ui.mjs';
 import { notify } from '../services/notify.mjs';
 import { audit } from '../services/audit.mjs';
@@ -29,8 +30,8 @@ export const when = value => value ? `${DAY.format(value)} ${TIME.format(value)}
 export const day = value => value ? DAY.format(value) : 'Never';
 const METHODS = { email: 'an email link', password: 'a password', passkey: 'a passkey', github: 'GitHub', google: 'Google' };
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
-// A section of the account page; the h2 keeps its id so /account#sessions and the like still land.
-export const accountSection = (id, title, description, body) => `<section class="fd-stack" data-gap="3"><div class="fd-stack" data-gap="1"><h2 class="fd-h3" id="${id}">${e(title)}</h2>${description ? `<p class="fd-small fd-muted">${e(description)}</p>` : ''}</div>${body}</section>`;
+// A titled section of an account page.
+const accountSection = (id, title, description, body) => `<section class="fd-stack" data-gap="3"><div class="fd-stack" data-gap="1"><h2 class="fd-h3" id="${id}">${e(title)}</h2>${description ? `<p class="fd-small fd-muted">${e(description)}</p>` : ''}</div>${body}</section>`;
 // A Fire list whose trail can hold a form (a div, so the form is not inside a span). title is text; the rest is safe markup.
 const rowList = (label, rows) => `<ul class="fd-list" data-card aria-label="${e(label)}">${rows.map(row => `<li class="fd-list-row"><div class="fd-list-body"><span class="fd-list-title">${e(row.title)}</span>${row.desc ? `<span class="fd-list-desc">${row.desc}</span>` : ''}</div>${row.meta ? `<span class="fd-list-meta">${row.meta}</span>` : ''}${row.trail ? `<div class="fd-list-trail">${row.trail}</div>` : ''}</li>`).join('')}</ul>`;
 // A labelled input with its button beside it, in a settings row. `input` is already-safe markup.
@@ -45,20 +46,59 @@ async function requireSession(request, env) {
     invariant(session, 'login_required', 'Sign in to an app first, then return to your account.', 401);
     return session;
 }
+// The page a path shows, including the page each action returns to.
+const VIEWS = { '/account': 'profile', '/account/profile': 'profile', '/account/email': 'profile', '/account/security': 'security', '/account/devices': 'security',
+    '/account/sessions': 'sessions', '/account/apps': 'sessions', '/account/agents': 'agents' };
 // message: what is now true, as a string or { title, body }.
 export async function accountHome(request, env, session, message = '') {
+    const url = new URL(request.url), view = VIEWS[url.pathname] || 'profile';
+    if (!message && url.searchParams.get('changed') === 'email') message = { title: 'Email changed', body: 'Sign in with your new address from now on.' };
+    const note = message ? callout(message.title ?? message, message.body ?? '', { tone: 'success', role: 'status' }) : '';
+    const { title, description, bands } = await { profile, security, sessions, agents }[view](request, env, session);
+    return accountPage(title, [note + bands[0], ...bands.slice(1)], { active: view, description });
+}
+async function profile(request, env, session) {
     const user = await env.DB.prepare('SELECT email,display_name,email_verified FROM users WHERE id=?').bind(session.user_id).first();
-    const [password, factors, sessions, apps, devices] = await Promise.all([
+    const settings = `<div>
+${setting('Email', `<span class="fd-mono">${e(user.email)}</span>${user.email_verified ? '' : ` ${badge('Not confirmed', 'warning')} ${e('Sign in with an email link to confirm it.')}`}`)}
+${inlineForm(request, '/account/profile', { id: 'display_name', label: 'Name', desc: 'Apps that ask for your profile see this name.',
+        input: `<input class="fd-input" id="display_name" name="display_name" maxlength="100" autocomplete="name" aria-describedby="display_name-desc" value="${e(user.display_name || '')}">`, submit: button('Save name') })}
+${inlineForm(request, '/account/email', { id: 'new_email', label: 'New email', desc: 'Needs an email-link sign-in in the last 10 minutes. We confirm the new address and tell the old one.',
+        input: '<input class="fd-input" id="new_email" name="new_email" type="email" maxlength="254" autocomplete="email" placeholder="name@example.com" aria-describedby="new_email-desc" required>', submit: button('Change email') })}
+</div>`;
+    const remove = accountSection('delete', 'Delete account', 'Signs you out of every app and agent and removes how you sign in. It can’t be undone.',
+        `<form class="fd-form" method="post" action="/account/delete">${csrfField(request)}
+${field({ id: 'confirm_email', name: 'confirm_email', label: 'Your email', hint: `Type ${user.email} to confirm.`, autocomplete: 'off', spellcheck: 'false', required: true })}
+${small('Apps keep their own records of you. Deleting needs a sign-in in the last 10 minutes.')}
+${actions(button('Delete account', { variant: 'danger' }))}</form>`);
+    return { title: 'Profile', description: 'Your name and email, as the apps you sign in to see them.', bands: [settings, remove] };
+}
+async function security(request, env, session) {
+    const [password, factors, devices] = await Promise.all([
         env.DB.prepare('SELECT updated FROM user_passwords WHERE user_id=?').bind(session.user_id).first(),
         confirmedFactors(env, session.user_id),
-        env.DB.prepare('SELECT sid,method,auth_time,last_seen,device,location FROM sessions WHERE user_id=? AND expires_at>? ORDER BY auth_time DESC LIMIT 50').bind(session.user_id, Date.now()).all(),
-        env.DB.prepare(`SELECT a.client_id,c.branding,max(a.created) AS signed_in FROM app_sessions a JOIN clients c ON c.id=a.client_id
-            WHERE a.user_id=? GROUP BY a.client_id ORDER BY signed_in DESC LIMIT 50`).bind(session.user_id).all(),
         env.DB.prepare('SELECT hash,name,created,last_used,expires_at FROM trusted_devices WHERE user_id=? AND expires_at>? ORDER BY last_used DESC').bind(session.user_id, Date.now()).all()
     ]);
-    if (!message && new URL(request.url).searchParams.get('changed') === 'email') message = { title: 'Email changed', body: 'Sign in with your new address from now on.' };
-    const note = message ? callout(message.title ?? message, message.body ?? '', { tone: 'success', role: 'status' }) : '';
-    const sessionRows = sessions.results.map(s => {
+    const deviceRows = devices.results.map(d => ({ title: d.name, desc: e(`Remembered until ${day(d.expires_at)}`),
+        trail: rowAction(request, '/account/devices', hidden('device', d.hash), 'Forget', { 'aria-label': `Forget ${d.name}` }) }));
+    const apps2fa = factors.filter(f => f.type !== 'passkey').length, passkeys = factors.length - apps2fa;
+    const factorText = factors.length ? `${status('On', 'success')} ${e([apps2fa && plural(apps2fa, 'authenticator app'), passkeys && plural(passkeys, 'passkey')].filter(Boolean).join(' · '))}`
+        : `${status('Off')} ${e('Ask for a code or passkey when you sign in.')}`;
+    const settings = `<div>
+${setting('Password', password ? e(`Set ${day(password.updated)}`) : e('None. Apps that offer passwords let you set one.'), password ? linkButton('Change password', '/account/password', { variant: 'outline' }) : '')}
+${setting('Two-factor authentication', factorText, linkButton(factors.length ? 'Manage' : 'Set up', '/account/mfa', { variant: factors.length ? 'outline' : 'primary' }))}
+</div>`;
+    const browsers = accountSection('browsers', 'Remembered browsers', 'These skip the second-factor code until the date shown.',
+        deviceRows.length ? rowList('Remembered browsers', deviceRows) : empty('No remembered browsers', 'Browsers you choose to remember at a second-factor prompt appear here.'));
+    return { title: 'Security', description: 'How you sign in, and the browsers you trust.', bands: [settings, browsers] };
+}
+async function sessions(request, env, session) {
+    const [rows, apps] = await Promise.all([
+        env.DB.prepare('SELECT sid,method,auth_time,last_seen,device,location FROM sessions WHERE user_id=? AND expires_at>? ORDER BY auth_time DESC LIMIT 50').bind(session.user_id, Date.now()).all(),
+        env.DB.prepare(`SELECT a.client_id,c.branding,max(a.created) AS signed_in FROM app_sessions a JOIN clients c ON c.id=a.client_id
+            WHERE a.user_id=? GROUP BY a.client_id ORDER BY signed_in DESC LIMIT 50`).bind(session.user_id).all()
+    ]);
+    const sessionRows = rows.results.map(s => {
         const device = s.device || 'Unknown device', current = s.sid === session.sid;
         return { title: device, desc: e([s.location, `Signed in ${when(s.auth_time * 1000)} with ${METHODS[s.method] || s.method}`].filter(Boolean).join(' · ')),
             meta: e(`Active ${when(s.last_seen)}`),
@@ -69,41 +109,13 @@ export async function accountHome(request, env, session, message = '') {
         return { title: name, desc: e(`Signed in ${when(a.signed_in)}`),
             trail: rowAction(request, '/account/apps', hidden('client_id', a.client_id), 'Sign out', { 'aria-label': `Sign out of ${name}` }) };
     });
-    const deviceRows = devices.results.map(d => ({ title: d.name, desc: e(`Remembered until ${day(d.expires_at)}`),
-        trail: rowAction(request, '/account/devices', hidden('device', d.hash), 'Forget', { 'aria-label': `Forget ${d.name}` }) }));
-    const apps2fa = factors.filter(f => f.type !== 'passkey').length, passkeys = factors.length - apps2fa;
-    const factorText = factors.length ? `${status('On', 'success')} ${e([apps2fa && plural(apps2fa, 'authenticator app'), passkeys && plural(passkeys, 'passkey')].filter(Boolean).join(' · '))}`
-        : `${status('Off')} ${e('Ask for a code or passkey when you sign in.')}`;
-    const profile = accountSection('profile', 'Profile', '', `<div>
-${setting('Email', `<span class="fd-mono">${e(user.email)}</span>${user.email_verified ? '' : ` ${badge('Not confirmed', 'warning')} ${e('Sign in with an email link to confirm it.')}`}`)}
-${inlineForm(request, '/account/profile', { id: 'display_name', label: 'Name', desc: 'Apps that ask for your profile see this name.',
-        input: `<input class="fd-input" id="display_name" name="display_name" maxlength="100" autocomplete="name" aria-describedby="display_name-desc" value="${e(user.display_name || '')}">`, submit: button('Save name') })}
-${inlineForm(request, '/account/email', { id: 'new_email', label: 'New email', desc: 'Needs an email-link sign-in in the last 10 minutes. We confirm the new address and tell the old one.',
-        input: '<input class="fd-input" id="new_email" name="new_email" type="email" maxlength="254" autocomplete="email" placeholder="name@example.com" aria-describedby="new_email-desc" required>', submit: button('Change email') })}
-</div>`);
-    const security = accountSection('security', 'Security', '', `<div>
-${setting('Password', password ? e(`Set ${day(password.updated)}`) : e('None. Apps that offer passwords let you set one.'), password ? linkButton('Change password', '/account/password', { variant: 'outline' }) : '')}
-${setting('Two-factor authentication', factorText, linkButton(factors.length ? 'Manage' : 'Set up', '/account/mfa', { variant: 'outline' }))}
-<div class="fd-setting" data-align="start"><div class="fd-setting-text"><h3 class="fd-setting-title">Remembered browsers</h3><p class="fd-setting-desc">These skip the second-factor code until the date shown.</p></div>
-${deviceRows.length ? rowList('Remembered browsers', deviceRows) : empty('No remembered browsers', 'Browsers you choose to remember at a second-factor prompt appear here.')}</div>
-</div>`);
-    const signedIn = accountSection('sessions', 'Signed-in sessions', 'Browsers signed in to your account. Times are UTC.', rowList('Signed-in sessions', sessionRows) +
-        (sessions.results.length > 1 ? actions(rowAction(request, '/account/sessions', hidden('sid', 'others'), 'Sign out other sessions', { size: undefined })) : ''));
+    const signedIn = accountSection('sessions', 'Signed-in sessions', 'Browsers signed in to your account.', rowList('Signed-in sessions', sessionRows) +
+        (rows.results.length > 1 ? actions(rowAction(request, '/account/sessions', hidden('sid', 'others'), 'Sign out other sessions', { size: undefined })) : ''));
     const appList = accountSection('apps', 'Apps', 'Signing out of an app ends its session on every device.', appRows.length ? rowList('Apps', appRows)
         : empty('No apps yet', 'Apps you sign in to with this account appear here.'));
-    const remove = accountSection('delete', 'Delete account', 'Signs you out of every app and agent and removes how you sign in. It can’t be undone.',
-        `<form class="fd-form" method="post" action="/account/delete">${csrfField(request)}
-${field({ id: 'confirm_email', name: 'confirm_email', label: 'Your email', hint: `Type ${user.email} to confirm.`, autocomplete: 'off', spellcheck: 'false', required: true })}
-${small('Apps keep their own records of you. Deleting needs a sign-in in the last 10 minutes.')}
-${actions(button('Delete account', { variant: 'danger' }))}</form>`);
-    return page('Your account', `${heading('Your account', 'Manage your profile, sign-in security and where you’re signed in.')}${note}
-${profile}
-${security}
-${signedIn}
-${appList}
-${await agentsSection(request, env, session)}
-${remove}`, { wide: true });
+    return { title: 'Sessions and apps', description: 'Where you’re signed in. Times are UTC.', bands: [signedIn, appList] };
 }
+const agents = async (request, env, session) => ({ title: 'Connected agents', description: 'Agents act for you in an app. Revoke one to end its access.', bands: [await agentsList(request, env, session)] });
 export async function accountAction(request, env, ctx) {
     const session = await requireSession(request, env);
     const url = new URL(request.url), what = url.pathname.slice('/account/'.length);

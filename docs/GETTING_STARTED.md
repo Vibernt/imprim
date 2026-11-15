@@ -61,7 +61,7 @@ Then make your MCP server answer with the OAuth challenge and verify tokens on e
 > Connect to the MCP server at https://app.example.com/w/team-one/mcp.
 
 The agent discovers Imprim, opens your browser (or shows a device code), and you approve exactly which workspace
-and scopes it gets. You can see and revoke every connected agent at `https://id.example.com/account`.
+and scopes it gets. You can see and revoke every connected agent at `https://id.example.com/account/agents`.
 
 ## Next
 

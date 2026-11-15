@@ -15,8 +15,12 @@ its icons are Lucide (ISC).
 How Imprim uses it:
 
 - Pages are rendered on the server. `apps/server/src/pages/ui.mjs` renders Fire components (fields, buttons,
-  callouts, lists, tables, settings rows, icons) with every text escaped. Pages handling credentials load no Fire
-  JavaScript; only the admin Branding page loads `fire.js`, for the Tweaks panel.
+  callouts, lists, tables, settings rows, icons) with every text escaped. There are two layouts: a centred screen
+  for sign-in, consent and results (`pages/layout.mjs`), and Fire's app shell for the console and the account pages
+  (`pages/shell.mjs`).
+- Sign-in, consent and second-factor screens load no Fire JavaScript. Shell pages load `/imprim/shell.js`, which
+  brings in three Fire modules (shell, icons, texture) for the sidebar, the phone menu and the hero texture. Only
+  the admin Branding page loads all of `fire.js`, for the Tweaks panel.
 - A brand's **look** is Fire's tweak state (palette, tone, type set, density, corners, lines, text size, contrast,
   motion, texture, theme). `apps/server/src/branding/look.mjs` applies it as `<html>` attributes plus
   `/assets/theme.css`, using Fire's own palette engine (`public/fire/js/palettes.js`), exactly as the Tweaks panel
