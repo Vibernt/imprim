@@ -29,7 +29,8 @@ import { logout } from './oidc/logout.mjs';
 import { invite } from './services/invitations.mjs';
 import { scheduled, queue } from './services/maintenance.mjs';
 import { loginPage, signInScript } from './pages/sign-in.mjs';
-import { page, pageCss, errorPage, signedOutPage, withBrand, escapeHtml } from './pages/layout.mjs';
+import { page, localCss, errorPage, signedOutPage, withBrand, escapeHtml } from './pages/layout.mjs';
+import { heading, linkButton } from './pages/ui.mjs';
 import { themeResponse } from './branding/theme.mjs';
 import { serveAsset } from './branding/assets.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
@@ -43,7 +44,7 @@ async function route(request, env, ctx, url) {
     if (callback) return providerCallback(request, env, callback[1]);
     const key = `${request.method} ${url.pathname}`;
     switch (key) {
-        case 'GET /assets/page.css': return new Response(pageCss, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+        case 'GET /assets/local.css': return new Response(localCss, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
         case 'GET /assets/passkey.js': return new Response(passkeyScript, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
         case 'POST /v1/auth/passkey/options': return assertionOptions(request, env);
         case 'POST /v1/auth/passkey/verify': return assertionVerify(request, env, ctx);
@@ -81,21 +82,22 @@ async function route(request, env, ctx, url) {
         case 'GET /v1/auth/google/start': return googleStart(request, env);
         case 'GET /login/google/callback': return googleCallback(request, env);
         case 'GET /login': return loginPage(request, env);
-        case 'GET /check-email': return page('Check your email', '<h1>Check your email</h1><p>If this address is eligible, a link will arrive shortly. Open it in the browser where you started and choose Sign in.</p>');
+        case 'GET /check-email': return page('Check your email', heading('Check your email', 'If this address can sign in here, a link arrives within a minute.') +
+            '<p class="fd-small fd-muted">Open it in this browser. The link works once and expires in 15 minutes.</p>');
         case 'GET /signed-in': {
             if (!await getSession(request, env)) throw new AppError(401, 'login_required', 'Sign in first.');
-            return page('Signed in', '<h1>You are signed in</h1><p>Return to your app or <a href="/admin">open the admin console</a>.</p>');
+            return page('Signed in', heading('You’re signed in', 'Go back to your app to continue.') + `<div class="fd-row" data-gap="3">${linkButton('Your account', '/account')}${linkButton('Admin console', '/admin', { variant: 'ghost' })}</div>`);
         }
-        case 'GET /signed-out': return page('Signed out', `<h1>You are signed out</h1><p>${escapeHtml(env.REALM.branding?.copy?.signed_out || 'Apps may still have their own active sessions.')}</p>`);
+        case 'GET /signed-out': return page('Signed out', heading('You’re signed out', env.REALM.branding?.copy?.signed_out || 'Apps you used keep their own sessions until you sign out there.'));
         case 'GET /assets/theme.css': return themeResponse(env, url);
-        case 'GET /error': return errorPage('Return to the app and start again.');
+        case 'GET /error': return errorPage('This sign-in request is missing or has expired.');
         default: throw new AppError(404, 'not_found', 'Endpoint not found.');
     }
 }
 // Public metadata is unlimited (and memoised); /token, /userinfo and /v1/invitations limit by the authenticated client
 // inside the handler, because Worker-hosted apps share Cloudflare egress addresses (S2).
 const unlimited = new Set(['GET /.well-known/openid-configuration', 'GET /.well-known/oauth-authorization-server', 'GET /.well-known/jwks.json',
-    'GET /assets/page.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'GET /assets/theme.css', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations',
+    'GET /assets/local.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'GET /assets/theme.css', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations',
     'POST /introspect', 'POST /revoke', 'GET /v1/grants', 'POST /v1/grants/revoke']);
 export function limiterFor(method, path) {
     if (unlimited.has(`${method} ${path}`)) return null;

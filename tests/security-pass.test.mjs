@@ -34,12 +34,16 @@ test('S1: device and loopback consents say the agent host is claimed and warn ab
     const w = await agentWorld(t);
     const loopback = await w.start();
     const html = await (await w.call(`/agent/consent?request_id=${loopback.id}`, { headers: { cookie: loopback.cookie } })).text();
-    assert.match(html, /Agent calling itself “Example Agent”/);
+    assert.match(html, /<h1 class="fd-h1">Connect an agent calling itself “Example Agent”\?<\/h1>/);
     assert.match(html, /claimed, not verified/);
-    assert.match(html, /If someone sent you this link or code, choose Deny/);
+    assert.match(html, /<div class="fd-callout" data-tone="danger" role="alert">.*If someone sent you this link or code, choose Deny/s);
     const https = await w.start({ redirect_uri: 'https://agent.example/callback' });
     const verified = await (await w.call(`/agent/consent?request_id=${https.id}`, { headers: { cookie: https.cookie } })).text();
     assert.match(verified, /verified by its HTTPS callback/);
+    assert.doesNotMatch(verified, /role="alert"/);
+    assert.match(html, /<form method="post" action="\/agent\/consent"><input type="hidden" name="request_id" value="[^"]+"><input type="hidden" name="csrf" value="[^"]+">/);
+    assert.match(html, /<button class="fd-btn" type="submit" data-variant="outline" name="decision" value="deny"><span>Deny<\/span><\/button><button class="fd-btn" type="submit" data-variant="primary" name="decision" value="approve"><span>Approve<\/span><\/button>/);
+    assert.equal((html.match(/data-variant="primary"/g) || []).length, 1);
     assert.doesNotMatch(verified, /claimed, not verified/);
 });
 test('S1: a key-bound agent must sign every token request; a claimed client_id alone gets nothing', async t => {
@@ -139,7 +143,7 @@ test('S5: /account pages connected agents and a person cannot hold more than the
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (let i = 1; i <= MAX_LIVE_GRANTS; i++) insert.run(crypto.randomUUID(), grant.client_id, 'Filler', 'metadata_document', 'app', grant.user_id, resource, 'read', 'email', grant.created - i, grant.created, grant.expires_at);
     const page = await (await w.call('/account', { headers: { cookie: w.cookie } })).text();
-    assert.equal((page.match(/<section>/g) || []).length, 50);
+    assert.equal((page.match(/action="\/account\/revoke"/g) || []).length, 50, 'one revoke form per agent on the page');
     assert.match(page, /Older agents/);
     const flow = await w.start();
     await error(await w.approve(flow), 'access_denied', 403);

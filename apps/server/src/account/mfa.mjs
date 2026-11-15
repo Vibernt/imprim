@@ -9,26 +9,44 @@ import { qrSvg } from '../lib/qr.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { safeNext } from '../auth/mfa-challenge.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
+import { heading, section, button, linkButton, field, hidden, callout, list, empty, setting, badge, small } from '../pages/ui.mjs';
 import { credentials } from '../webauthn/ceremonies.mjs';
 import { notify } from '../services/notify.mjs';
 const FRESH_AUTH_MS = 600000;
-const hidden = (name, value) => `<input type="hidden" name="${name}" value="${e(value ?? '')}">`;
 const csrfOf = request => cookies(request)[CSRF_COOKIE] || '';
 const carry = values => hidden('request_id', values.request_id) + hidden('next', values.next);
-const post = (request, values, action, body, label) => `<form method="post" action="/account/mfa">${hidden('csrf', csrfOf(request))}${carry(values)}${hidden('action', action)}${body}<button>${e(label)}</button></form>`;
+// A form that posts one action to /account/mfa; `body` and `submit` are already-safe markup.
+const post = (request, values, action, body, submit, layout = '') => `<form${layout} method="post" action="/account/mfa">${hidden('csrf', csrfOf(request))}${carry(values)}${hidden('action', action)}${body}${submit}</form>`;
+// Short dates in UTC, as WRITING.md asks: "Nov 15, 2026".
+const day = time => e(new Date(time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }));
+// Recovery codes as a two-column grid of mono codes; tests/support/admin.mjs reads them from this markup.
+const recoveryCodes = codes => `<div class="fd-card" data-variant="sunken"><ul class="fd-grid" data-cols="2" data-min="4xs" data-gap="2" id="recovery-codes" aria-label="Recovery codes">${codes.map(code => `<li><code class="fd-code">${e(code)}</code></li>`).join('')}</ul></div>`;
+// Where "Cancel" returns to, keeping the app request (or the page to go back to) the person arrived with.
+const overviewHref = values => {
+    const query = new URLSearchParams(Object.entries({ request_id: values.request_id, next: values.next }).filter(([, v]) => typeof v === 'string' && v));
+    return `/account/mfa${query.size ? `?${query}` : ''}`;
+};
 const audit = (env, event, userId, detail = {}) => env.DB.prepare('INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,?,?,?)').bind(event, userId, JSON.stringify(detail), Date.now(), env.REALM.id);
 async function overview(request, env, session, values, message = '') {
     const all = await confirmedFactors(env, session.user_id), factors = all.filter(f => f.type === 'totp'), passkeys = await credentials(env, session.user_id);
     const left = (await env.DB.prepare('SELECT count(*) n FROM recovery_codes WHERE user_id=? AND used_at IS NULL').bind(session.user_id).first()).n;
-    const required = values.request_id ? '<p role="alert">This app requires a second factor. Add one to continue.</p>' : '';
-    return page('Two-factor authentication', `<h1>Two-factor authentication</h1>${required}${message ? `<p role="status">${e(message)}</p>` : ''}
-${all.length ? `<h2>Authenticator apps</h2>${factors.map(f => `<section><p><strong>${e(f.name)}</strong> · added ${e(new Date(f.created).toISOString().slice(0, 10))}${f.last_used ? ` · last used ${e(new Date(f.last_used).toISOString().slice(0, 10))}` : ''}</p>
-${post(request, values, 'remove', hidden('factor_id', f.id), 'Remove')}</section>`).join('')}
-<h2>Recovery codes</h2><p>${left} unused. Each works once if you lose your authenticator.</p>${post(request, values, 'recovery', '', 'Generate new recovery codes')}` : '<p>No second factor yet.</p>'}
-<h2>Add an authenticator app</h2>${post(request, values, 'start', '', 'Add authenticator app')}
-<h2>Passkeys</h2>${passkeys.map(p => `<section><p><strong>${e(p.name)}</strong> · added ${e(new Date(p.created).toISOString().slice(0, 10))}${p.backup_eligible ? ' · synced' : ''}</p>
-<form method="post" action="/account/passkeys/remove">${hidden('csrf', csrfOf(request))}${hidden('id', p.id)}<button>Remove</button></form></section>`).join('')}
-<label for="passkey-name">Passkey name</label><input id="passkey-name" maxlength="60" value="Passkey"><button id="passkey-add" type="button">Add a passkey</button><p id="message" role="status"></p>`, { script: '/assets/passkey.js' });
+    const required = values.request_id ? callout('Add a second factor to continue', 'This app asks for a code or a passkey after you sign in.', { tone: 'warning', role: 'alert' }) : '';
+    const notice = message ? callout(message, '', { tone: 'success', role: 'status' }) : '';
+    const add = post(request, values, 'start', '', button('Add authenticator app', { variant: all.length ? 'outline' : 'primary', icon: 'plus' }));
+    const apps = factors.length ? list('Authenticator apps', factors.map(f => ({ title: f.name, desc: `Added ${day(f.created)} · ${f.last_used ? `last used ${day(f.last_used)}` : 'never used'}`,
+        trail: post(request, values, 'remove', hidden('factor_id', f.id), button('Remove', { variant: 'ghost', size: 'sm', 'aria-label': `Remove ${f.name}` })) }))) + `<div class="fd-row">${add}</div>`
+        : empty('No authenticator app yet', 'Add one to enter a 6-digit code each time you sign in.', add);
+    const keys = passkeys.length ? list('Passkeys', passkeys.map(p => ({ title: p.name, desc: `Added ${day(p.created)}`, meta: p.backup_eligible ? badge('Synced') : '',
+        trail: `<form method="post" action="/account/passkeys/remove">${hidden('csrf', csrfOf(request))}${hidden('id', p.id)}${button('Remove', { variant: 'ghost', size: 'sm', 'aria-label': `Remove ${p.name}` })}</form>` })))
+        : empty('No passkeys yet', 'Add one to use your fingerprint, face or device PIN.');
+    // The passkey name has no form: /assets/passkey.js reads #passkey-name and wires #passkey-add.
+    const addKey = `<div class="fd-row" data-align="end" data-wrap data-gap="3"><div class="fd-grow">${field({ id: 'passkey-name', label: 'Passkey name', maxlength: 60, placeholder: 'Work laptop', hint: 'Leave blank to name it “Passkey”.' })}</div>${button('Add passkey', { id: 'passkey-add', type: 'button', variant: 'outline', icon: 'key-round' })}</div>`;
+    const codes = all.length ? section('Recovery codes', 'Each code works once, for when you can’t use your app or passkey.',
+        setting(left ? `${left} unused ${left === 1 ? 'code' : 'codes'}` : 'No unused codes', 'New codes replace every old one.', post(request, values, 'recovery', '', button('Generate new codes', { variant: 'outline', size: 'sm', icon: 'refresh-cw' })))) : '';
+    return page('Two-factor authentication', heading('Two-factor authentication', 'Ask for a code or a passkey each time you sign in.') + required + notice +
+        section('Authenticator apps', 'Apps that show a new 6-digit code every 30 seconds.', apps) +
+        section('Passkeys', 'Sign in with this device’s screen lock instead of a code.', keys + addKey + '<p class="fd-small" id="message" role="status" aria-live="polite"></p>') +
+        codes, { script: '/assets/passkey.js', wide: true });
 }
 export async function mfaAccount(request, env, ctx) {
     const session = await getSession(request, env);
@@ -51,10 +69,13 @@ export async function mfaAccount(request, env, ctx) {
         await env.DB.prepare('INSERT INTO mfa_factors(id,user_id,type,name,sealed_secret,created) VALUES(?,?,?,?,?,?)')
             .bind(id, session.user_id, 'totp', 'Authenticator app', await sealTotp(env, id, secret), now).run();
         const uri = otpauthUri({ issuer: env.REALM.display_name, account: session.email, secret });
-        return page('Add authenticator app', `<h1>Add an authenticator app</h1><p>Scan this code with your authenticator app, or enter the key by hand.</p>
-<figure>${qrSvg(uri, { label: 'Authenticator setup code' })}</figure><p>Key: <code id="totp-secret">${e(secret.match(/.{1,4}/g).join(' '))}</code></p>
-${post(request, values, 'confirm', `${hidden('factor_id', id)}<label for="name">Name</label><input id="name" name="name" value="Authenticator app" maxlength="60" required>
-<label for="code">Six-digit code from the app</label><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>`, 'Confirm')}`);
+        const key = `<div class="fd-stack" data-gap="2"><p class="fd-small fd-muted">Can’t scan it? Enter this setup key in the app instead.</p><p><code class="fd-code" id="totp-secret">${e(secret.match(/.{1,4}/g).join(' '))}</code></p></div>`;
+        const confirm = post(request, values, 'confirm', hidden('factor_id', id) +
+            field({ id: 'name', label: 'Name', name: 'name', value: 'Authenticator app', maxlength: 60, required: true, hint: 'Shown in your list, so you can tell your apps apart.' }) +
+            field({ id: 'code', label: 'Code', name: 'code', size: 'lg', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, required: true, placeholder: '123456' }),
+            `<div class="fd-form-actions">${linkButton('Cancel', overviewHref(values), { variant: 'ghost' })}${button('Add authenticator app', { variant: 'primary' })}</div>`, ' class="fd-form"');
+        return page('Add authenticator app', heading('Add an authenticator app', 'Scan the code, then enter the 6-digit code your app shows.') +
+            `<div class="fd-stack" data-gap="4"><figure class="x-qr">${qrSvg(uri, { label: 'Authenticator setup code' })}</figure>${key}</div>` + confirm);
     }
     if (values.action === 'confirm') {
         const factor = await env.DB.prepare('SELECT * FROM mfa_factors WHERE id=? AND user_id=? AND confirmed=0 AND created>?').bind(values.factor_id || '', session.user_id, now - 3600000).first();
@@ -70,8 +91,10 @@ ${post(request, values, 'confirm', `${hidden('factor_id', id)}<label for="name">
             ...recovery.statements, mfaStatement(env, session, ['otp']), forgetDevices(env, session.user_id),
             audit(env, 'mfa_factor_added', session.user_id, { type: 'totp' })]);
         notify(env, ctx, session.email, 'a second factor was added', `An authenticator app ("${name}") was added to your account. Remembered browsers were signed out of their second-factor exemption.`);
-        return page('Two-factor authentication on', `<h1>Two-factor authentication is on</h1>${recovery.codes.length ? `<p>Save these recovery codes somewhere safe. Each works once. They will not be shown again.</p>
-<ul id="recovery-codes">${recovery.codes.map(code => `<li><code>${e(code)}</code></li>`).join('')}</ul>` : ''}${post(request, values, 'continue', '', 'Continue')}`);
+        const saved = recovery.codes.length ? callout('Save these recovery codes now', 'They are shown once. Each code signs you in one time if you lose your authenticator app.', { tone: 'warning' }) +
+            recoveryCodes(recovery.codes) + small('Keep them in a password manager or somewhere offline. Anyone with a code can pass this step.') : '';
+        return page('Two-factor authentication on', heading('Two-factor authentication is on', 'Sign-ins now ask for a code from this app.') +
+            saved + post(request, values, 'continue', '', button('Continue', { variant: 'primary', size: 'lg', block: true })));
     }
     if (values.action === 'continue') {
         if (values.request_id) {
@@ -89,15 +112,16 @@ ${post(request, values, 'confirm', `${hidden('factor_id', id)}<label for="name">
             ...(all.length === 1 ? [env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(session.user_id)] : []),
             forgetDevices(env, session.user_id), audit(env, 'mfa_factor_removed', session.user_id, { type: factor.type })]);
         notify(env, ctx, session.email, 'a second factor was removed', `The authenticator "${factor.name}" was removed from your account.`);
-        return overview(request, env, session, values, 'Removed.');
+        return overview(request, env, session, values, 'Authenticator app removed');
     }
     if (values.action === 'recovery') {
         invariant(factors.length, 'invalid_request', 'Add a second factor first.');
         const recovery = await recoveryStatements(env, session.user_id);
         await env.DB.batch([...recovery.statements, audit(env, 'recovery_codes_regenerated', session.user_id)]);
         notify(env, ctx, session.email, 'new recovery codes were generated', 'Your recovery codes were replaced. The old ones no longer work.');
-        return page('New recovery codes', `<h1>New recovery codes</h1><p>The old codes no longer work. Save these; they will not be shown again.</p>
-<ul id="recovery-codes">${recovery.codes.map(code => `<li><code>${e(code)}</code></li>`).join('')}</ul><p><a href="/account/mfa">Back</a></p>`);
+        return page('New recovery codes', heading('New recovery codes', 'Your old codes stopped working. Save these before you leave.') +
+            callout('Save these codes now', 'They are shown once. Each code signs you in one time.', { tone: 'warning' }) + recoveryCodes(recovery.codes) +
+            small('Keep them in a password manager or somewhere offline. Anyone with a code can pass this step.') + `<div class="fd-row">${linkButton('Done', '/account/mfa', { variant: 'primary' })}</div>`);
     }
     invariant(false, 'invalid_request', 'Unknown action.');
 }

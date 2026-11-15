@@ -61,5 +61,5 @@ test('consent escapes untrusted names, workspace labels and scope descriptions',
     const flow = await w.start({ resource: resource.replace('team-one', '%3Cscript%3E') });
     const response = await w.call('/agent/consent?request_id=' + flow.id, { headers: { cookie: flow.cookie } });
     const html = await response.text();
-    assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html.split('<main>')[1], /<script>|<img/);
+    assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html.split('<main class="fd-page">')[1], /<script>|<img/);
 });

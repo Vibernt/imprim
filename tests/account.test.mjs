@@ -176,9 +176,9 @@ test('a signed-out visit to the account or second-factor pages gets a page that 
         assert.equal(response.status, 401, path);
         assert.match(response.headers.get('content-type'), /^text\/html/, path);
         const html = await response.text();
-        assert.match(html, /<h1>Sign in to see your account<\/h1>/, path);
+        assert.match(html, /<h1 class="fd-h1">Sign in to see your account<\/h1>/, path);
         assert.match(html, /Your Vibernt account opens from the apps that use it/, path);
-        assert.match(html, /<a href="\/login">sign in here<\/a>/, path);
+        assert.match(html, /<a class="fd-link" href="\/login">sign in here<\/a>/, path);
         assert.ok(!html.includes('<!--identity:'), 'brand markers are filled');
     }
     const post = await w.call('/account/profile', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: w.env.ISSUER }, body: 'display_name=x' });

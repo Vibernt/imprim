@@ -8,14 +8,14 @@ for (const path of ['/login', '/check-email', '/error', '/signed-out']) test(`se
     assert.equal(response.status, path === '/error' ? 400 : 200);
     // Turnstile's origin appears only on the page that renders the widget.
     const turnstile = path === '/login' ? " https://challenges.cloudflare.com" : '', frames = path === '/login' ? 'https://challenges.cloudflare.com' : "'none'";
-    assert.equal(response.headers.get('content-security-policy'), `default-src 'self'; script-src 'self'${turnstile}; frame-src ${frames}; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
+    assert.equal(response.headers.get('content-security-policy'), `default-src 'self'; script-src 'self'${turnstile}; frame-src ${frames}; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
     assert.match(html, /<html lang="en">/);
     if (path !== '/login') assert.ok(!/<(?:script|link|img|iframe)[^>]+(?:src|href)="https?:/i.test(html));
     assert.equal(response.headers.get('referrer-policy'), 'same-origin', 'no-referrer makes browsers send Origin: null on form POSTs, which the origin check refuses');
 });
 test('every page shows the realm name, escaped, and no product is written into the code', async t => {
     const w = await world(t), html = await (await w.call('/signed-out')).text();
-    assert.match(html, /<header class="brand"><span>Vibernt<\/span><\/header>/);
+    assert.match(html, /<div class="fd-brand fd-row" data-gap="3"><svg class="x-wordmark"[^>]*aria-label="Imprim">[\s\S]*?<\/svg><span class="fd-brand-name">Vibernt<\/span><\/div>/);
     assert.match(html, /<title>Signed out · Vibernt<\/title>/);
     w.env.DB.db.prepare("UPDATE realms SET display_name=? WHERE id='default'").run('<b>Acme</b>');
     const { forgetRealms } = await import('../apps/server/src/realms/realm.mjs'); forgetRealms(w.env);

@@ -1,0 +1,273 @@
+/* ==========================================================================
+   Texture & frame — the signature layer. Decorative, quiet, always aria-hidden.
+
+   <div class="fd-ascii" data-fd-ascii="terrain" data-fade="left" aria-hidden="true"></div>
+     A generative character field drawn by fire/js/texture.js. It fills its positioned
+     parent and sits between the parent's background and its content.
+     data-fd-ascii  terrain | waves | orbit | rain | grid | flame | halftone | spark
+     data-tone      neutral (default) | accent | contrast (on an accent or inverse surface)
+     data-fade      left | right | top | bottom | x | y | radial
+     data-inline    in normal flow; give it a height
+     (behaviour attributes are documented in fire/js/texture.js)
+
+   <div class="fd-dotgrid" data-fade="radial" aria-hidden="true"></div>   dot lattice backdrop
+   <span class="fd-crosshair" data-corner="tl"></span>                    one registration mark
+   <div class="fd-corners">…</div>                                        four marks framing a box
+   <div class="fd-noise" aria-hidden="true"></div>                        film grain for large accent areas
+   <span class="fd-glyph" aria-hidden="true"></span>                      empty-state character glyph
+   <span class="fd-shimmer">Searching the web…</span>                     moving highlight on a status
+   <section class="fd-announce">…</section>                               accent announcement surface
+
+   Contrast stays under ~1.6:1 against the surface: neutral ink is a24 in light, a16 in dark.
+   ========================================================================== */
+
+/* ---------- Tokens ---------- */
+:root {
+  /* character field + glyph */
+  --fd-ascii-inline-h: 160px;     /* height of an inline field or dot grid */
+  --fd-ascii-font: 10px;          /* character size of a field (fixed px: it is a pixel grid) */
+  --fd-glyph-font: 10px;
+  --fd-glyph-font-sm: 9px;        /* the 40px glyph */
+  --fd-glyph-40: 40px;
+  --fd-glyph-48: 48px;
+  --fd-glyph-56: 56px;            /* default */
+  --fd-glyph-64: 64px;
+  /* dot grid */
+  --fd-dotgrid-gap: 16px;         /* lattice pitch: default */
+  --fd-dotgrid-gap-sm: 12px;
+  --fd-dotgrid-gap-lg: 24px;
+  --fd-dotgrid-r: 0.75px;         /* dot radius: default */
+  --fd-dotgrid-r-lg: 0.9px;
+  --fd-dotgrid-soft: 0.6px;       /* soft edge added to the dot radius */
+  /* crosshair + corners */
+  --fd-crosshair-size: 9px;       /* length of each registration arm */
+  --fd-crosshair-half: 4px;       /* half of it, rounded down: the centre offset */
+  --fd-corners-gap: 8px;
+  --fd-corners-sm: 160px;         /* [data-size]: a framed figure of a set width (a code to scan, a screenshot) */
+  --fd-corners-md: 240px;
+  --fd-corners-lg: 320px;
+  --fd-corners-xl: 400px;          /* [data-gap] pushes the marks out by this much */
+  /* grain */
+  --fd-noise-tile: 180px;
+  /* shimmer text + announcement */
+  --fd-shimmer-loop: 2.2s;
+  --fd-announce-min-h: 280px;
+  --fd-announce-measure: 34rem;   /* widest line of the announcement body */
+  --fd-announce-ring-gap: 2px;    /* focus ring on the accent: gap, then ring */
+  --fd-announce-ring-w: 4px;
+}
+
+/* ---------- Layering: decorative layers sit above the host's background, below its content ---------- */
+:where(:has(> .fd-ascii:not([data-inline]), > .fd-dotgrid:not([data-inline]), > .fd-noise)) { isolation: isolate; }
+
+/* ---------- Character field ---------- */
+.fd-ascii {
+  /* Ink at twice the resting strength, shown at half opacity: the same tone as --fd-a24 / --fd-a16,
+     with headroom for --fd-texture to go above 1. */
+  --_tx-ink: light-dark(color-mix(in srgb, var(--fd-wash) 48%, transparent), color-mix(in srgb, var(--fd-wash) 36%, transparent));
+  --_tx-opacity: 0.5;
+  --_tx-font-size: var(--fd-ascii-font);
+  position: absolute; inset: 0; z-index: -1;
+  display: block; overflow: hidden;
+  pointer-events: none; user-select: none; -webkit-user-select: none;
+  color: var(--_tx-ink);
+  opacity: calc(var(--_tx-opacity) * var(--fd-texture));
+  font-family: var(--fd-font-mono); font-size: var(--_tx-font-size); font-weight: var(--fd-weight-regular);
+  contain: strict;
+  -webkit-mask-image: var(--_tx-mask, none);
+  mask-image: var(--_tx-mask, none);
+}
+.fd-ascii[data-inline] {
+  position: relative; inset: auto; z-index: auto;
+  width: 100%; height: var(--fd-ascii-inline-h);
+  contain: layout paint;
+}
+.fd-ascii-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  max-width: none;
+}
+
+.fd-ascii[data-tone="accent"] { --_tx-ink: var(--fd-accent-text); --_tx-opacity: 0.4; }
+.fd-ascii[data-tone="contrast"] { --_tx-ink: var(--fd-accent-contrast); --_tx-opacity: 0.38; }
+.fd-ascii[data-tone="strong"] { --_tx-ink: light-dark(color-mix(in srgb, var(--fd-ink-wash) 64%, transparent), color-mix(in srgb, var(--fd-wash) 52%, transparent)); }
+
+/* Fades. "left" means the field fades out toward the left edge. */
+:is(.fd-ascii, .fd-dotgrid)[data-fade="left"] { --_tx-mask: linear-gradient(to right, transparent, #000 var(--_tx-fade, 62%)); }
+:is(.fd-ascii, .fd-dotgrid)[data-fade="right"] { --_tx-mask: linear-gradient(to left, transparent, #000 var(--_tx-fade, 62%)); }
+:is(.fd-ascii, .fd-dotgrid)[data-fade="top"] { --_tx-mask: linear-gradient(to bottom, transparent, #000 var(--_tx-fade, 62%)); }
+:is(.fd-ascii, .fd-dotgrid)[data-fade="bottom"] { --_tx-mask: linear-gradient(to top, transparent, #000 var(--_tx-fade, 62%)); }
+:is(.fd-ascii, .fd-dotgrid)[data-fade="x"] { --_tx-mask: linear-gradient(to right, transparent, #000 22%, #000 78%, transparent); }
+:is(.fd-ascii, .fd-dotgrid)[data-fade="y"] { --_tx-mask: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent); }
+:is(.fd-ascii, .fd-dotgrid)[data-fade="radial"] { --_tx-mask: radial-gradient(closest-side, #000 30%, transparent); }
+
+/* ---------- Glyph: a small ember of characters for empty states ---------- */
+.fd-glyph {
+  --_tx-ink: var(--fd-accent-text);
+  --_tx-opacity: 0.78;
+  --_tx-size: var(--fd-glyph-56);
+  --_tx-font-size: var(--fd-glyph-font);
+  position: relative;
+  display: inline-block; flex: none;
+  width: var(--_tx-size); height: var(--_tx-size);
+  overflow: hidden; pointer-events: none; user-select: none; -webkit-user-select: none;
+  color: var(--_tx-ink); opacity: calc(var(--_tx-opacity) * var(--fd-texture));
+  font-family: var(--fd-font-mono); font-size: var(--_tx-font-size);
+  vertical-align: middle;
+}
+.fd-glyph[data-size="40"] { --_tx-size: var(--fd-glyph-40); --_tx-font-size: var(--fd-glyph-font-sm); }
+.fd-glyph[data-size="48"] { --_tx-size: var(--fd-glyph-48); }
+.fd-glyph[data-size="64"] { --_tx-size: var(--fd-glyph-64); }
+.fd-glyph[data-tone="neutral"] { --_tx-ink: var(--fd-a48); --_tx-opacity: 1; }
+
+/* ---------- Dot grid ---------- */
+.fd-dotgrid {
+  --_tx-gap: var(--fd-dotgrid-gap);
+  --_tx-dot: light-dark(color-mix(in srgb, var(--fd-wash) calc(12% * var(--fd-texture)), transparent), color-mix(in srgb, var(--fd-wash) calc(14% * var(--fd-texture)), transparent));
+  --_tx-r: var(--fd-dotgrid-r);
+  position: absolute; inset: 0; z-index: -1;
+  display: block; pointer-events: none;
+  background-image: radial-gradient(circle at center, var(--_tx-dot) var(--_tx-r), transparent calc(var(--_tx-r) + var(--fd-dotgrid-soft)));
+  background-size: var(--_tx-gap) var(--_tx-gap);
+  background-position: center;
+  -webkit-mask-image: var(--_tx-mask, none);
+  mask-image: var(--_tx-mask, none);
+}
+.fd-dotgrid[data-inline] { position: relative; inset: auto; z-index: auto; width: 100%; height: var(--fd-ascii-inline-h); }
+.fd-dotgrid[data-size="sm"] { --_tx-gap: var(--fd-dotgrid-gap-sm); }
+.fd-dotgrid[data-size="lg"] { --_tx-gap: var(--fd-dotgrid-gap-lg); --_tx-r: var(--fd-dotgrid-r-lg); }
+.fd-dotgrid[data-tone="accent"] { --_tx-dot: color-mix(in srgb, var(--fd-accent) calc(24% * var(--fd-texture)), transparent); }
+
+/* ---------- Crosshair: one registration mark (9px) ---------- */
+.fd-crosshair {
+  --_tx-c: var(--fd-line-strong);
+  --_tx-o: calc(var(--fd-crosshair-half) * -1);
+  display: inline-block; flex: none;
+  width: var(--fd-crosshair-size); height: var(--fd-crosshair-size);
+  pointer-events: none;
+  background:
+    linear-gradient(var(--_tx-c), var(--_tx-c)) center / var(--fd-crosshair-size) var(--fd-hairline) no-repeat,
+    linear-gradient(var(--_tx-c), var(--_tx-c)) center / var(--fd-hairline) var(--fd-crosshair-size) no-repeat;
+}
+/* Placed: the mark's centre lands on the corner pixel of the positioned parent's padding box. */
+.fd-crosshair[data-corner] { position: absolute; z-index: 1; }
+.fd-crosshair[data-corner="tl"] { inset-block-start: var(--_tx-o); inset-inline-start: var(--_tx-o); }
+.fd-crosshair[data-corner="tr"] { inset-block-start: var(--_tx-o); inset-inline-end: var(--_tx-o); }
+.fd-crosshair[data-corner="bl"] { inset-block-end: var(--_tx-o); inset-inline-start: var(--_tx-o); }
+.fd-crosshair[data-corner="br"] { inset-block-end: var(--_tx-o); inset-inline-end: var(--_tx-o); }
+.fd-crosshair[data-tone="accent"] { --_tx-c: var(--fd-accent); }
+
+/* ---------- Corners: four marks on a wrapper's corners ---------- */
+.fd-corners {
+  --_tx-c: var(--fd-line-strong);
+  --_tx-gap: 0px;
+  position: relative;
+}
+.fd-corners::before {
+  content: "";
+  position: absolute; inset: calc(var(--fd-crosshair-half) * -1 - var(--_tx-gap)); z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--_tx-c), var(--_tx-c)) left 0 top var(--fd-crosshair-half) / var(--fd-crosshair-size) var(--fd-hairline) no-repeat,
+    linear-gradient(var(--_tx-c), var(--_tx-c)) left var(--fd-crosshair-half) top 0 / var(--fd-hairline) var(--fd-crosshair-size) no-repeat,
+    linear-gradient(var(--_tx-c), var(--_tx-c)) right 0 top var(--fd-crosshair-half) / var(--fd-crosshair-size) var(--fd-hairline) no-repeat,
+    linear-gradient(var(--_tx-c), var(--_tx-c)) right var(--fd-crosshair-half) top 0 / var(--fd-hairline) var(--fd-crosshair-size) no-repeat,
+    linear-gradient(var(--_tx-c), var(--_tx-c)) left 0 bottom var(--fd-crosshair-half) / var(--fd-crosshair-size) var(--fd-hairline) no-repeat,
+    linear-gradient(var(--_tx-c), var(--_tx-c)) left var(--fd-crosshair-half) bottom 0 / var(--fd-hairline) var(--fd-crosshair-size) no-repeat,
+    linear-gradient(var(--_tx-c), var(--_tx-c)) right 0 bottom var(--fd-crosshair-half) / var(--fd-crosshair-size) var(--fd-hairline) no-repeat,
+    linear-gradient(var(--_tx-c), var(--_tx-c)) right var(--fd-crosshair-half) bottom 0 / var(--fd-hairline) var(--fd-crosshair-size) no-repeat;
+}
+.fd-corners[data-size="sm"] { inline-size: var(--fd-corners-sm); max-inline-size: 100%; }
+.fd-corners[data-size="md"] { inline-size: var(--fd-corners-md); max-inline-size: 100%; }
+.fd-corners[data-size="lg"] { inline-size: var(--fd-corners-lg); max-inline-size: 100%; }
+.fd-corners[data-size="xl"] { inline-size: var(--fd-corners-xl); max-inline-size: 100%; }
+.fd-corners[data-gap] { --_tx-gap: var(--fd-corners-gap); }
+.fd-corners[data-tone="accent"] { --_tx-c: var(--fd-accent); }
+
+/* ---------- Grain: very subtle film noise for large accent areas ---------- */
+.fd-noise {
+  --_tx-opacity: 0.04;
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  opacity: calc(var(--_tx-opacity) * var(--fd-texture));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: var(--fd-noise-tile) var(--fd-noise-tile);
+}
+
+/* ---------- Shimmer text: a highlight sweeping a live status ---------- */
+.fd-shimmer {
+  --_tx-base: var(--fd-text-3);
+  --_tx-hi: var(--fd-text);
+  color: var(--_tx-base);
+  background-image: linear-gradient(90deg, var(--_tx-base) 0%, var(--_tx-base) 38%, var(--_tx-hi) 50%, var(--_tx-base) 62%, var(--_tx-base) 100%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: fd-shimmer-text var(--fd-shimmer-loop) var(--fd-ease-in-out) infinite;
+}
+.fd-shimmer[data-tone="accent"] { --_tx-base: color-mix(in srgb, var(--fd-accent-text) 56%, transparent); --_tx-hi: var(--fd-accent-text); }
+@keyframes fd-shimmer-text { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+/* ---------- Announcement surface: accent block, textures at both sides, contrast text in the middle ---------- */
+.fd-announce {
+  position: relative; isolation: isolate; overflow: hidden;
+  container: fd-announce / inline-size;
+  display: grid; place-items: center;
+  min-height: var(--fd-announce-min-h);
+  padding: var(--fd-space-12) var(--fd-space-6);
+  border-radius: var(--fd-radius-xl);
+  background: var(--fd-accent);
+  color: var(--fd-accent-contrast);
+  text-align: center;
+}
+.fd-announce-art {
+  position: absolute; inset-block: 0; z-index: -1;
+  width: 36%;
+  pointer-events: none;
+}
+.fd-announce-art[data-side="start"] { inset-inline-start: 0; }
+.fd-announce-art[data-side="end"] { inset-inline-end: 0; }
+.fd-announce-body { display: grid; justify-items: center; gap: var(--fd-space-3); max-width: var(--fd-announce-measure); }
+.fd-announce-body > :is(h1, h2, h3, .fd-h1, .fd-h2, .fd-h3) { text-wrap: balance; }
+.fd-announce-body > p { color: color-mix(in srgb, var(--fd-accent-contrast) 84%, transparent); }
+.fd-announce-tag {
+  display: inline-flex; align-items: center; gap: var(--fd-space-1-5);
+  height: var(--fd-control-xs); padding-inline: var(--fd-space-2-5);
+  border-radius: var(--fd-radius-full);
+  background: color-mix(in srgb, var(--fd-accent-contrast) 14%, transparent);
+  box-shadow: inset 0 0 0 var(--fd-hairline) color-mix(in srgb, var(--fd-accent-contrast) 28%, transparent);
+  font-size: var(--fd-text-sm); line-height: var(--fd-lh-sm); font-weight: var(--fd-weight-label);
+}
+.fd-announce-tag > .fd-icon { width: var(--fd-icon-sm); height: var(--fd-icon-sm); }
+.fd-announce-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--fd-space-2); margin-top: var(--fd-space-3); }
+/* On the accent, a ghost button becomes a contrast outline. */
+.fd-announce .fd-btn[data-variant="ghost"] {
+  --_b-fg: var(--fd-accent-contrast);
+  --_b-bg-hover: color-mix(in srgb, var(--fd-accent-contrast) 12%, transparent);
+  --_b-bg-active: color-mix(in srgb, var(--fd-accent-contrast) 18%, transparent);
+  --_b-shadow: inset 0 0 0 var(--fd-hairline) color-mix(in srgb, var(--fd-accent-contrast) 40%, transparent);
+}
+.fd-announce .fd-btn[data-variant="ghost"]:hover { --_b-fg: var(--fd-accent-contrast); }
+.fd-announce .fd-btn:focus-visible { box-shadow: var(--_b-shadow), 0 0 0 var(--fd-announce-ring-gap) var(--fd-accent), 0 0 0 var(--fd-announce-ring-w) var(--fd-accent-contrast); }
+
+@container fd-announce (max-width: 640px) {
+  .fd-announce-art[data-side="end"] { display: none; }
+  .fd-announce-art[data-side="start"] {
+    width: 100%; height: 46%;
+    -webkit-mask-image: linear-gradient(to bottom, #000, transparent);
+    mask-image: linear-gradient(to bottom, #000, transparent);
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .fd-shimmer {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--fd-text-3);
+  }
+  .fd-shimmer[data-tone="accent"] { color: var(--fd-accent-text); }
+}

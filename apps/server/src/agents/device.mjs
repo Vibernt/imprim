@@ -4,6 +4,7 @@ import { readBody, json, uniqueParams, tokenShape } from '../lib/http.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { limitAgentAddress } from '../auth/rate-limit.mjs';
 import { page } from '../pages/layout.mjs';
+import { heading, field, button } from '../pages/ui.mjs';
 import { checkPolicy } from './policy.mjs';
 import { authenticateAgent } from './client-auth.mjs';
 import { beginAgentSignIn } from './authorize.mjs';
@@ -30,12 +31,14 @@ export async function deviceAuthorization(request, env) {
 }
 export async function devicePage(request, env) {
     const query = uniqueParams(new URL(request.url).searchParams);
-    if (!query.user_code) return page('Connect a device', '<h1>Connect a device</h1><p>Enter the code shown by your agent. Only approve a connection you started.</p><form method="get" action="/device"><label>Device code<input name="user_code" required autocomplete="off"></label><button>Continue</button></form>');
+    if (!query.user_code) return page('Connect a device', heading('Connect a device', 'Enter the code your agent shows you.') +
+        `<form class="fd-stack" data-gap="4" method="get" action="/device">${field({ id: 'user_code', label: 'Device code', name: 'user_code', required: true, autocomplete: 'off',
+            spellcheck: 'false', size: 'lg', placeholder: 'BCDF-GHJK', hint: 'Only enter a code from an agent you started yourself.' })}${button('Continue', { variant: 'primary', size: 'lg', block: true })}</form>`);
     await limitAgentAddress(env, request, 'user-code');
     const code = query.user_code.replaceAll('-', '').toUpperCase();
-    invariant(/^[BCDFGHJKLMNPQRSTVWXZ]{8}$/.test(code), 'invalid_request', 'Invalid device code.');
+    invariant(/^[BCDFGHJKLMNPQRSTVWXZ]{8}$/.test(code), 'invalid_request', 'That code isn’t valid. Codes are 8 letters, like BCDF-GHJK.');
     const row = await env.DB.prepare("SELECT * FROM agent_devices WHERE user_code_hash=? AND expires_at>? AND status='pending'").bind(await sha256(code), Date.now()).first();
-    invariant(row, 'expired_token', 'Device code expired, invalid, or already completed.');
+    invariant(row, 'expired_token', 'This code has expired, was already used or doesn’t exist. Get a new code from your agent.');
     const context = await checkPolicy(env, row);
     return beginAgentSignIn(request, env, row, context, row.hash);
 }

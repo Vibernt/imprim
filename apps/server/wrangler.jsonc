@@ -28,6 +28,9 @@
     "consumers": [{ "queue": "imprim-logout", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 5, "dead_letter_queue": "imprim-logout-dlq" }]
   },
   "triggers": { "crons": ["* * * * *"] },
+  // The Fire design system (public/fire: CSS, ES modules, fonts) is served as static files before the Worker runs.
+  // Any other path falls through to the Worker. public/_headers sets their security headers.
+  "assets": { "directory": "public" },
   "env": {
     // Every release runs here first (docs/DEPLOY.md). Email-link sign-in only until staging OAuth callbacks exist.
     "staging": {

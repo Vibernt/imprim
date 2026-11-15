@@ -3,7 +3,8 @@ import { getClient, registeredUri } from './clients.mjs';
 import { getSession, requireCsrf, cookie, SESSION_COOKIE, CSRF_COOKIE, cookies } from '../auth/session.mjs';
 import { uniqueParams, readBody, redirect } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
-import { page, escapeHtml } from '../pages/layout.mjs';
+import { page } from '../pages/layout.mjs';
+import { heading, hidden, button } from '../pages/ui.mjs';
 import { audit } from '../services/audit.mjs';
 import { logoutHint } from './logout-hint.mjs';
 async function parameters(env, values, session) {
@@ -29,7 +30,8 @@ export async function logout(request, env, ctx) {
     if (request.method === 'GET') {
         if (!session) return redirect(destination(env, values));
         const fields = { client_id: values.client_id, post_logout_redirect_uri: values.post_logout_redirect_uri || '', state: values.state || '', id_token_hint: values.id_token_hint || '', csrf: cookies(request)[CSRF_COOKIE] || '' };
-        return page('Sign out', `<h1>Sign out of ${escapeHtml(env.REALM.display_name)}?</h1><form method="post" action="/logout">${Object.entries(fields).map(([k,v]) => `<input type="hidden" name="${k}" value="${escapeHtml(v)}">`).join('')}<button>Sign out</button></form>`,
+        return page('Sign out', heading(`Sign out of ${env.REALM.display_name}?`, 'This ends your session in this browser.') +
+            `<form method="post" action="/logout">${Object.entries(fields).map(([k, v]) => hidden(k, v)).join('')}${button('Sign out', { variant: 'primary', size: 'lg', block: true })}</form>`,
             { formTargets: values.post_logout_redirect_uri ? [values.post_logout_redirect_uri] : [] });
     }
     await requireCsrf(request, env, session, values.csrf);

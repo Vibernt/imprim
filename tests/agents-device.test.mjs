@@ -29,8 +29,14 @@ test('device user-code entry, pending, permanent slow_down, consent, tokens and 
     await error(await w.poll(), 'slow_down'); assert.equal(w.env.DB.db.prepare('SELECT interval FROM agent_devices').get().interval, 15);
     const browser = await w.browser();
     const consent = await w.call('/agent/consent?request_id=' + browser.id, { headers: { cookie: browser.cookie } });
-    assert.match(await consent.text(), /Example Agent.*team-one.*Read workspace/s);
-    assert.equal((await w.approve(browser)).status, 200);
+    const consentHtml = await consent.text();
+    assert.match(consentHtml, /Example Agent.*team-one.*Read workspace/s);
+    // A device code reaches whoever started the flow, so the device consent always carries the phishing alert.
+    assert.match(consentHtml, /<div class="fd-callout" data-tone="danger" role="alert">/);
+    const entry = await (await w.call('/device', { headers: { cookie: w.cookie } })).text();
+    assert.match(entry, /<form class="fd-stack" data-gap="4" method="get" action="\/device"><div class="fd-field"><label class="fd-field-label" for="user_code">Device code<\/label><input class="fd-input"[^>]* name="user_code"[^>]* required/);
+    const approved = await w.approve(browser); assert.equal(approved.status, 200);
+    assert.match(await approved.text(), /<h1 class="fd-h1">Agent connected<\/h1>/);
     w.ready(); const tokens = await (await w.poll()).json(); assert.ok(tokens.access_token); assert.ok(tokens.refresh_token);
     const claim = JSON.parse(Buffer.from(tokens.access_token.split('.')[1], 'base64url')); assert.equal(claim.aud, resource); assert.equal(claim.sub, w.user.id);
     await error(await w.poll(), 'invalid_grant'); assert.equal((await w.refresh(tokens.refresh_token)).status, 200);

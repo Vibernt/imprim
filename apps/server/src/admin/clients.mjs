@@ -4,7 +4,7 @@ import { validateSignInSettings } from '../oidc/sign-in-methods.mjs';
 import { validateAgentSettings, settingNames } from '../agents/settings.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { auditStatement } from './auth.mjs';
-import { validateBranding, resolveBranding, assertContrast } from '../branding/tokens.mjs';
+import { validateBranding } from '../branding/tokens.mjs';
 import { assetExists } from '../branding/assets.mjs';
 import { realmId } from '../realms/realm.mjs';
 const jsonFields = ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains','token_exchange_from',
@@ -40,9 +40,8 @@ function validate(config, realmBranding = {}) {
     invariant(typeof config.backchannel_uri === 'string' && config.backchannel_uri.length > 0, 'invalid_request', 'A back-channel URI is required for session termination.');
     registeredUri({ redirect_uris: JSON.stringify([config.backchannel_uri]), dev: 0 }, config.backchannel_uri);
     validateSignInSettings(methods, config.allowed_domains);
-    // App branding overrides the realm's tokens; the merged result must still meet WCAG AA contrast.
+    // App branding overrides the realm's fields and look, key by key.
     validateBranding(config.branding, { app: true });
-    assertContrast(resolveBranding(realmBranding, config.branding));
     const value = { ...config, sign_in_methods: methods, google_hosted_domains: domains, ...agent };
     delete value.confidential;
     return Object.fromEntries(Object.entries(value).map(([k,v]) => [k, jsonFields.includes(k) ? JSON.stringify(v) : v]));

@@ -57,7 +57,7 @@ test('unconfigured Turnstile enables email without contacting siteverify', async
     const w = await world(t); delete w.env.TURNSTILE_SECRET; delete w.env.TURNSTILE_SITE_KEY;
     const network = t.mock.method(globalThis, 'fetch', () => { throw new Error('unexpected'); });
     const flow = await begin(w), html = await (await w.call('/login')).text();
-    assert.match(html, /<button id="send-link" type="submit" value="link">/);
+    assert.match(html, /<button class="fd-btn" type="submit"[^>]* id="send-link" value="link">/);
     assert.doesNotMatch(html, /cf-turnstile|challenges.cloudflare.com\/turnstile\/v0\/api.js/);
     assert.equal((await attempt(w, flow, '')).status, 200);
     assert.equal(w.mails.length, 1);
@@ -72,7 +72,7 @@ test('configured sign-in renders only the approved external script and widget', 
     const w = await world(t), html = await (await w.call('/login')).text();
     assert.match(html, /<script src="https:\/\/challenges.cloudflare.com\/turnstile\/v0\/api.js" async defer><\/script>/);
     assert.match(html, /class="cf-turnstile" data-sitekey="test-site-key" data-action="sign_in"/);
-    assert.match(html, /<button id="send-link" type="submit" value="link">/);
+    assert.match(html, /<button class="fd-btn" type="submit"[^>]* id="send-link" value="link">/);
     assert.doesNotMatch(html, /<script nonce=|<script>(?:.|\n)*?<\/script>/);
 });
 for (const name of ['EMAIL', 'AUTH_LIMITER', 'API_LIMITER']) test(`missing ${name} is explicit failure`, async t => {

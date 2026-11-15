@@ -6,12 +6,18 @@ import { totpAt, fromBase32, currentStep } from '../../apps/server/src/auth/totp
 export async function enrolMfa(w, cookie, csrf) {
     const form = body => w.call('/account/mfa', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: w.env.ISSUER, cookie }, body: new URLSearchParams({ csrf, ...body }) });
     const start = await (await form({ action: 'start' })).text();
-    const secret = start.match(/id="totp-secret">([A-Z2-7 ]+)</)[1].replaceAll(' ', '');
+    const secret = start.match(/<code class="fd-code" id="totp-secret">([A-Z2-7 ]+)<\/code>/)[1].replaceAll(' ', '');
     const factor = start.match(/name="factor_id" value="([^"]+)"/)[1];
     const code = async (offset = 0) => totpAt(fromBase32(secret), currentStep() + offset);
     const confirmed = await form({ action: 'confirm', factor_id: factor, name: 'Test phone', code: await code() });
     assert.equal(confirmed.status, 200, await confirmed.clone().text());
-    return { secret, code, recovery: [...(await confirmed.text()).matchAll(/<li><code>([A-Z2-7-]+)<\/code><\/li>/g)].map(m => m[1]) };
+    return { secret, code, recovery: [...(await confirmed.text()).matchAll(/<li><code class="fd-code">([A-Z2-7-]+)<\/code><\/li>/g)].map(m => m[1]) };
+}
+// Fire pages: only Fire (fd-) and stopgap (x-) classes and no inline styles (docs/fire/GUIDE.md section 4).
+export function assertFireMarkup(html) {
+    assert.ok(!/\sstyle=/.test(html) && !/<style/.test(html), 'no inline styles');
+    for (const [, list] of html.matchAll(/\sclass="([^"]*)"/g))
+        for (const name of list.split(/\s+/).filter(Boolean)) assert.match(name, /^(fd|x)-[a-z0-9-]+$/, `class ${name}`);
 }
 export async function adminLogin(w) {
     const page = await w.call('/login'), browser = cookieJar(page);

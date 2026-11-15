@@ -11,7 +11,12 @@ test('logout confirms first, requires CSRF POST, revokes identity/access session
     const w = await world(t), signed = await login(w, t);
     const tokens = await (await w.exchange(signed.code)).json();
     const response = await w.call('/logout?' + query(), { headers: { cookie: signed.cookie } });
-    assert.equal(response.status, 200); assert.match(await response.text(), /method="post"/);
+    const html = await response.text();
+    assert.equal(response.status, 200); assert.match(html, /<form method="post" action="\/logout">/);
+    assert.match(html, /<h1 class="fd-h1">Sign out of [^<]+\?<\/h1>/);
+    for (const [name, value] of [['client_id', 'app'], ['post_logout_redirect_uri', 'https://app.example/bye'], ['state', 'logout-state']])
+        assert.ok(html.includes(`<input type="hidden" name="${name}" value="${value}">`), name);
+    assert.match(html, /<input type="hidden" name="csrf" value="[^"]+">/);
     // Chrome applies form-action to the redirect after the POST, so the page allows the registered post-logout origin.
     assert.match(response.headers.get('content-security-policy'), /form-action 'self' https:\/\/app\.example;/);
     assert.equal(w.env.DB.db.prepare('SELECT count(*) AS n FROM sessions').get().n, 1);
@@ -70,4 +75,11 @@ test('malformed base64url hint signature is a client error', async t => {
     const w = await world(t), signed = await login(w, t), tokens = await (await w.exchange(signed.code)).json();
     const hint = tokens.id_token.split('.').slice(0,2).join('.') + '.A';
     assert.equal((await w.call('/logout?' + new URLSearchParams({ id_token_hint: hint }), { headers: { cookie: signed.cookie } })).status, 400);
+});
+test('logout confirmation escapes the state it carries back', async t => {
+    const w = await world(t), signed = await login(w, t);
+    const params = new URLSearchParams({ client_id: 'app', post_logout_redirect_uri: 'https://app.example/bye', state: '"><img src=x onerror=alert(1)>' });
+    const html = await (await w.call('/logout?' + params, { headers: { cookie: signed.cookie } })).text();
+    assert.ok(html.includes('<input type="hidden" name="state" value="&quot;&gt;&lt;img src=x onerror=alert(1)&gt;">'));
+    assert.doesNotMatch(html.split('<main class="fd-page">')[1], /<img|<script/);
 });

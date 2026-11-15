@@ -1,31 +1,38 @@
-// Branding: tokens with contrast checks, theme stylesheet, assets with SVG safety, branded pages and emails, editor.
+// Branding: a Fire look, the brand stylesheet, assets with SVG safety, branded pages and emails, editor.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { world, begin, login, turnstile } from './support/world.mjs';
 import { adminLogin } from './support/admin.mjs';
-import { validateBranding, resolveBranding, assertContrast, contrast } from '../apps/server/src/branding/tokens.mjs';
+import { validateBranding, resolveBranding } from '../apps/server/src/branding/tokens.mjs';
+import { validateLook, resolveLook, lookAttributes, lookCss } from '../apps/server/src/branding/look.mjs';
 import { checkAsset } from '../apps/server/src/branding/assets.mjs';
 import { themeCss } from '../apps/server/src/branding/theme.mjs';
 import { forgetRealms } from '../apps/server/src/realms/realm.mjs';
 const svg = body => new TextEncoder().encode(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">${body}</svg>`);
-test('contrast uses WCAG relative luminance; the defaults meet AA in light and dark', () => {
-    assert.equal(contrast('#000000', '#ffffff').toFixed(1), '21.0');
-    assert.equal(contrast('#777777', '#ffffff').toFixed(2), '4.48');
-    assertContrast(resolveBranding());
+test('a look is Fire tweak state: palettes, type sets and choices from Fire, tone and scales in range and on step', () => {
+    assert.ok(validateLook({ palette: 'forest', type: 'editorial', tone: { hue: 24, vivid: 120, light: -3, warmth: 40 }, theme: 'dark', density: 'compact', corners: 1.25, lines: 1.5, textSize: 'lg', contrast: 'high', motion: 'off', texture: 0.35 }));
+    for (const bad of [{ palette: 'neon' }, { palette: ['forest'] }, { type: 'comic' }, { tone: { hue: 181 } }, { tone: { vivid: 1.5 } }, { tone: { sat: 1 } }, { corners: 1.1 }, { corners: '1' },
+        { lines: 3 }, { texture: 2 }, { motion: 'fast' }, { css: 'body{}' }, []])
+        assert.throws(() => validateLook(bad), error => error.code === 'branding', JSON.stringify(bad));
 });
-test('branding refuses unknown fields, bad colours, fonts, links, copy and low contrast', () => {
-    for (const bad of [{ css: 'body{}' }, { theme: { primary: 'red' } }, { theme: { font: 'Comic Sans' } }, { theme: { radius: 99 } }, { privacy_url: 'http://x.test' },
-        { privacy_url: 'javascript:alert(1)' }, { copy: { sign_in_heading: '<b>‮</b>' } }, { copy: { unknown: 'x' } }, { logo_light: '../etc' }, { theme_dark: { font: 'serif' } }])
+test('branding refuses unknown fields, a bad look, links and copy', () => {
+    for (const bad of [{ css: 'body{}' }, { theme: { primary: '#0b5d1e' } }, { look: { palette: 'neon' } }, { privacy_url: 'http://x.test' },
+        { privacy_url: 'javascript:alert(1)' }, { copy: { sign_in_heading: '<b>‮</b>' } }, { copy: { unknown: 'x' } }, { logo_light: '../etc' }])
         assert.throws(() => validateBranding(bad), error => error.code === 'branding', JSON.stringify(bad));
-    assert.throws(() => assertContrast(resolveBranding({ theme: { text: '#999999' } })), error => error.code === 'branding_contrast');
-    assert.throws(() => assertContrast(resolveBranding({ theme: { primary: '#ffeb3b', primary_text: '#ffffff' } })), error => error.code === 'branding_contrast');
-    assert.ok(validateBranding({ name: 'Acme', theme: { primary: '#0b5d1e', font: 'serif', radius: 4 }, copy: { sign_in_heading: 'Welcome back' }, privacy_url: 'https://acme.test/privacy' }));
+    assert.ok(validateBranding({ name: 'Acme', look: { palette: 'forest', type: 'book', corners: 0.5 }, copy: { sign_in_heading: 'Welcome back' }, privacy_url: 'https://acme.test/privacy' }));
 });
-test('the theme stylesheet sets variables only, for light and dark', () => {
-    const css = themeCss(resolveBranding({ theme: { primary: '#0b5d1e', font: 'serif' }, theme_dark: { primary: '#7fd18f' } }));
-    assert.match(css, /--primary:#0b5d1e/); assert.match(css, /prefers-color-scheme:dark\)\{:root\{--primary:#7fd18f/);
-    assert.match(css, /--font:Charter/);
-    assert.ok(!/url\(|@import|expression/i.test(css));
+test('the brand stylesheet and <html> attributes apply a look as Fire tweaks do; the default look writes nothing', () => {
+    assert.equal(themeCss(resolveBranding()), ''); assert.equal(lookAttributes(resolveLook()), '');
+    const shaped = resolveLook({ palette: 'forest', corners: 1.5, motion: 'off', density: 'compact', theme: 'dark', type: 'editorial' });
+    assert.equal(lookAttributes(shaped), ' data-palette="forest" data-type="editorial" data-theme="dark" data-density="compact"');
+    assert.equal(lookCss(shaped), ':root:root{--fd-radius-scale:1.5;--fd-motion:0}\n');
+    // A toned palette is written out in full, so data-palette is left off and every palette token is a light-dark() pair.
+    const toned = resolveLook({ palette: 'forest', tone: { hue: 30 } }), css = lookCss(toned);
+    assert.ok(!lookAttributes(toned).includes('data-palette'));
+    assert.match(css, /--fd-accent:light-dark\(#[0-9a-f]{6}, ?#[0-9a-f]{6}\)/);
+    assert.ok(!/url\(|@import|expression|[<>{}]/.test(css.slice(':root:root{'.length, -2)));
+    // The realm's look, then the app's, tone per key.
+    assert.deepEqual(resolveLook({ palette: 'iris', tone: { hue: 10 } }, { corners: 0.5, tone: { warmth: 20 } }).tone, { hue: 10, vivid: 100, light: 0, warmth: 20 });
 });
 test('assets: magic bytes must match, SVGs with script, handlers, styles, links or entities are refused, size is capped', () => {
     assert.doesNotThrow(() => checkAsset('image/svg+xml', svg('<path d="M0 0h10v10z" fill="#123456"/>')));
@@ -48,32 +55,33 @@ test('admins upload a logo and set realm branding; pages show it with a sandboxe
     assert.match(asset.headers.get('content-security-policy'), /sandbox/);
     assert.equal(asset.headers.get('x-content-type-options'), 'nosniff');
     const { version } = await (await admin.get('branding')).json();
-    assert.equal((await admin.post('branding', { version, branding: { theme: { text: '#cccccc' } } })).status, 400, 'contrast checked on save');
+    assert.equal((await admin.post('branding', { version, branding: { look: { palette: 'neon' } } })).status, 400, 'look checked on save');
     assert.equal((await admin.post('branding', { version, branding: { logo_light: 'a'.repeat(64) } })).status, 400, 'unknown asset');
     const saved = await admin.post('branding', { version, branding: { logo_light: id, legal_name: 'Vibernt Ltd', privacy_url: 'https://vibernt.example/privacy', terms_url: 'https://vibernt.example/terms',
-        support_email: 'help@vibernt.example', theme: { primary: '#0b5d1e' }, copy: { signed_out: 'See you soon.', footer: 'Built on Imprim' } } });
+        support_email: 'help@vibernt.example', look: { palette: 'forest', corners: 1.5 }, copy: { signed_out: 'See you soon.', footer: 'Built on Imprim' } } });
     assert.equal(saved.status, 200, await saved.clone().text());
     assert.equal((await admin.post('branding', { version, branding: {} })).status, 409, 'stale version');
     const page = await (await w.call('/signed-out')).text();
-    assert.match(page, new RegExp(`<img src="/assets/brand/${id}" alt="Vibernt">`));
+    assert.match(page, new RegExp(`<img class="x-logo" src="/assets/brand/${id}" alt="Vibernt">`));
+    assert.match(page, /<html lang="en" data-palette="forest">/);
     assert.match(page, /<link rel="stylesheet" href="\/assets\/theme.css">/);
-    assert.match(page, /<a href="https:\/\/vibernt.example\/privacy">Privacy<\/a> · <a href="https:\/\/vibernt.example\/terms">Terms<\/a>/);
+    assert.match(page, /<a class="fd-link" href="https:\/\/vibernt.example\/privacy">Privacy<\/a><a class="fd-link" href="https:\/\/vibernt.example\/terms">Terms<\/a>/);
     assert.match(page, /See you soon\./); assert.match(page, /© Vibernt Ltd/);
-    assert.match(await (await w.call('/assets/theme.css')).text(), /--primary:#0b5d1e/);
+    assert.match(await (await w.call('/assets/theme.css')).text(), /--fd-radius-scale:1.5/);
     assert.equal((await w.call('/assets/brand/' + 'f'.repeat(64))).status, 404);
 });
 test('an app overrides the realm: name, copy and theme on its sign-in page and in its sign-in email', async t => {
     const w = await world(t);
     w.env.DB.db.prepare("UPDATE realms SET config=json_set(config,'$.branding',json(?)) WHERE id='default'").run(JSON.stringify({ support_email: 'help@vibernt.example', legal_name: 'Vibernt Ltd' }));
-    w.env.DB.db.prepare("UPDATE clients SET branding=? WHERE id='app'").run(JSON.stringify({ name: 'Assay', theme: { primary: '#5b21b6' }, copy: { sign_in_heading: 'Welcome to Assay', sign_in_help: 'Use your work email.' } }));
+    w.env.DB.db.prepare("UPDATE clients SET branding=? WHERE id='app'").run(JSON.stringify({ name: 'Assay', look: { palette: 'iris', corners: 0.5 }, copy: { sign_in_heading: 'Welcome to Assay', sign_in_help: 'Use your work email.' } }));
     forgetRealms(w.env);
     const html = await (await w.authorize()).text();
-    assert.match(html, /<h1>Welcome to Assay<\/h1><p>Use your work email\.<\/p>/);
-    assert.match(html, /<html lang="en">/);
+    assert.match(html, /<h1 class="fd-h1">Welcome to Assay<\/h1><p class="fd-muted">Use your work email\.<\/p>/);
+    assert.match(html, /<html lang="en" data-palette="iris">/);
     assert.match(html, /<link rel="stylesheet" href="\/assets\/theme.css\?client=app">/);
-    assert.match(html, /<header class="brand"><span>Assay<\/span><\/header>/);
-    assert.match(await (await w.call('/assets/theme.css?client=app')).text(), /--primary:#5b21b6/);
-    assert.match(await (await w.call('/assets/theme.css?client=other')).text(), /--primary:#2346d8/);
+    assert.match(html, /<span class="fd-brand-name">Assay<\/span>/);
+    assert.match(await (await w.call('/assets/theme.css?client=app')).text(), /--fd-radius-scale:0.5/);
+    assert.equal(await (await w.call('/assets/theme.css?client=other')).text(), '');
     turnstile(t);
     const flow = await begin(w);
     await w.post('/v1/auth/magic/request', { request_id: flow.request_id, email: 'person@example.com', turnstile: crypto.randomUUID() }, flow.cookie);
@@ -81,14 +89,14 @@ test('an app overrides the realm: name, copy and theme on its sign-in page and i
     assert.equal(w.mails.at(-1).subject, 'Sign in to Assay');
     assert.match(w.mails.at(-1).text, /Help: help@vibernt\.example\n© Vibernt Ltd$/);
 });
-test('app branding is validated when saved, against the realm, including contrast', async t => {
+test('app branding is validated when saved, look included', async t => {
     const w = await world(t); turnstile(t);
     w.env.DB.db.exec("UPDATE clients SET backchannel_uri='https://app.example/backchannel' WHERE id='app'");
     const admin = await adminLogin(w);
     const current = await (await admin.get('clients/app')).json();
-    assert.equal((await admin.post('clients/app', { version: current.version, branding: { name: 'X', theme: { primary: '#fafafa' } } })).status, 400);
+    assert.equal((await admin.post('clients/app', { version: current.version, branding: { name: 'X', look: { tone: { hue: 999 } } } })).status, 400);
     assert.equal((await admin.post('clients/app', { version: current.version, branding: { name: 'X', script: 'alert(1)' } })).status, 400);
-    const ok = await admin.post('clients/app', { version: current.version, branding: { name: 'X', theme: { primary: '#14532d' } } });
+    const ok = await admin.post('clients/app', { version: current.version, branding: { name: 'X', look: { palette: 'ocean' } } });
     assert.equal(ok.status, 200, await ok.clone().text());
 });
 test('branded text is escaped everywhere', async t => {
@@ -148,24 +156,21 @@ test('a 200 KB logo uploads through HTTP and comes back byte for byte (D1 return
     assert.equal((await admin.post('branding/assets', { content_type: 'image/svg+xml', data: b64.slice(0, 8) + ' \n ' + b64.slice(8) })).status, 400);
     assert.equal((await admin.post('branding/assets', { content_type: 'image/svg+xml', data: b64, extra: 1 })).status, 400);
 });
-test('a realm change that would leave an app failing contrast is refused, naming the app', async t => {
+test('a realm saves its look and an app overrides part of it; a bad look is refused without an audit row', async t => {
     const w = await world(t); turnstile(t);
     w.env.DB.db.exec("UPDATE clients SET backchannel_uri='https://app.example/backchannel' WHERE id='app'");
     const admin = await adminLogin(w);
-    const current = await (await admin.get('clients/app')).json();
-    assert.equal((await admin.post('clients/app', { version: current.version, branding: { name: 'X', theme: { primary: '#14532d' } } })).status, 200);
     const { version } = await (await admin.get('branding')).json();
-    const dark = { background: '#000000', surface: '#000000', text: '#ffffff', muted: '#bbbbbb', primary: '#8aa8ff', primary_text: '#000000', border: '#333333', danger: '#ff8f87' };
-    const refused = await admin.post('branding', { version, branding: { theme: dark } });
-    assert.equal(refused.status, 400);
-    assert.match((await refused.json()).error_description, /\bapp\b/);
+    assert.equal((await admin.post('branding', { version, branding: { look: { corners: 3 } } })).status, 400);
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_branding_update'").get().n, 0);
+    assert.equal((await admin.post('branding', { version, branding: { look: { palette: 'midnight', type: 'terminal' } } })).status, 200);
+    const current = await (await admin.get('clients/app')).json();
+    assert.equal((await admin.post('clients/app', { version: current.version, branding: { name: 'X', look: { type: 'editorial' } } })).status, 200);
+    const html = await (await w.authorize()).text();
+    assert.match(html, /<html lang="en" data-palette="midnight" data-type="editorial">/);
 });
-test('contrast covers the footer (muted on background) and warnings (danger on surface); type confusion is refused', () => {
-    assert.throws(() => assertContrast(resolveBranding({ theme: { background: '#9aa0a6' } })), error => error.code === 'branding_contrast');
-    assert.throws(() => assertContrast(resolveBranding({ theme_dark: { danger: '#9b1c1c' } })), error => error.code === 'branding_contrast');
-    assert.match(themeCss(resolveBranding()), /--danger:#b42318/);
-    for (const bad of [{ locale: ['en'] }, { theme: { font: ['serif'] } }, { name: 'Acme‮' }, { name: 'Acme\u0085' }])
+test('type confusion and spoofing characters are refused', () => {
+    for (const bad of [{ locale: ['en'] }, { look: { palette: ['forest'] } }, { look: { tone: { hue: '30' } } }, { name: 'Acme‮' }, { name: 'Acme\u0085' }])
         assert.throws(() => validateBranding(bad), error => error.code === 'branding', JSON.stringify(bad));
 });
 test('an app\'s empty name falls back to the realm\'s branding name', async t => {
@@ -182,15 +187,15 @@ test('branding is realm-scoped: assets, app themes and previews of another realm
     const ACME = 'https://id.acme.test';
     w.env.DB.db.prepare(`INSERT INTO realms(id,issuer,display_name,config,created) VALUES('acme',?,'Acme','{}',0)`).run(ACME);
     w.env.DB.db.prepare(`INSERT INTO clients(id,secret_hash,redirect_uris,signup_policy,sign_in_methods,realm_id,branding) VALUES('acme-app',?,?,'open','["email"]','acme',?)`)
-        .run(await sha256('secret'), JSON.stringify(['https://acme-app.test/callback']), JSON.stringify({ name: 'AcmeApp', theme: { primary: '#5b21b6' } }));
+        .run(await sha256('secret'), JSON.stringify(['https://acme-app.test/callback']), JSON.stringify({ name: 'AcmeApp', look: { corners: 0.25 } }));
     forgetRealms(w.env);
     const acme = path => worker.fetch(new Request(ACME + path), w.env, { waitUntil() {} });
     const admin = await adminLogin(w);
     const up = await (await admin.post('branding/assets', { content_type: 'image/svg+xml', data: Buffer.from(`<svg ${NS}><path d="M0 0h1v1z"/></svg>`).toString('base64') })).json();
     assert.equal((await w.call(up.url)).status, 200);
     assert.equal((await acme(up.url)).status, 404);
-    assert.doesNotMatch(await (await w.call('/assets/theme.css?client=acme-app')).text(), /#5b21b6/);
-    assert.match(await (await acme('/assets/theme.css?client=acme-app')).text(), /#5b21b6/);
+    assert.doesNotMatch(await (await w.call('/assets/theme.css?client=acme-app')).text(), /0\.25/);
+    assert.match(await (await acme('/assets/theme.css?client=acme-app')).text(), /--fd-radius-scale:0.25/);
     assert.doesNotMatch(await (await w.call('/admin/branding/preview?client=acme-app', { headers: { cookie: admin.cookie } })).text(), /AcmeApp/);
 });
 test('branding writes need the CSRF token and the issuer Origin', async t => {
@@ -209,6 +214,6 @@ test('agent consent uses the merged realm and app branding', async t => {
     const flow = await w.start();
     const html = await (await w.call('/agent/consent?request_id=' + flow.id, { headers: { cookie: flow.cookie } })).text();
     assert.match(html, /Agents act as you, within the scopes below\./);
-    assert.match(html, /App: Example App/);
+    assert.match(html, /<dt class="fd-kv-key">App<\/dt><dd class="fd-kv-value"><span class="fd-kv-text">Example App<\/span><\/dd>/);
     assert.match(html, /theme\.css\?client=app/);
 });

@@ -83,7 +83,7 @@ test('DCR is public only, rate limited per IP, and expiry removes unused clients
     const data = await registered.json(); assert.equal(data.token_endpoint_auth_method, 'none'); assert.equal(data.client_secret, undefined);
     const flow = await w.start({ client_id: data.client_id, redirect_uri: 'http://localhost:5555/cb' });
     assert.equal(flow.response.status, 303);
-    const page = await w.call('/agent/consent?request_id=' + flow.id, { headers: { cookie: flow.cookie } }); assert.match(await page.text(), /Unverified agent calling itself “Unverified Agent”/);
+    const page = await w.call('/agent/consent?request_id=' + flow.id, { headers: { cookie: flow.cookie } }); assert.match(await page.text(), /<h1 class="fd-h1">Connect an unverified agent calling itself “Unverified Agent”\?<\/h1>/);
     for (let i = 0; i < 6; i++) assert.equal((await w.post('/register', body)).status, 201);
     await error(await w.post('/register', body), 'rate_limit', 429);
     assert.equal((await w.post('/register', body, '', { 'cf-connecting-ip': '203.0.113.2' })).status, 201);

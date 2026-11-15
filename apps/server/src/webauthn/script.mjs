@@ -4,7 +4,7 @@ const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\\+/g,
 const unb64=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));
 const csrf=()=>(document.cookie.match(/(?:^|; )__Host-vi_csrf=([^;]+)/)||[])[1]||'';
 const say=text=>{const m=document.getElementById('message');if(m)m.textContent=text;};
-async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-csrf-token':csrf()},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error_description||'The passkey step failed.');return j;}
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-csrf-token':csrf()},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error_description||'The passkey step didn’t finish. Try again.');return j;}
 async function assertWith(extra){
  const o=(await post('/v1/auth/passkey/options',extra)).publicKey;
  const c=await navigator.credentials.get({publicKey:{...o,challenge:unb64(o.challenge),allowCredentials:o.allowCredentials.map(x=>({...x,id:unb64(x.id)}))}});
@@ -20,5 +20,5 @@ wire('passkey-add',async()=>{
  const c=await navigator.credentials.create({publicKey:{...o,challenge:unb64(o.challenge),user:{...o.user,id:unb64(o.user.id)},excludeCredentials:o.excludeCredentials.map(x=>({...x,id:unb64(x.id)}))}});
  const added=await post('/account/passkeys/register',{name:(document.getElementById('passkey-name')||{}).value,clientDataJSON:b64(c.response.clientDataJSON),attestationObject:b64(c.response.attestationObject)});
  if(!added.recovery_codes.length){location.reload();return;}
- const m=document.getElementById('message');m.textContent='Passkey added. Save these recovery codes; each works once and they will not be shown again: '+added.recovery_codes.join('  ');
+ const m=document.getElementById('message');m.textContent='Passkey added. Save these recovery codes now. Each works once, and they are not shown again: '+added.recovery_codes.join('  ');
 });`;

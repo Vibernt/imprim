@@ -1,7 +1,7 @@
 // Realm branding, editable by realm admins (the rest of a realm's config, which names secrets, stays platform-only),
 // asset upload, and a preview of the sign-in page as an app would show it.
 import { invariant } from '../lib/errors.mjs';
-import { validateBranding, resolveBranding, assertContrast } from '../branding/tokens.mjs';
+import { validateBranding } from '../branding/tokens.mjs';
 import { prepareAsset, storeStatement, assetExists } from '../branding/assets.mjs';
 import { forgetRealms } from '../realms/realm.mjs';
 import { signInPage } from '../pages/sign-in.mjs';
@@ -11,15 +11,10 @@ export async function realmBranding(env) {
     const row = await env.DB.prepare('SELECT config,version FROM realms WHERE id=?').bind(env.REALM.id).first();
     return { branding: JSON.parse(row.config).branding || {}, version: row.version };
 }
-// A realm's branding is valid when its own theme meets contrast, its assets are that realm's, and every app's
-// override still meets contrast once merged over it, so a realm change can never leave an app failing.
+// A realm's branding is valid when its fields and look are, and its assets are that realm's.
 export async function checkRealmBranding(env, realm, value) {
     const branding = validateBranding(value);
-    assertContrast(resolveBranding(branding));
     for (const key of ASSET_FIELDS) if (branding[key]) invariant(await assetExists(env, branding[key], realm), 'branding', `branding.${key} is not an uploaded asset of this realm.`);
-    const { results } = await env.DB.prepare('SELECT id,branding FROM clients WHERE realm_id=?').bind(realm).all();
-    const failing = results.filter(client => { try { assertContrast(resolveBranding(branding, JSON.parse(client.branding || '{}'))); return false; } catch { return true; } });
-    invariant(!failing.length, 'branding_contrast', `These apps would fail WCAG AA contrast with this branding; change their themes first: ${failing.map(client => client.id).join(', ')}.`, 400);
     return branding;
 }
 export const realmVersionGuard = (env, realm, version) => env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT CASE WHEN EXISTS(

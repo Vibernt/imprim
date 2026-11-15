@@ -7,40 +7,43 @@ import { validatePassword } from '../auth/password-policy.mjs';
 import { assertNotBreached } from '../auth/breach.mjs';
 import { hashPassword, verifyPassword } from '../auth/password-hash.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
-import { page, escapeHtml as e } from '../pages/layout.mjs';
+import { page } from '../pages/layout.mjs';
+import { heading, field, hidden, button, linkButton, callout, small } from '../pages/ui.mjs';
 import { audit } from '../services/audit.mjs';
 import { notify } from '../services/notify.mjs';
 import { logoutStatements, flushLogouts } from '../oidc/backchannel.mjs';
 import { forgetDevices } from '../auth/mfa.mjs';
 export const FRESH_MS = 600000;
 const freshMailbox = session => session.method === 'email' && session.auth_time * 1000 > Date.now() - FRESH_MS;
-function form(request, session, values, hasPassword, message = '') {
+function form(request, session, values, hasPassword, saved = false) {
     const current = hasPassword && !freshMailbox(session)
-        ? '<label for="current_password">Current password</label><input id="current_password" type="password" name="current_password" autocomplete="current-password" required>' : '';
-    return page(hasPassword ? 'Change password' : 'Set a password', `<h1>${hasPassword ? 'Change your password' : 'Set a password'}</h1>
-${message ? `<p role="alert">${e(message)}</p>` : ''}<p>Use 12 or more characters. A few unrelated words work well. We check new passwords against known breaches.</p>
-<form method="post" action="/account/password"><input type="hidden" name="csrf" value="${e(cookies(request)[CSRF_COOKIE] || '')}">
-<input type="hidden" name="request_id" value="${e(values.request_id || '')}">${current}
-<label for="password">New password</label><input id="password" type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required>
-<button>Save password</button></form>`);
+        ? field({ id: 'current_password', label: 'Current password', type: 'password', name: 'current_password', autocomplete: 'current-password', required: true }) : '';
+    const title = hasPassword ? 'Change password' : 'Set a password';
+    return page(title, `${heading(title, 'Use it to sign in to apps that offer passwords.')}
+${saved ? callout('Password saved', 'Your other sessions were signed out.', { tone: 'success', role: 'status' }) : ''}
+<form class="fd-stack" data-gap="4" method="post" action="/account/password">${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}${hidden('request_id', values.request_id || '')}
+${current}${field({ id: 'password', label: 'New password', type: 'password', name: 'password', autocomplete: 'new-password', minlength: 12, maxlength: 128, required: true, hint: '12 to 128 characters. A few unrelated words work well.' })}
+${small('We check new passwords against known data breaches. Saving signs out your other sessions and forgets remembered browsers.')}
+${button('Save password', { variant: 'primary', block: true })}</form>
+${values.request_id ? '' : `<div class="fd-row" data-justify="center">${linkButton('Back to your account', '/account', { variant: 'ghost' })}</div>`}`);
 }
 export async function passwordPage(request, env, ctx) {
     const session = await getSession(request, env);
-    invariant(session, 'login_required', 'Sign in first.', 401);
-    invariant(session.email_verified === 1, 'access_denied', 'Confirm your email with a sign-in link before setting a password.', 403);
+    invariant(session, 'login_required', 'Sign in to an app first, then return here.', 401);
+    invariant(session.email_verified === 1, 'access_denied', 'Your email isn’t confirmed yet. Sign in with an email link, then set a password.', 403);
     const stored = await env.DB.prepare('SELECT * FROM user_passwords WHERE user_id=?').bind(session.user_id).first();
     if (request.method === 'GET') {
         const query = uniqueParams(new URL(request.url).searchParams);
-        return form(request, session, query, Boolean(stored), query.done ? 'Password saved.' : '');
+        return form(request, session, query, Boolean(stored), Boolean(query.done));
     }
     const body = await readBody(request, 'form');
     await requireCsrf(request, env, session, body.csrf);
     const pending = body.request_id ? await pendingRequest(env, request, body.request_id) : null;
     // A first password needs fresh mailbox proof (an email link in the last ten minutes); a change needs that or the
     // current password.
-    if (!stored) invariant(freshMailbox(session), 'reauth_required', 'Use an email link to set a password.', 403);
+    if (!stored) invariant(freshMailbox(session), 'reauth_required', 'Setting a first password needs an email-link sign-in in the last 10 minutes. Use Set or reset password at sign-in.', 403);
     else if (!freshMailbox(session))
-        invariant(typeof body.current_password === 'string' && await verifyPassword(body.current_password, stored), 'invalid_grant', 'Your current password is incorrect.', 403);
+        invariant(typeof body.current_password === 'string' && await verifyPassword(body.current_password, stored), 'invalid_grant', 'That isn’t your current password. Try again, or reset it from the sign-in page.', 403);
     validatePassword(body.password, session.email);
     await assertNotBreached(body.password);
     const next = await hashPassword(body.password), now = Date.now();

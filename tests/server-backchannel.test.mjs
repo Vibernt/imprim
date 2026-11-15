@@ -185,12 +185,12 @@ for (const kind of ['logout','revocation']) test(`${kind} younger event retries 
     assert.equal(api.delivery.events[0].id, row.id);
     assert.match(api.delivery.events[0].last_error, /refused delivery \(HTTP 503\)\./);
     const html = await (await w.call('/admin/clients/app', { headers: { cookie: admin.cookie } })).text();
-    assert.match(html, /Undelivered: 1/); assert.match(html, /Expired: 0/);
+    assert.match(html, /<dt class="fd-kv-key">Undelivered<\/dt><dd class="fd-kv-value"><span class="fd-kv-text">1<\/span><\/dd>/); assert.match(html, /<dt class="fd-kv-key">Expired<\/dt><dd class="fd-kv-value"><span class="fd-kv-text">0<\/span><\/dd>/);
     w.env.DB.db.prepare(`UPDATE ${table} SET created=? WHERE id=?`).run(Date.now() - deliveryWindowMs - 1, row.id);
     await queue({ messages: [message] }, w.env);
     const expired = await (await admin.get('clients/app')).json();
     assert.equal(expired.delivery.counts.undelivered, 0); assert.equal(expired.delivery.counts.expired, 1);
     assert.equal(expired.delivery.events[0].delivery_state, 'expired');
     const expiredHtml = await (await w.call('/admin/clients/app', { headers: { cookie: admin.cookie } })).text();
-    assert.match(expiredHtml, /Expired: 1/); assert.match(expiredHtml, /Back-channel endpoint refused delivery/);
+    assert.match(expiredHtml, /<dt class="fd-kv-key">Expired<\/dt><dd class="fd-kv-value"><span class="fd-kv-text">1<\/span><\/dd>/); assert.match(expiredHtml, /Back-channel endpoint refused delivery/);
 });

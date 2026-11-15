@@ -1,7 +1,7 @@
 // A realm is one brand: its own issuer host, keys, users, provider credentials, email sender and admins.
 // The request host selects the realm before any route runs; everything downstream reads the scoped env.
 import { invariant } from '../lib/errors.mjs';
-import { validateBranding, resolveBranding, assertContrast } from '../branding/tokens.mjs';
+import { validateBranding } from '../branding/tokens.mjs';
 // Secrets are never stored in D1: a secret field must name a Worker secret as {"env":"NAME"}.
 const isRef = value => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 1 && typeof value.env === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value.env);
 const at = (object, path) => path.reduce((value, key) => value?.[key], object);
@@ -22,7 +22,7 @@ export function validateRealmConfig(config) {
     const known = { email: ['from', 'from_name', 'reply_to'], turnstile: ['site_key', 'secret'] };
     const scalar = value => value === undefined || (typeof value === 'string' && value.length > 0 && value.length <= 500) || isRef(value);
     for (const [section, value] of Object.entries(config)) {
-        if (section === 'branding') { validateBranding(value); assertContrast(resolveBranding(value)); continue; }
+        if (section === 'branding') { validateBranding(value); continue; }
         if (!known[section] && section !== 'providers') fail(`Unknown realm config section ${section}.`);
         if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`${section} must be an object.`);
         if (section !== 'providers') for (const key of Object.keys(value)) if (!known[section].includes(key)) fail(`Unknown field ${section}.${key}.`);
