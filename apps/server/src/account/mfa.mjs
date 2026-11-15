@@ -30,7 +30,9 @@ const audit = (env, event, userId, detail = {}) => env.DB.prepare('INSERT INTO a
 async function overview(request, env, session, values, message = '') {
     const all = await confirmedFactors(env, session.user_id), factors = all.filter(f => f.type === 'totp'), passkeys = await credentials(env, session.user_id);
     const left = (await env.DB.prepare('SELECT count(*) n FROM recovery_codes WHERE user_id=? AND used_at IS NULL').bind(session.user_id).first()).n;
-    const required = values.request_id ? callout('Add a second factor to continue', 'This app asks for a code or a passkey after you sign in.', { tone: 'warning', role: 'alert' }) : '';
+    const toConsole = !all.length && typeof values.next === 'string' && /^\/admin(\/|$)/.test(values.next);
+    const required = values.request_id ? callout('Add a second factor to continue', 'This app asks for a code or a passkey after you sign in.', { tone: 'warning', role: 'alert' })
+        : toConsole ? callout('Add a second factor to open the admin console', 'Administrators need an authenticator app or a passkey. You go on to the console once it is added.', { tone: 'warning', role: 'alert' }) : '';
     const notice = message ? callout(message, '', { tone: 'success', role: 'status' }) : '';
     const add = post(request, values, 'start', '', button('Add authenticator app', { variant: all.length ? 'outline' : 'primary', icon: 'plus' }));
     const apps = factors.length ? list('Authenticator apps', factors.map(f => ({ title: f.name, desc: `Added ${day(f.created)} · ${f.last_used ? `last used ${day(f.last_used)}` : 'never used'}`,

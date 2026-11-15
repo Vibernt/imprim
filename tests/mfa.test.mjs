@@ -315,3 +315,15 @@ test('the second-factor step offers the trusted browser only where the app allow
     assert.match(html, /<label class="fd-checkbox"><input type="checkbox" name="trust" value="1">.*Trust this browser for 30 days/);
     assert.ok(html.includes('/assets/theme.css?client=app'), 'wears the app\'s brand');
 });
+test('an administrator sent from the console to add a second factor is told why', async t => {
+    const w = await world(t); turnstile(t);
+    const page = await w.call('/login'), browser = cookieJar(page);
+    await w.post('/v1/auth/magic/request', { email: 'admin@example.com', turnstile: crypto.randomUUID() }, browser); await w.drain();
+    const token = w.mails.at(-1).text.match(/#token=([A-Za-z0-9_-]+)/)[1];
+    const cookie = cookieJar(await w.post('/v1/auth/magic/verify', { token }, browser));
+    const console = await w.call('/admin', { headers: { cookie } });
+    assert.equal(console.status, 303); assert.match(console.headers.get('location'), /\/account\/mfa\?next=%2Fadmin$/);
+    const html = await (await w.call('/account/mfa?next=%2Fadmin', { headers: { cookie } })).text();
+    assert.match(html, /Add a second factor to open the admin console/);
+    assert.doesNotMatch(await (await w.call('/account/mfa', { headers: { cookie } })).text(), /open the admin console/);
+});
