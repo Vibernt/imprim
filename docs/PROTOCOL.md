@@ -14,7 +14,7 @@ identity; apps keep workspace admission, memberships, roles, local sessions and 
 | `GET /authorize` | Exact registered client/redirect validation, then SSO or sign-in. |
 | `POST /token` | Form-encoded authorization-code exchange; confidential clients use HTTP Basic. |
 | `GET /userinfo` or `POST /userinfo` | Bearer opaque access token; `sub`, and email claims if `email` was authorized. |
-| `GET /logout` | Validate client/return URI, show confirmation; no cookie-authenticated destructive GET. |
+| `GET /logout` | Validate client/return URI, show confirmation; no cookie-authenticated destructive GET. With no `client_id` it is a person signing out from Imprim's own pages: no return URI or state is accepted, and it ends at `/signed-out`. |
 | `POST /logout` | Form-encoded same-origin CSRF confirmation; deletes identity session and associated tokens/codes. |
 | `POST /v1/invitations` | JSON `{email}`, confidential client Basic authentication; upserts a 30-day invitation. |
 | `POST /v1/auth/magic/request` | JSON `{email, request_id, turnstile}`; neutral `{accepted:true}` after browser/challenge checks. |
@@ -265,7 +265,7 @@ magic request remains neutral and does not claim delivery.
 RP logout uses `client_id` and/or a verified `id_token_hint`, optional exact `post_logout_redirect_uri`, and optional `state`. With a session, GET
 renders a confirmation form carrying CSRF; POST checks Origin + double submit and deletes the identity session.
 The registered URI is checked again at POST. Without a session GET may redirect to the registered URI. An `id_token_hint` must have an ES256 signature from this issuer's local ring, matching issuer/client claims and
-(current browser, if present) subject/sid. An expired hint is accepted only for its still-active browser session. No third-party logout URL is accepted without a registered client.
+(current browser, if present) subject/sid. An expired hint is accepted only for its still-active browser session. No third-party logout URL is accepted without a registered client. The console and the account pages link to `/logout` with no client; a request that names no client and still carries a return URI or state is refused.
 Human logout captures durable app-session associations and sends signed OIDC back-channel logout through the queue.
 An association expires 30 days after it was created, matching the identity-session lifetime. Token exchange records
 the association once per client, subject and identity-session sid; later exchanges do not extend its expiry. Scheduled

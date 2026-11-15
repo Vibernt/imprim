@@ -3,16 +3,18 @@
 // and the hero texture. Labels and descriptions are text and are escaped here; `body`, `actions` and `back` hrefs come
 // from the pages.
 import { htmlResponse, escapeHtml as e, icon, only, SIDE_BRAND, MARK, SHELL_FOOTER, VIEWER, INITIALS } from './layout.mjs';
+// Sign-out asks first: /logout shows a confirmation, and only its form ends the session.
+const SIGN_OUT = `<a class="fd-btn" data-variant="ghost" data-only="desktop" href="/logout">${icon('log-out')}<span>Sign out</span></a>`;
 const ADMIN = { id: 'admin', label: 'Admin console', home: '/admin', sections: [
     { items: [['clients', 'Clients', 'blocks', '/admin/clients'], ['services', 'Services', 'server', '/admin/services'], ['users', 'Users', 'users', '/admin/users']] },
     { label: 'Realm', items: [['branding', 'Branding', 'palette', '/admin/branding'], ['audit', 'Audit log', 'scroll-text', '/admin/audit'], ['settings', 'Settings', 'settings', '/admin/settings']] },
     { label: 'Platform', only: 'platform', items: [['keys', 'Signing keys', 'key-round', '/admin/keys'], ['realms', 'Realms', 'globe', '/admin/realms']] }],
-    actions: `<a class="fd-btn" data-variant="ghost" data-only="desktop" href="/login">${icon('refresh-cw')}<span>Sign in again</span></a><a class="fd-btn" data-only="desktop" href="/account">${icon('user')}<span>Your account</span></a>`,
-    phone: [['Your account', '/account'], ['Sign in again', '/login']] };
+    actions: `<a class="fd-btn" data-variant="ghost" data-only="desktop" href="/login">${icon('refresh-cw')}<span>Sign in again</span></a><a class="fd-btn" data-only="desktop" href="/account">${icon('user')}<span>Your account</span></a>${SIGN_OUT}`,
+    phone: [['Your account', '/account'], ['Sign in again', '/login'], ['Sign out', '/logout']] };
 const ACCOUNT = { id: 'account', label: 'Your account', home: '/account', sections: [
     { items: [['profile', 'Profile', 'user', '/account'], ['security', 'Security', 'shield-check', '/account/security'], ['sessions', 'Sessions and apps', 'monitor', '/account/sessions'], ['agents', 'Agents', 'bot', '/account/agents']] },
     { label: 'Administration', only: 'admin', items: [['admin', 'Admin console', 'settings', '/admin']] }],
-    actions: only('admin', `<a class="fd-btn" data-only="desktop" href="/admin">${icon('settings')}<span>Admin console</span></a>`), phone: [] };
+    actions: only('admin', `<a class="fd-btn" data-only="desktop" href="/admin">${icon('settings')}<span>Admin console</span></a>`) + SIGN_OUT, phone: [['Sign out', '/logout']] };
 const AREAS = { admin: ADMIN, account: ACCOUNT };
 const current = on => on ? ' aria-current="page"' : '';
 const gated = (section, html) => section.only ? only(section.only, html) : html;

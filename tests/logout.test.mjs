@@ -83,3 +83,34 @@ test('logout confirmation escapes the state it carries back', async t => {
     assert.ok(html.includes('<input type="hidden" name="state" value="&quot;&gt;&lt;img src=x onerror=alert(1)&gt;">'));
     assert.doesNotMatch(html.split('<main class="fd-page">')[1], /<img|<script/);
 });
+test('a person signs out from Imprim\'s own pages: no app is named, so nothing outside can be reached', async t => {
+    const w = await world(t), signed = await login(w, t);
+    const csrf = signed.cookie.match(/__Host-vi_csrf=([^;]+)/)[1];
+    const sessions = () => w.env.DB.db.prepare('SELECT count(*) n FROM sessions').get().n;
+    // The account pages link to it.
+    assert.match(await (await w.call('/account', { headers: { cookie: signed.cookie } })).text(), /<a class="fd-btn" data-variant="ghost" data-only="desktop" href="\/logout">/);
+    // GET only asks; it changes nothing.
+    const ask = await w.call('/logout', { headers: { cookie: signed.cookie } });
+    assert.equal(ask.status, 200);
+    const html = await ask.text();
+    assert.match(html, /<form method="post" action="\/logout">/); assert.match(html, /href="\/account"[^>]*><span>Stay signed in<\/span>/);
+    assert.equal(ask.headers.get('content-security-policy').match(/form-action ([^;]+)/)[1], "'self'");
+    assert.equal(sessions(), 1);
+    // Without an app, a return address or state is refused, on GET and on POST.
+    for (const extra of [{ post_logout_redirect_uri: 'https://evil.example/' }, { post_logout_redirect_uri: 'https://app.example/bye' }, { state: 'x' }]) {
+        assert.equal((await w.call('/logout?' + new URLSearchParams(extra), { headers: { cookie: signed.cookie } })).status, 400);
+        const post = await w.call('/logout', { method: 'POST', headers: { origin: w.env.ISSUER, cookie: signed.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf, ...extra }) });
+        assert.equal(post.status, 400);
+    }
+    // The POST needs the CSRF value and this origin.
+    const post = (body, headers = {}) => w.call('/logout', { method: 'POST', headers: { origin: w.env.ISSUER, cookie: signed.cookie, 'content-type': 'application/x-www-form-urlencoded', ...headers }, body: new URLSearchParams(body) });
+    assert.equal((await post({ client_id: '', csrf: 'wrong' })).status, 403);
+    assert.equal((await post({ client_id: '', csrf }, { origin: 'https://evil.example' })).status, 403);
+    assert.equal(sessions(), 1);
+    const out = await post({ client_id: '', post_logout_redirect_uri: '', state: '', id_token_hint: '', csrf });
+    assert.equal(out.status, 303); assert.equal(out.headers.get('location'), w.env.ISSUER + '/signed-out');
+    assert.equal(sessions(), 0);
+    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='sign_out'").get().n, 1);
+    // Signed out already: straight to the signed-out page.
+    assert.equal((await w.call('/logout')).headers.get('location'), w.env.ISSUER + '/signed-out');
+});
