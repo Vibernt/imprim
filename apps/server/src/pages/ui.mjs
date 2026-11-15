@@ -8,9 +8,10 @@ const attrs = (pairs = {}) => Object.entries(pairs).filter(([, v]) => v !== unde
 // Lucide icons from Fire's set, inline (Fire's own <i data-icon> needs its JavaScript).
 export const icon = (name, size) => ICONS[name] ? `<svg class="fd-icon" viewBox="0 0 24 24"${size ? ` data-size="${size}"` : ''} aria-hidden="true">${ICONS[name]}</svg>` : '';
 export { dotLogo, dotMark } from './dots.mjs';
-export const heading = (title, description = '') => `<div class="fd-stack" data-gap="1-5"><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${e(description)}</p>` : ''}</div>`;
+// The head of a centred screen: its heading and one line, centred.
+export const heading = (title, description = '') => `<header class="fd-screen-head"><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${e(description)}</p>` : ''}</header>`;
 // The top of a result screen (link sent, signed out, stopped): an icon tile, then the heading, centred.
-export const result = (name, tone, title, description = '') => `<div class="fd-stack" data-gap="4" data-align="center"><span class="fd-tile" data-size="44" data-tone="${tone}">${icon(name)}</span>${heading(title, description)}</div>`;
+export const result = (name, tone, title, description = '') => `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="${tone}">${icon(name)}</span><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${e(description)}</p>` : ''}</header>`;
 export const section = (title, description, body) => `<section class="fd-stack" data-gap="3"><div class="fd-stack" data-gap="1"><h2 class="fd-h3">${e(title)}</h2>${description ? `<p class="fd-small fd-muted">${e(description)}</p>` : ''}</div>${body}</section>`;
 // A button. `html` is already-safe inner markup (an icon plus escaped text); otherwise `label` is escaped.
 export function button(label, { variant, size, block, type = 'submit', icon: name, html, ...rest } = {}) {
@@ -27,6 +28,15 @@ export function field({ id, label, hint, error, size, ...input }) {
             required: input.required, autofocus: input.autofocus, readonly: input.readonly, spellcheck: input.spellcheck })}>`;
     return `<div class="fd-field"><label class="fd-field-label" for="${e(id)}">${e(label)}</label>${control}${hint ? `<p class="fd-field-hint" id="${e(id)}-hint">${e(hint)}</p>` : ''}${error ? `<p class="fd-field-error" id="${e(id)}-error">${icon('circle-alert', 14)}<span>${e(error)}</span></p>` : ''}</div>`;
 }
+// A 6-digit code in Fire's one-time-code boxes. It is one ordinary input, so the form works without script;
+// /imprim/otp.js (load it with the page) turns it into the boxes, and the form posts the same `name` either way.
+export function otp({ id, label, name, hint, error, autofocus, length = 6 }) {
+    const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
+    return `<div class="fd-field"><label class="fd-field-label" for="${e(id)}">${e(label)}</label><div class="fd-otp" data-fd-otp data-length="${length}" role="group" aria-label="${e(label)}"><input${attrs({ id, name,
+        inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: length, pattern: `[0-9]{${length}}`, required: true, autofocus, 'aria-invalid': error ? 'true' : undefined, 'aria-describedby': describedBy })}></div>${
+        hint ? `<p class="fd-field-hint" id="${e(id)}-hint">${e(hint)}</p>` : ''}${error ? `<p class="fd-field-error" id="${e(id)}-error">${icon('circle-alert', 14)}<span>${e(error)}</span></p>` : ''}</div>`;
+}
+export const OTP_MODULE = '/imprim/otp.js';
 export const checkbox = (name, label, { value = '1', checked, required } = {}) =>
     `<label class="fd-checkbox"><input type="checkbox"${attrs({ name, value, checked, required })}><span class="fd-checkbox-box"></span><span class="fd-checkbox-text"><span class="fd-checkbox-label">${e(label)}</span></span></label>`;
 export const hidden = (name, value) => `<input type="hidden" name="${e(name)}" value="${e(value ?? '')}">`;
@@ -46,7 +56,6 @@ export const code = value => `<code class="fd-code">${e(value)}</code>`;
 // A table: headers are text; cells are already-safe markup.
 export const table = (label, headers, rows) => `<div class="fd-table-wrap"><div class="fd-table-scroll"><table class="fd-table" aria-label="${e(label)}"><thead><tr>${headers.map(h => `<th>${e(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
 export const actions = (...buttons) => `<div class="fd-form-actions">${buttons.join('')}</div>`;
-// "or" between two ways to do one thing. The rules sit in fd-grow boxes: Fire's fd-divider sets flex: none, which
-// overrides fd-grow on the same element (docs/fire/REQUESTS.md, request 4).
-export const orDivider = '<div class="fd-row" data-gap="3" role="separator" aria-label="or"><div class="fd-grow"><hr class="fd-divider"></div><span class="fd-eyebrow">or</span><div class="fd-grow"><hr class="fd-divider"></div></div>';
+// "or" between two ways to do one thing.
+export const orDivider = '<div class="fd-row" data-gap="3" role="separator" aria-label="or"><hr class="fd-divider fd-grow"><span class="fd-eyebrow">or</span><hr class="fd-divider fd-grow"></div>';
 export const small = text => `<p class="fd-small fd-muted">${e(text)}</p>`;

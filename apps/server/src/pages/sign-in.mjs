@@ -29,10 +29,10 @@ export function signInPage(env, requestId = '', responseCookies = [], client = n
     // In the app's order; "or" separates the email form from the buttons around it.
     const ordered = controls.flatMap((c, i) => c.startsWith('<form') ? [...(i > 0 ? [or] : []), c, ...(i < controls.length - 1 ? [or] : [])] : [c]);
     const heading = branding.copy.sign_in_heading || `Sign in to ${branding.name || env.REALM.display_name}`;
-    return page('Sign in', `<div class="fd-stack" data-gap="1-5"><h1 class="fd-h1">${escapeHtml(heading)}</h1>${branding.copy.sign_in_help ? `<p class="fd-muted">${escapeHtml(branding.copy.sign_in_help)}</p>` : ''}</div>
-<section id="request" class="fd-stack" data-gap="3" data-request-id="${escapeHtml(requestId)}">${ordered.join('\n')}${client ? '' : '<p class="fd-small fd-muted x-center">Administrators sign in by email.</p>'}</section>
-<section id="confirm" class="fd-stack" data-gap="4" hidden><p class="fd-muted x-center">Finish signing in with the link you opened. Keep this browser.</p>${button('Sign in', { id: 'verify', type: 'button', variant: 'primary', size: 'lg', block: true })}</section>
-<p class="fd-small x-center" id="message" role="status" aria-live="polite"></p>`, { client, cookies: responseCookies, script: methods.includes('passkey') ? ['/assets/sign-in.js', '/assets/passkey.js'] : '/assets/sign-in.js', turnstile: (email || password) && challengeConfigured(env) });
+    return page('Sign in', `<header class="fd-screen-head"><h1 class="fd-h1">${escapeHtml(heading)}</h1>${branding.copy.sign_in_help ? `<p class="fd-muted">${escapeHtml(branding.copy.sign_in_help)}</p>` : ''}</header>
+<section id="request" class="fd-stack" data-gap="3" data-request-id="${escapeHtml(requestId)}">${ordered.join('\n')}${client ? '' : '<p class="fd-screen-note">Administrators sign in by email.</p>'}</section>
+<section id="confirm" class="fd-stack" data-gap="4" hidden><header class="fd-screen-head"><p class="fd-muted">Finish signing in with the link you opened. Keep this browser.</p></header>${button('Sign in', { id: 'verify', type: 'button', variant: 'primary', size: 'lg', block: true })}</section>
+<p class="fd-small" id="message" role="status" aria-live="polite"></p>`, { client, cookies: responseCookies, script: methods.includes('passkey') ? ['/assets/sign-in.js', '/assets/passkey.js'] : '/assets/sign-in.js', turnstile: (email || password) && challengeConfigured(env) });
 }
 export function loginPage(request, env) {
     const existing = cookies(request)[BROWSER_COOKIE], browser = tokenShape(existing) ? existing : randomToken();

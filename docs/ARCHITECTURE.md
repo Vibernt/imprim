@@ -93,8 +93,8 @@ shell: a sidebar, a top bar, a page hero and a phone menu (`pages/shell.mjs`). B
 `withBrand` fills from the realm's and the app's branding: the name, the look's `<html>` attributes, the
 `/assets/theme.css` link, the favicon, the logo or mark (the brand's initial in a dot matrix until one is uploaded),
 the footer, and who is signed in. Navigation that only administrators use is dropped for everyone else. Every page
-ends with "Powered by Imprim". Everything inserted is escaped or an asset id. Fire's own files come from static assets; Imprim's stopgap classes are
-`/assets/local.css` ([Branding](BRANDING.md), [Fire](fire/README.md)).
+ends with "Powered by Imprim". Everything inserted is escaped or an asset id. Fire's own files come from static assets, and every class on a page is Fire's
+([Branding](BRANDING.md), [Fire](fire/README.md)).
 
 ## Keys and maintenance
 

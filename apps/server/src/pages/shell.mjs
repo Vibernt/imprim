@@ -44,7 +44,7 @@ export function shellPage(title, body, { area, active = '', description = '', ba
 ${back ? `<a class="fd-back" href="${e(back[1])}">${icon('arrow-left')}<span>${e(back[0])}</span></a>` : ''}<h1 class="fd-display">${e(title)}</h1>
 ${description ? `<p class="fd-page-hero-desc">${e(description)}</p>` : ''}${actions ? `<div class="fd-page-hero-actions">${actions}</div>` : ''}</section>`;
     return htmlResponse(title, `<div class="fd-app" data-sidebar="expanded">${sidebar(a, active)}
-<div class="fd-main"><header class="fd-topbar"><a class="fd-topbar-brand" data-only="mobile" href="${a.home}" aria-label="${e(a.label)}">${MARK}</a><span class="fd-topbar-title">${e(a.label)}</span>
+<div class="fd-main"><header class="fd-topbar"><a class="fd-topbar-brand" data-only="mobile" href="${a.home}" aria-label="${e(a.label)}"><span class="fd-brand-mark">${MARK}</span></a><span class="fd-topbar-title">${e(a.label)}</span>
 <div class="fd-topbar-actions">${a.actions}<button class="fd-btn" type="button" data-icon-only data-only="mobile" data-fd-mobile-nav aria-controls="shell-menu" aria-expanded="false" aria-label="Open menu">${icon('menu')}</button></div></header>
 <main class="fd-page"><div class="fd-frame">${hero}${bands.map((part, i) => band(part, i === bands.length - 1)).join('')}${SHELL_FOOTER}</div></main></div>
 ${phoneMenu(a, active)}</div>`, { ...options, modules: ['/imprim/shell.js', ...modules] });

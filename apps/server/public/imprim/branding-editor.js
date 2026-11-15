@@ -50,7 +50,7 @@ const fail = (message) => { errorText.textContent = message; errorBox.hidden = f
 const preview = (slot, url) => {
   const tile = root.querySelector(`[data-slot-preview="${slot}"]`);
   tile.replaceChildren();
-  if (url) { const img = new Image(); img.className = 'x-logo'; img.alt = ''; img.src = url; tile.append(img); }
+  if (url) { const img = new Image(); if (slot !== 'mark') img.className = 'fd-brand-logo'; img.alt = ''; img.src = url; tile.append(img); }
   root.querySelector(`[data-remove="${slot}"]`).hidden = !url;
 };
 root.addEventListener('change', async (event) => {

@@ -10,7 +10,7 @@ import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { safeNext } from '../auth/mfa-challenge.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { accountPage } from '../pages/shell.mjs';
-import { heading, section, button, linkButton, field, hidden, callout, list, empty, setting, badge, small } from '../pages/ui.mjs';
+import { heading, section, button, linkButton, field, otp, OTP_MODULE, hidden, callout, list, empty, setting, badge, small } from '../pages/ui.mjs';
 import { credentials } from '../webauthn/ceremonies.mjs';
 import { notify } from '../services/notify.mjs';
 const FRESH_AUTH_MS = 600000;
@@ -78,10 +78,10 @@ export async function mfaAccount(request, env, ctx) {
         const key = `<div class="fd-stack" data-gap="2"><p class="fd-small fd-muted">Can’t scan it? Enter this setup key in the app instead.</p><p><code class="fd-code" id="totp-secret">${e(secret.match(/.{1,4}/g).join(' '))}</code></p></div>`;
         const confirm = post(request, values, 'confirm', hidden('factor_id', id) +
             field({ id: 'name', label: 'Name', name: 'name', value: 'Authenticator app', maxlength: 60, required: true, hint: 'Shown in your list, so you can tell your apps apart.' }) +
-            field({ id: 'code', label: 'Code', name: 'code', size: 'lg', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, required: true, placeholder: '123456' }),
+            otp({ id: 'code', label: 'Code', name: 'code' }),
             `<div class="fd-form-actions">${linkButton('Cancel', overviewHref(values), { variant: 'ghost' })}${button('Add authenticator app', { variant: 'primary' })}</div>`, ' class="fd-form"');
         return show(values, 'Add an authenticator app', 'Scan the code, then enter the 6-digit code your app shows.',
-            `<div class="fd-stack" data-gap="4"><figure class="x-qr">${qrSvg(uri, { label: 'Authenticator setup code' })}</figure>${key}</div>` + confirm);
+            `<div class="fd-stack" data-gap="4"><figure class="fd-qr">${qrSvg(uri, { label: 'Authenticator setup code' })}</figure>${key}</div>` + confirm, { modules: [OTP_MODULE] });
     }
     if (values.action === 'confirm') {
         const factor = await env.DB.prepare('SELECT * FROM mfa_factors WHERE id=? AND user_id=? AND confirmed=0 AND created>?').bind(values.factor_id || '', session.user_id, now - 3600000).first();

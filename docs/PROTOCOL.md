@@ -27,13 +27,13 @@ identity; apps keep workspace admission, memberships, roles, local sessions and 
 | `GET`/`POST /login/provider/<id>/callback` | Registry provider callback; Apple's `form_post` is answered with a 303 to the same URL as a GET. |
 | `POST /v1/auth/password` | JSON `{request_id, email, password, turnstile}`; password sign-in (below). |
 | `POST /v1/auth/passkey/options`, `/v1/auth/passkey/verify` | Passkey sign-in ceremony (below). |
-| `GET`/`POST /mfa` | Second-factor challenge for a pending authorization, agent consent or the console. |
+| `GET`/`POST /mfa` | Second-factor challenge for a pending authorization, agent consent or the console. The page asks for the 6-digit authenticator code in one-time-code boxes; `?recovery=1` shows a field for a recovery code instead. The POST accepts either in `code`. |
 | `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. |
 | `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; the signed-in page requires a current identity session. |
 | `GET /account`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, security, sessions and apps, connected agents, and the password, factor and email-change pages (below). |
 | `POST /account/{profile,sessions,apps,devices,email,email/confirm,delete,password,mfa,revoke}` | Account changes; same Origin and CSRF. |
 | `POST /account/passkeys/{options,register,remove}` | Passkey registration and removal. |
-| `GET /assets/local.css`, `/assets/sign-in.js`, `/assets/passkey.js` | Imprim's stopgap CSS and its two page scripts; one-hour cache. Pages link the CSS with a hash of its content (`?v=`), so a release that changes it shows at once. |
+| `GET /assets/local.css`, `/assets/sign-in.js`, `/assets/passkey.js` | Imprim's stopgap CSS (empty unless Fire lacks something; pages link it only when it has rules, with a hash of its content as `?v=`) and its two page scripts; one-hour cache. |
 | `GET /assets/theme.css[?client=id]` | The brand's Fire look as `<html>`-level custom properties for the realm, or an app in it; five-minute cache ([Branding](BRANDING.md)). |
 | `GET /assets/brand/<sha256>` | An uploaded logo or mark of this realm, sandboxed (`CSP: default-src 'none'; style-src 'unsafe-inline'; sandbox`, `nosniff`); 404 otherwise. |
 | `GET /fire/*`, `/imprim/*` | Static assets (Fire, and the console's branding editor module), served before the Worker with `nosniff` and `Cross-Origin-Resource-Policy: same-origin`. |

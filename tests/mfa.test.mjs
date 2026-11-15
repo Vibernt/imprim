@@ -269,10 +269,13 @@ test('the two-factor pages are Fire markup and escape factor names and carried v
     const start = await form(w, '/account/mfa', { csrf, action: 'start', next: '/account"><b>x' }, jar);
     const setup = await start.text();
     assertFireMarkup(setup);
-    assert.match(setup, /<figure class="x-qr"><svg/);
+    assert.match(setup, /<figure class="fd-qr"><svg/);
     assert.match(setup, /<form class="fd-form" method="post" action="\/account\/mfa"><input type="hidden" name="csrf" value="[^"]+">/);
     assert.ok(setup.includes('<input type="hidden" name="next" value="/account&quot;&gt;&lt;b&gt;x">') && !setup.includes('"><b>x'), 'next is escaped');
-    assert.ok(setup.includes('<input class="fd-input" id="code" data-size="lg" name="code" placeholder="123456" autocomplete="one-time-code" inputmode="numeric" maxlength="6" required>'));
+    // The 6-digit code is Fire's one-time-code field: one ordinary input (it works without script) that /imprim/otp.js
+    // turns into six boxes.
+    assert.ok(setup.includes('<div class="fd-otp" data-fd-otp data-length="6" role="group" aria-label="Code"><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></div>'));
+    assert.ok(setup.includes('<script type="module" src="/imprim/otp.js"></script>'));
     assert.match(setup, /<input class="fd-input" id="name" aria-describedby="name-hint" name="name" value="Authenticator app" maxlength="60" required>/);
     await enrolMfa(w, jar, csrf);
     w.env.DB.db.prepare('UPDATE mfa_factors SET name=?').run('<img src=x onerror=alert(1)>');
@@ -301,8 +304,21 @@ test('the two-factor pages are Fire markup and escape factor names and carried v
     const wrong = await form(w, '/mfa', { csrf, code: '000000' }, jar);
     assert.equal(wrong.status, 401);
     const refused = await wrong.text();
-    assert.match(refused, /<input class="fd-input" id="code" data-size="lg" aria-invalid="true" aria-describedby="code-error"/);
-    assert.match(refused, /<p class="fd-field-error" id="code-error">.*<span>That code didn’t work\. Enter the newest code from your app, or a recovery code\.<\/span><\/p>/);
+    assert.ok(refused.includes('<div class="fd-otp" data-fd-otp data-length="6" role="group" aria-label="Code"><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required autofocus aria-invalid="true" aria-describedby="code-error"></div>'));
+    assert.match(refused, /<p class="fd-field-error" id="code-error">.*<span>That code didn’t work\. Enter the newest code from your app\.<\/span><\/p>/);
+    assert.ok(refused.includes('<script type="module" src="/imprim/otp.js"></script>'));
+    // A recovery code has its own field, reached by a link that keeps where the person was going.
+    assert.match(refused, /<a class="fd-link" href="\/mfa\?recovery=1">Use a recovery code<\/a>/);
+    const recovery = await (await w.call('/mfa?recovery=1&next=/account/mfa', { headers: { cookie: jar } })).text();
+    assertFireMarkup(recovery);
+    assert.match(recovery, /<h1 class="fd-h1">Enter a recovery code<\/h1>/);
+    assert.match(recovery, /<input type="hidden" name="recovery" value="1">/);
+    assert.match(recovery, /<input class="fd-input" id="code" data-size="lg" aria-describedby="code-hint" name="code" autocomplete="off" autocapitalize="characters" inputmode="text" maxlength="11" required autofocus spellcheck="false">/);
+    assert.ok(!recovery.includes('fd-otp') && !recovery.includes('/imprim/otp.js'), 'a recovery code is not six digits: a plain field, no boxes');
+    assert.match(recovery, /<a class="fd-link" href="\/mfa\?next=%2Faccount%2Fmfa">Enter a code from your app<\/a>/);
+    const wrongRecovery = await form(w, '/mfa', { csrf, code: 'AAAAA-BBBBB', recovery: '1' }, jar);
+    assert.equal(wrongRecovery.status, 401);
+    assert.match(await wrongRecovery.text(), /<input type="hidden" name="recovery" value="1">[\s\S]*That code didn’t work\. Check it, or use another recovery code\./);
 });
 test('the second-factor step offers the trusted browser only where the app allows it, in the app\'s brand', async t => {
     const w = await mfaWorld(t, { mfa_trusted_device_days: 30 });

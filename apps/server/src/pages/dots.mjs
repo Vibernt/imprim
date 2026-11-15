@@ -22,7 +22,7 @@ function matrix(glyphs) {
 }
 const wordmark = matrix([...'IMPRIM'].map(letter => FONT[letter]));
 // The IMPRIM wordmark. `size` is "sm" for the "Powered by" line.
-export const dotLogo = (size = '') => `<svg class="x-wordmark"${size ? ` data-size="${size}"` : ''} viewBox="0 0 ${wordmark.width} 7" fill="currentColor" role="img" aria-label="Imprim">${wordmark.paths}</svg>`;
+export const dotLogo = (size = '') => `<svg class="fd-wordmark"${size ? ` data-size="${size}"` : ''} viewBox="0 0 ${wordmark.width} 7" fill="currentColor" role="img" aria-label="Imprim">${wordmark.paths}</svg>`;
 // A brand's initial as a square mark, for fd-brand-mark and fd-topbar-brand.
 export function dotMark(name) {
     const initial = String(name || '').trim().normalize('NFD')[0]?.toUpperCase() ?? '';

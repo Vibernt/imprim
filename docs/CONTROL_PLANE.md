@@ -23,7 +23,7 @@ Every page sits in Fire's app shell: a sidebar grouped into apps, realm and plat
 only to platform administrators; the pages themselves refuse everyone else), a top bar, and a menu on phones.
 Responses are `no-store`. The console CSP is `default-src 'none'` with `script-src 'self'`, `style-src 'self'`,
 `img-src 'self' data:`, `font-src 'self'`, `form-action 'self'`, `frame-ancestors 'none'` and `base-uri 'none'`.
-The one script on every page is `/imprim/shell.js`, a static module that loads Fire's shell, icon and texture
+The one script on every page is `/imprim/shell.js`, a static module that loads Fire's shell and texture
 modules for the sidebar, the phone menu and the hero texture; it makes no requests. Only the Branding page adds
 `connect-src 'self'`, for Fire's Tweaks panel and the branding editor module. Mutations
 are POST only, with the exact issuer Origin and a cookie/submitted CSRF value matching the stored hash.

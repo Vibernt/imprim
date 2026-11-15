@@ -123,16 +123,17 @@ const BRAND_FIELDS = [['name', 'Name', 'Acme', 'Shown beside the mark, in page t
 const COPY_LABELS = { sign_in_heading: ['Sign-in heading', 'Sign in to Acme'], sign_in_help: ['Sign-in line', 'Use your work email.'], consent_intro: ['Agent consent line', 'Agents act as you, within the scopes below.'],
     signed_out: ['Signed-out line', 'See you soon.'], footer: ['Footer line', 'Acme accounts run on Imprim.'] };
 const logoSlot = (key, label, hint, id) => `<div class="fd-setting"><div class="fd-setting-text"><h3 class="fd-setting-title">${e(label)}</h3><p class="fd-setting-desc">${e(hint)}</p></div>
-<div class="fd-setting-control"><div class="fd-row" data-gap="3"><span class="fd-tile" data-size="36" data-slot-preview="${key}">${id ? `<img class="x-logo" src="/assets/brand/${e(id)}" alt="">` : ''}</span>
+<div class="fd-setting-control"><div class="fd-row" data-gap="3">${key === 'mark' ? `<span class="fd-tile" data-size="36" data-slot-preview="${key}">${id ? `<img src="/assets/brand/${e(id)}" alt="">` : ''}</span>`
+        : `<span class="fd-brand" data-slot-preview="${key}">${id ? `<img class="fd-brand-logo" src="/assets/brand/${e(id)}" alt="">` : ''}</span>`}
 <label class="fd-btn" data-variant="outline" data-size="sm"><span>Upload</span><input class="fd-sr-only" type="file" accept="image/svg+xml,image/png,image/jpeg,image/webp" data-slot="${key}"></label>
 ${button('Remove', { type: 'button', variant: 'ghost', size: 'sm', 'data-remove': key, hidden: !id })}</div></div></div>`;
 export function brandingPage({ branding, version }, csrf) {
     const brandFields = BRAND_FIELDS.map(([key, label, placeholder, hint]) => field({ id: `b-${key}`, label, name: key, value: branding[key] ?? '', placeholder, hint })).join('');
     const copyFields = COPY_KEYS.map(key => field({ id: `c-${key}`, label: COPY_LABELS[key][0], name: `copy.${key}`, value: branding.copy?.[key] ?? '', placeholder: COPY_LABELS[key][1] })).join('');
     // The sample mirrors the centred sign-in screen; the brand row is the saved one (layout.mjs fills it).
-    const specimen = `<article class="fd-card x-screen" data-size="lg" aria-label="Sample sign-in"><div class="fd-stack" data-gap="5"><div class="fd-row" data-justify="center"><div class="fd-brand">${SIDE_BRAND}</div></div>
-<div class="fd-stack" data-gap="1-5"><p class="fd-h1">${e(branding.copy?.sign_in_heading || `Sign in to ${branding.name || 'your brand'}`)}</p><p class="fd-muted">${e(branding.copy?.sign_in_help || 'Use the email your team invited.')}</p></div>
-<div class="fd-field"><span class="fd-field-label">Email</span><span class="fd-input" data-size="lg">dana@example.com</span></div>${button('Email me a link', { type: 'button', variant: 'primary', size: 'lg', block: true })}${button('Sign in with a passkey', { type: 'button', variant: 'outline', size: 'lg', block: true })}</div></article>`;
+    const specimen = `<div class="fd-screen" role="group" aria-label="Sample sign-in"><div class="fd-brand">${SIDE_BRAND}</div><article class="fd-card" data-size="lg">
+<header class="fd-screen-head"><p class="fd-h1">${e(branding.copy?.sign_in_heading || `Sign in to ${branding.name || 'your brand'}`)}</p><p class="fd-muted">${e(branding.copy?.sign_in_help || 'Use the email your team invited.')}</p></header>
+<div class="fd-field"><span class="fd-field-label">Email</span><span class="fd-input" data-size="lg">dana@example.com</span></div>${button('Email me a link', { type: 'button', variant: 'primary', size: 'lg', block: true })}${button('Sign in with a passkey', { type: 'button', variant: 'outline', size: 'lg', block: true })}</article></div>`;
     const body = `<div id="branding-editor" class="fd-stack" data-gap="6" data-csrf="${e(csrf)}" data-version="${e(version)}" data-branding="${e(JSON.stringify(branding))}">
 <div class="fd-callout" role="alert" data-tone="danger" id="branding-error" hidden><div class="fd-callout-content"><p class="fd-callout-title">Not saved</p><p class="fd-callout-body" id="branding-error-text"></p></div></div>
 <div class="fd-grid" data-min="lg" data-cols="2" data-gap="6"><div class="fd-stack" data-gap="6">

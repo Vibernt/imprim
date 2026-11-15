@@ -83,7 +83,7 @@ async function route(request, env, ctx, url) {
         case 'GET /login/google/callback': return googleCallback(request, env);
         case 'GET /login': return loginPage(request, env);
         case 'GET /check-email': return page('Check your email', result('mail', 'accent', 'Check your email', 'If this address can sign in here, a link arrives within a minute.') +
-            '<p class="fd-small fd-muted x-center">Open it in this browser. The link works once and expires in 15 minutes.</p>');
+            '<p class="fd-screen-note">Open it in this browser. The link works once and expires in 15 minutes.</p>');
         case 'GET /signed-in': {
             if (!await getSession(request, env)) throw new AppError(401, 'login_required', 'Sign in first.');
             return page('Signed in', result('circle-check', 'success', 'You’re signed in', 'Go back to your app to continue.') +

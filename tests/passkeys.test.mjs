@@ -148,5 +148,5 @@ test('the account page lists passkeys with escaped names; the second-factor step
     assertFireMarkup(html);
     assert.ok(html.includes(`<button class="fd-btn" type="button" data-variant="outline" data-size="lg" data-block id="passkey-mfa" data-request-id="${location.searchParams.get('request_id')}" data-next="">`));
     assert.ok(html.includes('<script src="/assets/passkey.js" defer></script>'));
-    assert.ok(html.includes('<p class="fd-small x-center" id="message" role="status" aria-live="polite"></p>'));
+    assert.ok(html.includes('<p class="fd-small" id="message" role="status" aria-live="polite"></p>'));
 });

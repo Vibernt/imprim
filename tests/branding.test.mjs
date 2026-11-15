@@ -62,7 +62,7 @@ test('admins upload a logo and set realm branding; pages show it with a sandboxe
     assert.equal(saved.status, 200, await saved.clone().text());
     assert.equal((await admin.post('branding', { version, branding: {} })).status, 409, 'stale version');
     const page = await (await w.call('/signed-out')).text();
-    assert.match(page, new RegExp(`<img class="x-logo" src="/assets/brand/${id}" alt="Vibernt">`));
+    assert.match(page, new RegExp(`<img class="fd-brand-logo" src="/assets/brand/${id}" alt="Vibernt">`));
     assert.match(page, /<html lang="en" data-palette="forest">/);
     assert.match(page, /<link rel="stylesheet" href="\/assets\/theme.css">/);
     assert.match(page, /<a class="fd-link" href="https:\/\/vibernt.example\/privacy">Privacy<\/a><a class="fd-link" href="https:\/\/vibernt.example\/terms">Terms<\/a>/);

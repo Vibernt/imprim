@@ -17,12 +17,13 @@ for (const path of ['/login', '/check-email', '/error', '/signed-out']) test(`se
 test('every page shows the realm name, escaped, and no product is written into the code', async t => {
     const w = await world(t), html = await (await w.call('/signed-out')).text();
     // The brand leads, centred: its initial in dots (no mark is uploaded) and its name. Imprim signs the page below.
-    assert.match(html, /<div class="fd-row" data-justify="center"><div class="fd-brand"><span class="fd-brand-mark"><svg viewBox="-1 0 7 7"[^>]*>[\s\S]*?<\/svg><\/span><span class="fd-brand-name">Vibernt<\/span><\/div><\/div>/);
-    assert.match(html, /<span>Powered by<\/span><svg class="x-wordmark" data-size="sm"[^>]*aria-label="Imprim">/);
+    assert.match(html, /<div class="fd-screen fd-rise"><div class="fd-brand"><span class="fd-brand-mark"><svg viewBox="-1 0 7 7"[^>]*>[\s\S]*?<\/svg><\/span><span class="fd-brand-name">Vibernt<\/span><\/div>/);
+    assert.match(html, /<p class="fd-screen-note"><span>Powered by<\/span><svg class="fd-wordmark" data-size="sm"[^>]*aria-label="Imprim">/);
     assert.match(html, /<title>Signed out · Vibernt<\/title>/);
-    // The stopgap stylesheet is cached for an hour, so its link changes when its rules do.
-    const href = /<link rel="stylesheet" href="(\/assets\/local\.css\?v=[0-9a-z]+)">/.exec(html)?.[1];
-    assert.ok(href, 'versioned link'); assert.match(await (await w.call(href)).text(), /\.x-screen/);
+    // Every class is Fire's own: there are no stopgap rules, so no page links the stopgap stylesheet.
+    assertFireMarkup(html);
+    assert.ok(!html.includes('local.css') && !/class="[^"]*\bx-/.test(html));
+    assert.ok(!(await (await w.call('/assets/local.css')).text()).includes('{'));
     w.env.DB.db.prepare("UPDATE realms SET display_name=? WHERE id='default'").run('<b>Acme</b>');
     const { forgetRealms } = await import('../apps/server/src/realms/realm.mjs'); forgetRealms(w.env);
     const escaped = await (await w.call('/signed-out')).text();
@@ -83,9 +84,15 @@ test('the console wears the app shell: scripts only from this origin, and naviga
     // Only the Branding page may call the admin API.
     assert.match((await read('/admin/branding')).response.headers.get('content-security-policy'), /script-src 'self'; connect-src 'self';/);
 });
-test('the shell script loads three Fire modules and makes no request of its own', async () => {
+test('the one-time-code script loads Fire\'s forms module and makes no request of its own', async () => {
+    const { readFileSync } = await import('node:fs');
+    const script = readFileSync(new URL('../apps/server/public/imprim/otp.js', import.meta.url), 'utf8');
+    assert.deepEqual([...script.matchAll(/import\('([^']+)'\)/g)].map(m => m[1]), ['/fire/js/forms.js']);
+    assert.ok(!/fetch\(|XMLHttpRequest|https?:/.test(script));
+});
+test('the shell script loads two Fire modules and makes no request of its own', async () => {
     const { readFileSync } = await import('node:fs');
     const script = readFileSync(new URL('../apps/server/public/imprim/shell.js', import.meta.url), 'utf8');
-    assert.deepEqual([...script.matchAll(/import\('([^']+)'\)/g)].map(m => m[1]), ['/fire/js/icons.js', '/fire/js/shell.js', '/fire/js/texture.js']);
+    assert.deepEqual([...script.matchAll(/import\('([^']+)'\)/g)].map(m => m[1]), ['/fire/js/shell.js', '/fire/js/texture.js']);
     assert.ok(!/fetch\(|XMLHttpRequest|https?:/.test(script));
 });
