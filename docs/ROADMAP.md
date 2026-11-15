@@ -8,8 +8,9 @@ policy, step-up (`acr_values`, `max_age`) and MFA for admins and agent consent; 
 security notices and admin MFA reset; passkeys (WebAuthn) for passwordless sign-in and as a second factor; a provider registry (any OIDC issuer,
 Microsoft/Entra ID, Sign in with Apple) with per-realm credentials and `trusted_domains`; service clients (`client_credentials` with `private_key_jwt`),
 introspection, revocation, an app grant API, DPoP-bound tokens and token exchange between apps; user lifecycle events to apps and audit export;
-branding per realm and per app (tokens only, WCAG AA contrast checks, sandboxed logo assets, branded pages and email
-footers, a console editor with preview).
+every page built with the Fire design system; branding per realm and per app as a Fire look (palette, tone, type set
+and other tweaks) with name, copy, links and sandboxed logo uploads, branded pages and email footers, and Fire's
+Tweaks panel in the console.
 
 Planned, roughly in order. Each item is an issue to discuss before code:
 
@@ -18,6 +19,6 @@ Planned, roughly in order. Each item is an issue to discuss before code:
    copy overrides per language.
 3. **HTML email.** A fixed, branded HTML layout alongside the plain-text body.
 
-Still owed from earlier milestones: live qualification with Claude Code, Cursor and Codex against a real MCP
-resource; device flow from a CLI; Workers egress and DNS-rebinding behaviour; Safari and Chrome cookie flows; Queue
-delivery against a real app.
+Still to verify live: Claude Code, Cursor and Codex against a real MCP resource; device flow from a CLI; Workers
+egress and DNS-rebinding behaviour; Safari and Chrome cookie flows; Queue delivery against a real app; the Fire
+interface on a deployed Worker ([Security](SECURITY.md#not-yet-verified-live)).

@@ -50,3 +50,11 @@ test('the sign-in-methods migration preserves existing state and foreign-key cas
         assert.equal(db.prepare('SELECT count(*) n FROM access_tokens').get().n, 0);
     } finally { db.close(); }
 });
+test('the seed script takes the console\'s policy settings with the console\'s rules', async () => {
+    const { clientSeedSql } = await import('../scripts/seed-client.mjs');
+    const base = { id: 'seeded', secret_hash: null, redirect_uris: ['https://seeded.example/callback'], sign_in_methods: ['email'], backchannel_uri: 'https://seeded.example/backchannel' };
+    const sql = clientSeedSql({ ...base, mfa: 'required', mfa_trusted_device_days: 30, agent_consent_mfa: 'required', agent_dpop: 'required', user_events: 'on' });
+    for (const fragment of ["'required'", '30', "'on'"]) assert.ok(sql.includes(fragment), fragment);
+    for (const bad of [{ mfa: 'always' }, { mfa_trusted_device_days: 91 }, { agent_dpop: 'yes' }, { user_events: true }, { token_exchange_from: { other: ['missing-scope'] } }])
+        assert.throws(() => clientSeedSql({ ...base, ...bad }), /Invalid policy/, JSON.stringify(bad));
+});

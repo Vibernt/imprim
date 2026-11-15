@@ -8,16 +8,16 @@ Identity for people and the agents that act for them: OpenID Connect and OAuth 2
 |---|---|
 | [Deploying](DEPLOY.md) | Running Imprim on Cloudflare, staging releases and upgrades |
 | [Realms](REALMS.md) | Several brands on one deployment: hosts, keys, users, providers, admins |
-| [Branding](BRANDING.md) | Logos, colours, fonts, copy and links per realm and per app, with contrast checks |
+| [Branding](BRANDING.md) | A Fire look, name, copy, links and logos per realm and per app |
+| [Fire](fire/README.md) | The design system every page is built with, and how Imprim uses it |
 | [Integrating](INTEGRATE.md) | Adding sign-in to an app, accepting agents on an MCP server, building an agent |
 | [Clients](CLIENTS.md) | Client registration settings and the `imprim-client` package |
 | [Agent access](AGENT_ACCESS.md) | How agents connect for a person, and how apps protect resources |
 | [Protocol](PROTOCOL.md) | Exact routes, parameters, claims and errors |
 | [Configuration](CONFIGURATION.md) | Worker bindings, secrets and settings |
 | [Control plane](CONTROL_PLANE.md) | The admin console and back-channel delivery |
-| [Operations](OPERATIONS.md) | Keys, retention, monitoring and release gates |
+| [Operations](OPERATIONS.md) | Keys, retention, delivery, monitoring, backups, provider apps, release gates and incidents |
 | [Architecture](ARCHITECTURE.md) | Components, schema and request flows |
 | [Security](SECURITY.md) | Threat model, controls, and what is not yet verified live |
 | [Security pass 2026-11-15](SECURITY_PASS.md) | The latest review and its fixes |
 | [Roadmap](ROADMAP.md) | What is planned next |
-| [Porting](PORTING.md), [history](history/) | Provenance from Assay and earlier milestone reports |

@@ -15,11 +15,13 @@ step.
 - **Apps keep authorisation.** Imprim proves who someone is and what they consented to. Your app keeps workspaces,
   memberships, roles and its own sessions, and checks them on every request.
 - **Many brands, one deployment.** Each realm has its own issuer host, signing keys, users, provider credentials,
-  email sender, admins and branding; each app can override the logo, colours, copy and links.
+  email sender, admins and branding. Branding is a look (palette, tone, type set and other tweaks) plus a name,
+  copy, links and logos, and each app can override it.
 - **Machines too.** Service clients (`client_credentials` with `private_key_jwt`), introspection, revocation,
   DPoP-bound tokens, token exchange between apps, and signed user lifecycle events.
+- **An admin console** for apps, users, sessions, service clients, branding, audit, keys and realms.
 
-📖 **Docs: https://vibernt.github.io/imprim/**. Start with [Getting started](docs/GETTING_STARTED.md).
+Docs: **https://vibernt.github.io/imprim/**. Start with [Getting started](docs/GETTING_STARTED.md).
 
 ## How it fits together
 
@@ -27,7 +29,8 @@ step.
 Person ── browser ───────────┐                         ┌── D1: realms, users, clients, sessions, grants, keys, audit
 Agent ─── code / device ─────┼──> Imprim (Worker) ─────┼── Queue: logout, revocation and user events
 App ───── OIDC / OAuth ──────┤        │                ├── Email: sign-in links and security notices
-Service ── private_key_jwt ──┘        │                └── GitHub, Google, Microsoft, Apple, OIDC, Turnstile
+Service ── private_key_jwt ──┘        │                ├── GitHub, Google, Microsoft, Apple, OIDC, Turnstile
+                                      │                └── Static assets: the Fire design system
 App MCP server <── signed access tokens ── verified with imprim-client, intersected with the person's role
 ```
 
@@ -62,22 +65,29 @@ npm run check
 
 | Path | Contents |
 |---|---|
-| `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, maintenance |
-| `apps/server/migrations/` | D1 schema |
+| `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, maintenance |
+| `apps/server/public/` | Static assets: the vendored Fire design system (`fire/`), the branding editor (`imprim/`) and `_headers` |
+| `apps/server/migrations/` | D1 schema, `0001` to `0019` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
-| `scripts/` | Realm, client-seed and import SQL generators (offline), checks, client build |
+| `scripts/` | Offline SQL generators for realms, clients and user imports; checks; client build |
 | `tests/` | `node:test` suites on a real SQLite harness, including negative tests at every trust boundary |
 | `docs/` | Guides, protocol, security and operations ([index](docs/README.md)) |
+| `docs/fire/` | Fire's guide, writing rules and class vocabulary, and how Imprim uses Fire |
+
+## Built with
+
+Every page uses the [Fire design system](docs/fire/README.md) (MIT), vendored in `apps/server/public/fire/`, with
+fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (ISC).
 
 ## Status
 
-Imprim runs in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`. Production
-runs the 2026-11-15 release (the security pass, realms and the rename; see [Security pass](docs/SECURITY_PASS.md)).
-Staging also runs passwords, two-factor, the account page, passkeys, the provider registry, machines, DPoP, user
-events and branding (migrations `0010`–`0018`), deployed on 2026-11-15; production follows after the staging
-checks ([Deploying](docs/DEPLOY.md)).
-What has not yet been verified against live Cloudflare is listed in [Security](docs/SECURITY.md). What comes next
-is in the [Roadmap](docs/ROADMAP.md).
+Vibernt runs Imprim in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`.
+Production runs the 2026-11-15 release (the security pass, realms and the rename; see
+[Security pass](docs/SECURITY_PASS.md)). Staging also runs passwords, two-factor, the account page, passkeys, the
+provider registry, machines, DPoP, user events and branding (migrations `0010`–`0018`), deployed on 2026-11-15;
+production follows after the staging checks ([Deploying](docs/DEPLOY.md)). The Fire interface and migration `0019` are not deployed yet.
+What has not been verified against live Cloudflare is listed in [Security](docs/SECURITY.md#not-yet-verified-live).
+What comes next is in the [Roadmap](docs/ROADMAP.md).
 
 ## Contributing
 

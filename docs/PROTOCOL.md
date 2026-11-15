@@ -1,8 +1,9 @@
-# Identity protocol (M1 sign-in, M2 agent access and M4 control plane)
+# Protocol
 
-Issuer: `https://id.vibernt.ai`. Native ESM Worker; zero runtime dependencies. Identity proves a human's identity;
-apps retain workspace admission, memberships, roles, local sessions and API tokens. Imported Assay principal ids
-remain `sub`. This implementation is not yet OpenID-certified; see the release gates in OPERATIONS.md.
+Every route below is served on each realm's issuer, for example `https://id.example.com`. Imprim proves a person's
+identity; apps keep workspace admission, memberships, roles, local sessions and API tokens. Users imported with
+`scripts/import-users.mjs` keep their ids as `sub`. Imprim is not yet OpenID-certified; see the
+[release gates](OPERATIONS.md#release-gates).
 
 ## Endpoints
 
@@ -22,22 +23,36 @@ remain `sub`. This implementation is not yet OpenID-certified; see the release g
 | `GET /auth/github/callback` | Consumes hashed OAuth state, checks browser, exchanges code, links numeric GitHub id. |
 | `GET /v1/auth/google/start?request_id=…` | Browser-bound pending request, Google OIDC code flow with S256, state and nonce. |
 | `GET /login/google/callback` | Consumes Google state, verifies RS256 ID token with cached Google JWKS, links Google sub. |
-| `GET /login` | Email fragment confirmation, or operator-only standalone email request with no client registered. |
-| `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; signed-in page requires a current identity session. |
-| `GET /assets/theme.css[?client=id]` | Branding tokens as CSS variables for the realm, or an app in it; five-minute cache ([Branding](BRANDING.md)). |
-| `GET /assets/brand/<sha256>` | An uploaded logo or mark of this realm, sandboxed (`CSP: default-src 'none'; sandbox`, `nosniff`); 404 otherwise. |
+| `GET /v1/auth/provider/<id>/start?request_id=…` | Registry provider (OIDC, Microsoft, Apple) start: PKCE S256, state and nonce. |
+| `GET`/`POST /login/provider/<id>/callback` | Registry provider callback; Apple's `form_post` is answered with a 303 to the same URL as a GET. |
+| `POST /v1/auth/password` | JSON `{request_id, email, password, turnstile}`; password sign-in (below). |
+| `POST /v1/auth/passkey/options`, `/v1/auth/passkey/verify` | Passkey sign-in ceremony (below). |
+| `GET`/`POST /mfa` | Second-factor challenge for a pending authorization, agent consent or the console. |
+| `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. |
+| `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; the signed-in page requires a current identity session. |
+| `GET /account`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account page and its password, factor and email-change pages (below). |
+| `POST /account/{profile,sessions,apps,devices,email,email/confirm,delete,password,mfa,revoke}` | Account changes; same Origin and CSRF. |
+| `POST /account/passkeys/{options,register,remove}` | Passkey registration and removal. |
+| `GET /assets/local.css`, `/assets/sign-in.js`, `/assets/passkey.js` | Imprim's stopgap CSS and its two page scripts; one-hour cache. |
+| `GET /assets/theme.css[?client=id]` | The brand's Fire look as `<html>`-level custom properties for the realm, or an app in it; five-minute cache ([Branding](BRANDING.md)). |
+| `GET /assets/brand/<sha256>` | An uploaded logo or mark of this realm, sandboxed (`CSP: default-src 'none'; style-src 'unsafe-inline'; sandbox`, `nosniff`); 404 otherwise. |
+| `GET /fire/*`, `/imprim/*` | Static assets (Fire, and the console's branding editor module), served before the Worker with `nosniff` and `Cross-Origin-Resource-Policy: same-origin`. |
 
-The email-request UI loads Turnstile's script/frame only when both keys are configured. With neither key configured,
-the email button works without a challenge for local/development use. Every HTML page has a strict CSP allowing only
-same-origin assets and the Turnstile script/frame origin; no inline script is used. No production readiness is implied.
+Pages use no inline script or style. Every HTML page sends `default-src 'self'; script-src 'self'; frame-src 'none';
+style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri
+'none'`. `form-action` also names the origin a page's form redirects to (an app's post-logout URI, an agent's
+callback). The sign-in page adds Turnstile's origin to `script-src` and `frame-src` only when both Turnstile keys
+are configured; with neither, the email button works without a challenge for development. Console pages use a
+stricter policy ([Control plane](CONTROL_PLANE.md#authentication-and-routes)).
 
 ## Authorization
 
 Required query parameters: `client_id`, `redirect_uri`, `response_type=code`, `scope` including `openid`, nonempty
 `state`, nonempty `nonce`, `code_challenge` (43-character base64url SHA-256 digest), `code_challenge_method=S256`.
-Supported scopes: `openid email profile` (no additional profile claims currently exist). Only query response mode.
+Supported scopes: `openid email profile` (`profile` adds `name`). Only the `query` response mode is accepted.
 `prompt=login` forces a new sign-in; `prompt=none` returns `login_required` to the trusted client if no valid session.
-Unsupported request objects, `request_uri`, `claims`, `max_age`, and authorization `id_token_hint` are rejected.
+`max_age` (whole seconds) and `acr_values` are accepted (see Two-factor authentication). Request objects,
+`request_uri`, `claims` and an authorization `id_token_hint` are rejected.
 Duplicate query/form parameters are rejected. State/nonce limit: 512 characters. Bodies: 16 KiB.
 
 Redirects match the stored string exactly; no wildcard, username/password, fragment, whitespace, or backslash.
@@ -69,7 +84,9 @@ authentication spends the caller's address budget instead.
 Success: `access_token`, `token_type=Bearer`, `expires_in=600`, `id_token`, `scope`, with `Cache-Control: no-store`.
 The access token is independent random material, hash-stored in D1 for UserInfo only. It is not an app API token.
 The signed ID token lasts 600 seconds and has `iss`, `aud` (client id), `azp` (same client id), `sub`, `iat`, `exp`,
-`amr` (`["email"]`, `["github"]`, or `["google"]`), `auth_time` (Unix seconds), `sid`, and `nonce`. `email` and boolean
+`amr` (the method: `email`, `pwd`, `github`, `google` or a provider id; a passkey gives `hwk` or `swk` with `user`;
+a second factor adds `otp` and `mfa`), `acr`, `auth_time` (Unix seconds), `sid`, and `nonce`. `name` appears with the
+`profile` scope when the person has set one. `email` and boolean
 `email_verified` appear only when the request asked for the `email` scope (OIDC Core 5.4).
 Only ES256 is emitted/advertised; private key material is never in JWKS. Human app grants have no refresh tokens; neither flow supports implicit grants. Agent refresh grants are described below.
 
@@ -87,8 +104,8 @@ Only ES256 is emitted/advertised; private key material is never in JWKS. Human a
   - a verified email (`email_verified` true; Microsoft has no such claim, so its email is accepted as a provider
     claim).
 - **Email trust:** mailbox proof only where the provider lists the domain in `trusted_domains`, with a pinned tenant
-  for Microsoft. Otherwise the S4 rules apply: no auto-link to an existing account, and a new account is unverified
-  until its first email link.
+  for Microsoft. Otherwise there is no auto-link to an existing account, and a new account is unverified until its
+  first email link.
 - **Apple:** `form_post`, a `SameSite=None` state cookie, and a client secret signed with the team key.
 
 **Passkeys** (WebAuthn Level 2; client method `passkey`). The relying-party ID is the realm's host, and the origin
@@ -190,7 +207,7 @@ satisfies a domain rule. An account that exists for another app is **not** admit
 applies again on SSO, at agent consent and in the `/token` transaction. A refused SSO returns `error=access_denied`
 to the client's redirect URI, including under `prompt=none`.
 Open clients allow new verified users. Blocked/deleted/merged users always fail. Invitations do not grant app access.
-An admin in the realm's D1 roster can sign in by email at `/login` before any RP is registered. Standalone login is
+An admin in the realm's D1 roster can sign in by email at `/login` before any app is registered. Standalone login is
 restricted to that roster; entries are compared case-insensitively. GitHub and Google cannot authenticate administrator
 emails, either the provider email or an existing linked account email.
 
@@ -200,8 +217,9 @@ email belonging to a different live/blocked user, or a tombstone merged elsewher
 merged into the linked user (or deleted without a merge target) is not a conflict; a provider identity is never reassigned. Provider access tokens are neither
 stored nor logged. OAuth state lasts ten minutes, is hashed, browser nonce bound, and consumed before network I/O.
 
-Each client's `sign_in_methods` is an ordered, nonempty list of distinct `email`, `github`, and/or `google`.
-Only those controls appear on its pending sign-in page; one method is offered directly. Method checks run at magic
+Each client's `sign_in_methods` is an ordered, nonempty list of distinct methods: `email`, `password`, `passkey`,
+`github`, `google`, or a provider id from the realm's config. Only those controls appear on its pending sign-in
+page; one method is offered directly. Method checks run at magic
 request and verification, each provider start and callback, authorization completion and code exchange. Existing
 SSO sessions must use an allowed method; otherwise interactive authorization shows the allowed methods and
 `prompt=none` returns `login_required`. A policy change never silently substitutes another method.
@@ -252,15 +270,15 @@ Human logout captures durable app-session associations and sends signed OIDC bac
 An association expires 30 days after it was created, matching the identity-session lifetime. Token exchange records
 the association once per client, subject and identity-session sid; later exchanges do not extend its expiry. Scheduled
 maintenance deletes at most 500 expired associations per run. Block, delete, logout and merge capture only unexpired
-associations, even if maintenance has not removed expired rows yet. Apps must end any session minted from identity
-sign-in within 30 days of that sign-in (Assay uses seven days). An app that needs a longer session must obtain a new
-identity sign-in and create a new association.
+associations, even if maintenance has not removed expired rows yet. Apps must end any session minted from an Imprim
+sign-in within 30 days of that sign-in. An app that needs a longer session must obtain a new sign-in, which creates
+a new association.
 The form field is `logout_token`, with ES256 header `typ=logout+jwt` and claims `iss`, scalar app `aud`, `sub`, `sid`
 when scoped to one session, integer `iat`, `exp=iat+120`, stable event `jti`, and exactly
 `events:{"http://schemas.openid.net/event/backchannel-logout":{}}`; never `nonce`. One event is sent per affected client.
 Account-wide actions covering multiple sessions of one client omit `sid` to end all sessions for that subject.
 Admin session revocation uses the same session-scoped path; merge logs out the disappearing subject and also the
-survivor, preserving M4's explicit reauthentication requirement.
+survivor, so both must sign in again.
 Block/delete capture all associations and revoke all grants atomically. Agent revocations use the separate event below.
 Both back-channel event types stop retrying 24 hours after outbox creation. The dispatcher marks them expired;
 the consumer acknowledges a late queue message without signing or delivery. `iat` remains the delivery time.
@@ -275,7 +293,7 @@ JSON errors have `error` and `error_description`; browser GET errors may render 
 `origin`, `csrf`, `browser_binding`, `turnstile_*`, `rate_limit`, and configuration errors. Unexpected failures are
 500 `server_error` without internal details. Failed dependencies are not replaced by alternate providers.
 
-## Agent authorization (M2)
+## Agent authorization
 
 This implements the [MCP authorization profile](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization),
 [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414.html), [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591.html),
@@ -370,7 +388,7 @@ dispatcher, and the person never sees an error.
 The queue consumer sends form-encoded `revocation_token`, a signed ES256 security event token (RFC 8417,
 `typ=secevent+jwt`) containing issuer, app ID `aud`, person's `sub`, stable event `jti`, five-minute `iat`/`exp`,
 `grant_id`, exact `resource`, and `events: {"<issuer>/events/agent-revoked": {}}`. The event type is relative to the
-issuer, so each realm names its own events; for `https://id.vibernt.ai` it is unchanged. Client 0.3.0 accepts only
+issuer, so each realm names its own events. Client 0.3.0 accepts only
 this form; 0.2.0 accepted `typ=JWT`. The receiver verifies signature/issuer/audience/event/
 time and deduplicates `jti`; 2xx acknowledges receipt. Delivery uses a ten-second deadline and refuses redirects;
 failures retry until the 24-hour creation bound and may reach the configured DLQ. Delivery is at least once within that bound. This event is not an OIDC logout
@@ -455,7 +473,8 @@ expiry returns `expired_token`. Approved codes redeem once to the same access/re
 Expired device rows remain one day for expiry responses, then maintenance removes them. Unknown/consumed codes
 return `invalid_grant`. Policy, user status and resource binding are checked again before credentials are issued.
 
-## Control plane (M4)
+## Control plane
 
-See [Control plane](CONTROL_PLANE.md) for all `/admin` and `/admin/api/*` routes, scoped magic-link sessions,
-CSRF/Origin enforcement, destructive reauthentication, transactional audit, block/merge/delete behavior and key rotation.
+See [Control plane](CONTROL_PLANE.md) for all `/admin` and `/admin/api/*` routes, scoped email-link sessions,
+CSRF and Origin enforcement, reauthentication, transactional audit, block, merge and delete behaviour, and key
+rotation.

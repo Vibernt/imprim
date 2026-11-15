@@ -7,7 +7,7 @@ export function discovery(env) {
         userinfo_endpoint: `${issuer}/userinfo`, jwks_uri: `${issuer}/.well-known/jwks.json`, end_session_endpoint: `${issuer}/logout`,
         introspection_endpoint: `${issuer}/introspect`, revocation_endpoint: `${issuer}/revoke`,
         introspection_endpoint_auth_methods_supported: ['client_secret_basic'], revocation_endpoint_auth_methods_supported: ['client_secret_basic', 'private_key_jwt', 'none'],
-        response_types_supported: ['code'], response_modes_supported: ['query', 'form_post'], grant_types_supported: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'urn:ietf:params:oauth:grant-type:token-exchange'],
+        response_types_supported: ['code'], response_modes_supported: ['query'], grant_types_supported: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'urn:ietf:params:oauth:grant-type:token-exchange'],
         backchannel_logout_supported: true, backchannel_logout_session_supported: true,
         subject_types_supported: ['public'], id_token_signing_alg_values_supported: ['ES256'],
         token_endpoint_auth_methods_supported: ['client_secret_basic', 'private_key_jwt', 'none'], token_endpoint_auth_signing_alg_values_supported: ['ES256', 'RS256'], dpop_signing_alg_values_supported: ['ES256', 'RS256', 'EdDSA'], code_challenge_methods_supported: ['S256'],

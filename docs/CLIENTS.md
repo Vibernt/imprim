@@ -1,35 +1,32 @@
 # Registering an app and signing in
 
-App registration has no self-service endpoint or admin console; Dynamic registration is for agents only. A trusted operator registers a client directly in D1 after
-reviewing its app-owned callback/logout endpoints. Do not register Assay until the empty-client deployment and
-subject-preserving import have been verified. The zero-dependency `imprim-client` package implements the relying-party flow.
+A realm admin registers each app, in the console (`<issuer>/admin` → Clients), through the
+[admin API](CONTROL_PLANE.md) or offline with `scripts/seed-client.mjs`, after reviewing its callback, logout and
+back-channel URLs. There is no self-service app registration; dynamic registration is for agents only. If the app
+is moving existing users to Imprim, import them first so they keep their ids as `sub`
+([Operations](OPERATIONS.md#importing-existing-users)). The zero-dependency `imprim-client` package implements the
+relying-party flow.
 
 ## Registration
 
-Choose a unique stable id such as `assay`. Use a cryptographically random 32-byte secret for a confidential server
-app. Store the plaintext in the app's secret manager; identity stores only its SHA-256 hex digest. Never put a secret
-in a browser bundle or commit it in SQL. Example offline generation (stdout is sensitive; capture securely):
+Choose a unique stable id such as `my-app`. The console generates a confidential client's secret and shows it once.
+For offline seeding, use a cryptographically random 32-byte secret. Store the plaintext in the app's secret manager;
+Imprim stores only its SHA-256 hex digest. Never put a secret in a browser bundle or commit it in SQL. Example
+offline generation (stdout is sensitive; capture it securely):
 
-```sh
+```bash
 node --input-type=module -e 'import {randomBytes,createHash} from "node:crypto"; const secret=randomBytes(32).toString("base64url"); console.log(JSON.stringify({secret,secret_hash:createHash("sha256").update(secret).digest("hex")}))'
 ```
 
-Review the exact URLs with the app owner; the following domains/paths are examples, not Assay's verified callback
-contract. Replace values, save SQL in ignored `imports/`, and have the operator apply it to D1:
+Review the exact URLs with the app owner; the domains and paths below are examples.
 
-```sql
-INSERT INTO clients(id,secret_hash,redirect_uris,post_logout_uris,backchannel_uri,signup_policy,allowed_domains,branding,dev,sign_in_methods,google_hosted_domains)
-VALUES('example-app','REPLACE_WITH_SHA256_HEX',
- '["https://app.example/auth/identity/callback"]',
- '["https://app.example/signed-out"]',NULL,'invited',
- '["example.com"]','{"name":"Example app"}',0,'["email","github","google"]','[]');
-```
-
-`sign_in_methods` is a JSON array containing one to three distinct values from `email`, `github`, `google`, in
-display order. Example: `["google"]` offers only Google and refuses magic-link and GitHub endpoints. Empty arrays,
-unknown values and duplicates are rejected. Existing M1 clients retain `["email","github"]` through migration
-0002 (also the SQL column default); explicitly configure this field for new clients. Disabled methods are rejected
-on start and completion, not merely hidden. An SSO session from a disallowed method requires a fresh sign-in.
+`sign_in_methods` is an ordered JSON array of distinct methods, in display order: `email`, `password`, `passkey`,
+`github`, `google`, or a provider id from the realm's config, such as `microsoft` ([Realms](REALMS.md)). Example:
+`["google"]` offers only Google and refuses the email-link and GitHub endpoints. Empty arrays, unknown values and
+duplicates are rejected. Disabled methods are refused at start and at completion, not only hidden. An SSO session
+from a method the app does not allow needs a fresh sign-in. `passkey` adds "Sign in with a passkey" (people add
+passkeys at `/account/mfa`). With `password`, the sign-in page shows a password field and an "email me a link to
+set one" action ([Protocol](PROTOCOL.md#sign-in-and-sessions)).
 
 `google_hosted_domains` is an optional list of distinct lowercase Google Workspace domains, stored as JSON `[]`
 when unrestricted. Example: `["example.com","subsidiary.example"]`. Restrictions check Google's signed `hd` claim,
@@ -37,30 +34,36 @@ not the email suffix, and apply again to SSO and code exchange. Missing `hd` fai
 URLs and `@` prefixes are invalid. This setting restricts Google only; use `["google"]` if every sign-in must prove
 Workspace membership. It is independent of signup admission in `allowed_domains`.
 
-For validated configuration-driven seeding, save a JSON object in ignored `imports/`, for example:
+For offline seeding, save a JSON object outside Git, for example:
 
 ```json
 {
-  "id": "example-app",
+  "id": "my-app",
   "secret_hash": "REPLACE_WITH_SHA256_HEX",
-  "redirect_uris": ["https://app.example/auth/identity/callback"],
-  "post_logout_uris": ["https://app.example/signed-out"],
+  "redirect_uris": ["https://app.example.com/auth/callback"],
+  "post_logout_uris": ["https://app.example.com/signed-out"],
+  "backchannel_uri": "https://app.example.com/auth/backchannel",
   "signup_policy": "invited",
   "sign_in_methods": ["google"],
   "google_hosted_domains": ["example.com"],
-  "branding": {"name": "Example app"}
+  "branding": {"name": "My app"}
 }
 ```
 
-Run `node scripts/seed-client.mjs imports/client.json > imports/client.sql`. The script requires explicit methods,
-validates domain and callback settings, and generates SQL only. It accepts a 64-character lowercase SHA-256 hash
-(or explicit `null` for a public client); the placeholder above must be replaced. Review the SQL before an operator
-applies it. Existing client IDs fail rather than being overwritten. Configure Google credentials as described in
-OPERATIONS.md before enabling Google. Missing provider configuration fails explicitly; no alternate method is chosen.
+Generate the SQL:
 
-`sign_in_methods` is an ordered list from `email`, `password`, `passkey`, `github` and `google`. `passkey` adds
-"Sign in with a passkey" (people add passkeys at `/account/mfa`). With `password`, the sign-in
-page shows a password field and an "email me a link to set one" action (see PROTOCOL.md).
+```bash
+node scripts/seed-client.mjs client.json > client.sql
+```
+
+The script requires explicit methods, validates domain, callback, branding and agent settings, and generates SQL
+only. It accepts a 64-character lowercase SHA-256 hash (or explicit `null` for a public client); replace the
+placeholder. The row lands in the `default` realm (the column default) unless you add a `realm_id` to the SQL, and
+an existing client id fails rather than being overwritten. Review the SQL, then apply it with `wrangler d1
+execute`. The second-factor, DPoP, token exchange and user event settings are set in the console
+([Configuration](CONFIGURATION.md#app-client-settings-clients)). Set up a provider's credentials
+([Operations](OPERATIONS.md#provider-apps-per-realm)) before an app enables it; missing provider configuration
+fails explicitly and no other method is chosen.
 
 `mfa` (`off`, `optional`, `required`), `mfa_trusted_device_days` (0–90) and `agent_consent_mfa` (`off`,
 `required`) set the second-factor policy (PROTOCOL.md, Two-factor authentication). Ask for a fresh or stronger
@@ -72,12 +75,13 @@ person only when the sign-in proves the mailbox: an email link, or Google with a
 GitHub's verified flag does not. Under `signup_policy='invited'` a person is admitted once they have reached this
 client before, hold a current invitation, or match an allowed domain. An account created through another app is
 not admitted here because it exists; the app gets `error=access_denied` at its redirect URI. `open` allows new verified identities;
-it grants no permission inside your app. `branding` overrides the realm's branding for this app: name, theme, copy, links and logos ([Branding](BRANDING.md)). Back-channel URI receives distinct `revocation_token` agent events and `logout_token` human events through the M4 durable outboxes. `dev=1` permits exact HTTP localhost redirects
+it grants no permission inside your app. `branding` overrides the realm's branding for this app: name, Fire look, copy, links and logos ([Branding](BRANDING.md)). The back-channel URI receives `logout_token` human events, `revocation_token` agent events and, with `user_events: on`, `event_token` user events, all through durable outboxes. `dev=1` permits exact HTTP localhost redirects
 (including the registered port); production clients must use HTTPS. Never register broad wildcard callback handlers.
 
 A public client has `secret_hash=NULL`; it must use PKCE, and cannot call the invitations endpoint. Confidential
-clients must use `client_secret_basic`, not form-post secrets. Rotation is a reviewed replacement of the stored
-hash and app secret; There is no overlapping-secret grace window or rotation console. Coordinate the switch.
+clients must use `client_secret_basic`, not form-post secrets. Rotate a secret in the console or with
+`rotate-secret` ([Control plane](CONTROL_PLANE.md)): the new secret is shown once and the old one stops working at
+once, with no overlap, so switch the app in the same window.
 
 ## Authorization-code round trip
 
@@ -87,14 +91,14 @@ hash and app secret; There is no overlapping-secret grace window or rotation con
 2. Redirect the browser to identity:
 
    ```text
-   https://id.vibernt.ai/authorize?client_id=example-app&redirect_uri=URL_ENCODED_CALLBACK&response_type=code&scope=openid%20email&state=RANDOM_STATE&nonce=RANDOM_NONCE&code_challenge=S256_DIGEST&code_challenge_method=S256
+   https://id.example.com/authorize?client_id=my-app&redirect_uri=URL_ENCODED_CALLBACK&response_type=code&scope=openid%20email&state=RANDOM_STATE&nonce=RANDOM_NONCE&code_challenge=S256_DIGEST&code_challenge_method=S256
    ```
 
-   Identity uses its own 30-day host-only session. Otherwise it performs one of the client's configured email, GitHub or Google methods and resumes the
-   request. `prompt=none` returns `login_required` if interaction is needed; the app decides whether to start a
+   Imprim reuses its own 30-day host-only session when it can. Otherwise it offers the client's configured methods
+   and resumes the request. `prompt=none` returns `login_required` if interaction is needed; the app decides whether to start a
    new interactive login. No cross-domain cookies are shared. Do not use third-party iframes for silent login.
 3. At the callback, atomically consume the app's login transaction. Check exact `state` and the authorization
-   response `iss=https://id.vibernt.ai` **before** exchanging the code. Handle `error` without creating a session.
+   response `iss=https://id.example.com` **before** exchanging the code. Handle `error` without creating a session.
 4. POST to `/token` with `grant_type=authorization_code`, `code`, exact original `redirect_uri`, and `code_verifier`.
    Use HTTP Basic with form-encoded client id and secret for confidential clients; public clients send `client_id`.
    Do not forward the browser's cookies. Codes expire after 60 seconds and are single-use. Retry by starting a new
@@ -104,13 +108,13 @@ hash and app secret; There is no overlapping-secret grace window or rotation con
    `azp`, `exp`, `iat` with bounded clock skew, and your exact stored `nonce`. Reject unknown/malformed claims.
    Cache keys, and refresh once on unknown kid against the fixed issuer JWKS URL; a long cache alone is insufficient
    for one-hour key prepublication. Validation failures do not create app sessions.
-6. Upsert the app's local principal projection keyed by `sub` (for Assay, the unchanged principal id), apply its
-   own workspace admission/role policy, then create the app's host-only session and CSRF token. Identity's email
-   invitation means “may establish identity”, not “may create or access a workspace”.
+6. Upsert the app's local user record keyed by `(iss, sub)` (an imported user keeps their old id as `sub`), apply
+   its own workspace admission and role policy, then create the app's host-only session and CSRF token. An Imprim
+   invitation means “may sign in to this app”, not “may create or access a workspace”.
 
 Access tokens last ten minutes and are only for `GET /userinfo` or `POST /userinfo`, via `Authorization: Bearer …`. ID tokens are not
 accepted as UserInfo credentials. Human app grants have no refresh tokens; apps retain local sessions and use top-level identity
-redirects when another authentication is needed. Existing local app sessions should continue during identity outages.
+redirects when another authentication is needed. Existing local app sessions should continue during Imprim outages.
 
 ## Invite a person
 
@@ -122,27 +126,29 @@ email. This call registers admission; it does not send mail or grant workspace m
 
 ## Sign out
 
-An app session minted from an identity sign-in must expire within 30 days of that sign-in; Assay uses seven days.
-Identity retains the client/subject/session association for 30 days after creation and sends back-channel logout
+An app session minted from an Imprim sign-in must expire within 30 days of that sign-in.
+Imprim retains the client/subject/session association for 30 days after creation and sends back-channel logout
 only for unexpired associations. Renewing a local session alone does not extend that association. Require a new
 identity sign-in before minting a session that would exceed the 30-day limit.
 
 Delete the app's own session under its own CSRF policy first. Redirect the browser to:
 
 ```text
-https://id.vibernt.ai/logout?client_id=example-app&post_logout_redirect_uri=URL_ENCODED_REGISTERED_URI&state=APP_LOGOUT_STATE
+https://id.example.com/logout?client_id=my-app&post_logout_redirect_uri=URL_ENCODED_REGISTERED_URI&state=APP_LOGOUT_STATE
 ```
 
-Identity validates the return URI and asks for explicit CSRF-protected confirmation before deleting its own session.
-Validate your returned logout state. You can also pass `id_token_hint`; it must be signed by this issuer and match the client and current session.
-Other apps' human sessions are unaffected until M4 back-channel logout delivery. Do not advertise global sign-out yet.
+Imprim validates the return URI and asks for explicit CSRF-protected confirmation before deleting its own session.
+Validate your returned logout state. You can also pass `id_token_hint`; it must be signed by this issuer and match
+the client and current session. Every app with a session from that sign-in then receives a signed back-channel
+`logout_token`, delivered at least once; ending its session is each app's job.
 
-## Required app-side tests before Assay switches
+## App-side tests before going live
 
-Wrong/missing state, replayed callback transaction/code, swapped nonce, wrong issuer/audience/azp, expired token,
-`alg=none`/HS256 substitution, untrusted key URL, unknown kid refresh, client-secret failure, blocked/deleted account,
-no-admission page, agent-connect approval continuation, local logout/CSRF and identity outage with an existing app
-session. The server suite does not substitute for these tests in Assay or for OpenID conformance.
+Wrong or missing state, replayed callback transaction or code, swapped nonce, wrong issuer, audience or `azp`,
+expired token, `alg=none` or HS256 substitution, untrusted key URL, unknown `kid` refresh, client-secret failure,
+blocked or deleted account, the no-admission page, agent-connect approval continuation, local logout and CSRF, and
+an Imprim outage with an existing app session. Imprim's own suite does not replace these tests in your app, or
+OpenID conformance.
 
 ## Worker app using the client
 
@@ -152,9 +158,9 @@ Install the workspace package or vendor `dist/imprim-client.mjs`. Keep `clientSe
 import { createClient, IdentityError } from 'imprim-client';
 
 const client = createClient({
-  issuer: 'https://id.vibernt.ai', clientId: 'example-app',
+  issuer: 'https://id.example.com', clientId: 'my-app',
   clientSecret: env.IDENTITY_CLIENT_SECRET,
-  redirectUri: 'https://app.example/auth/identity/callback'
+  redirectUri: 'https://app.example.com/auth/callback'
 });
 
 // Login handler: put these three values in an expiring, browser-bound,
@@ -172,16 +178,16 @@ return createAppSession(claims.sub);
 
 `handleCallback` returns verified claims and throws `IdentityError` with a stable `code`. Treat errors as failed login and create no app session. The app must protect its transaction cookie and reject reuse; the client checks response state, issuer, token signature and claims. `startLogin({prompt:'none'})` uses the existing top-level identity session. The optional `method` query records an app preference, but the server presents the client's configured method list and does not force that preference. Server settings enforce which methods can complete.
 
-`client.logoutUrl({idTokenHint,postLogoutRedirectUri,state})` produces the identity confirmation URL; end the local session under app CSRF first. `client.inviteEmail(email)` requires a confidential client and registers identity admission only. `handleBackchannelLogout(request)` verifies a signed logout token and returns `{sub,sid,jti}`; the app must persist consumed `jti` values, apply each event only once, and acknowledge duplicates with 2xx. Human back-channel logout is delivered through the durable M4 outbox; agent revocation events use the distinct contract below. Return 2xx for authenticated duplicate deliveries after durable deduplication.
+`client.logoutUrl({idTokenHint,postLogoutRedirectUri,state})` produces the identity confirmation URL; end the local session under app CSRF first. `client.inviteEmail(email)` requires a confidential client and registers identity admission only. `handleBackchannelLogout(request)` verifies a signed logout token and returns `{sub,sid,jti}`; the app must persist consumed `jti` values, apply each event only once, and acknowledge duplicates with 2xx. Human back-channel logout is delivered through a durable outbox; agent revocation events use the distinct contract below. Return 2xx for authenticated duplicate deliveries after durable deduplication.
 
-Run `node scripts/build-client.mjs` to regenerate the single-file vendored artifact. Its first line records package version and SHA-256 of the remaining exact UTF-8 body. Assay should verify both before accepting a copy.
+Run `node scripts/build-client.mjs` to regenerate the single-file vendored artifact. Its first line records the package version and the SHA-256 of the remaining exact UTF-8 body. Verify both before accepting a vendored copy.
 
-## Agent access (M2)
+## Agent access
 
 App clients and agent clients are separate registries. `/register` creates only a public **agent**; it cannot create an
 app, register a resource prefix, change admission, or obtain client credentials. Registration alone grants nothing.
-An operator configures agent access on the owning app through the existing offline seed/review process. Migration
-`0004_agent_access.sql` leaves every existing app off. Add these settings to the client JSON:
+A realm admin configures agent access on the owning app, in the console or the seed file. Every app starts with
+agent access off. Add these settings to the client:
 
 ```json
 {
@@ -207,7 +213,7 @@ Policies are read at authorization, sign-in continuation, consent, code/device r
 also checks the validated policy snapshot and current user state. Agent SSO uses the owning app's allowed sign-in
 methods and Google hosted domains. Signup admission remains the app's existing invited/open policy.
 
-The resource must name one workspace, for example `https://app.example/w/team-one/mcp`. Identity validates registered
+The resource must name one workspace, for example `https://app.example/w/team-one/mcp`. Imprim validates registered
 ownership, not membership in that workspace. The resource server must intersect scopes with the person's current
 membership and role **on every request**. Its expected audience comes from its own route/configuration, never a
 client-supplied query parameter or the token's unverified claims.
@@ -303,7 +309,7 @@ agent revocation events. Apps must verify the dedicated event and persist its `j
 - `handleCallback` requires `iss` on the authorization response (RFC 9207), as discovery advertises.
 - `IdentityError.message` is always the package's own text. A server's `error_description` is in `error.description`:
   untrusted, escape it before display.
-- JWKS is refetched after 10 minutes; keys up to 24 hours old keep verifying only while identity is unreachable.
+- JWKS is refetched after 10 minutes; keys up to 24 hours old keep verifying only while Imprim is unreachable.
 - A failed discovery is not cached.
 - ID tokens carry `email` and `email_verified` only when you request the `email` scope (the default `startLogin` does).
 
@@ -313,4 +319,4 @@ Use `verifyBackchannel(form)` at the registered back-channel URI to accept both 
 `revocation_token`. Persist the verified jti and effect atomically; return 2xx for authenticated duplicates.
 Agent tokens now include `grant_id`; check a denial keyed by `(sub, aud, grant_id)` on every agent request.
 Logout with no sid ends all local sessions for sub. The full handler, exact claim shapes, clock rules and
-Assay/Touchstone upgrade steps are in the [package README](https://github.com/Vibernt/imprim/blob/main/packages/imprim-client/README.md).
+upgrade steps are in the [package README](https://github.com/Vibernt/imprim/blob/main/packages/imprim-client/README.md).

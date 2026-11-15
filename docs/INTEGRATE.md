@@ -1,6 +1,6 @@
 # Integrating an app and connecting agents
 
-Identity proves who a person is. Your app decides what they may do: it keeps its workspaces, memberships, roles,
+Imprim proves who a person is. Your app decides what they may do: it keeps its workspaces, memberships, roles,
 its own session and its own CSRF. The `sub` claim is the stable person id within one realm. Key your local user
 record on `(issuer, sub)`, never on email.
 
@@ -12,10 +12,11 @@ A realm admin registers the client in `<issuer>/admin` (or with `scripts/seed-cl
 |---|---|
 | `redirect_uris` | Exact HTTPS callback URLs. `dev=1` allows exact `http://localhost` ones for development. |
 | `post_logout_uris` | Exact URLs you return to after sign-out. |
-| `backchannel_uri` | Required. Receives `logout_token` and `revocation_token` POSTs. |
+| `backchannel_uri` | Required. Receives `logout_token`, `revocation_token` and (with `user_events: on`) `event_token` POSTs. |
 | `sign_in_methods` | Ordered list from `email`, `password`, `passkey`, `github`, `google` and the realm's provider ids (such as `microsoft`). Refused at the server, not only hidden. |
 | `signup_policy` | `invited` (default) or `open`. Under `invited`, admit people with `POST /v1/invitations` or `allowed_domains`. |
-| `branding` | Name, colours, logo, copy and links for this app's pages and emails, over the realm's defaults ([Branding](BRANDING.md)). |
+| `branding` | Name, Fire look, logos, copy and links for this app's pages and emails, over the realm's defaults ([Branding](BRANDING.md)). |
+| `mfa` | `off` (default), `optional` or `required` second factor for this app. |
 
 A confidential client gets its secret once, at creation. Store it as a secret in your app.
 
@@ -43,9 +44,9 @@ const claims = await identity.handleCallback(request.url, login);   // { sub, em
 
 ## 3. Receive back-channel events
 
-Identity POSTs signed events to `backchannel_uri` when someone signs out, is blocked, deleted or merged
-(`logout_token`), or when an agent grant is revoked (`revocation_token`). Verify each with
-`identity.verifyBackchannel(form)`. Store its `jti` and apply its effect in one transaction, then return 2xx. The
+Imprim POSTs signed events to `backchannel_uri` when someone signs out, is blocked, deleted or merged
+(`logout_token`), when an agent grant is revoked (`revocation_token`), and, if the app sets `user_events: on`,
+when a person's account changes (`event_token`). Verify each with `identity.verifyBackchannel(form)`. Store its `jti` and apply its effect in one transaction, then return 2xx. The
 [package README](https://github.com/Vibernt/imprim/blob/main/packages/imprim-client/README.md) has a complete handler. Delivery is at least once and is
 retried for 24 hours.
 

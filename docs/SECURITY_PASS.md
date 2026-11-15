@@ -1,7 +1,8 @@
 # Security pass, 2026-11-15
 
-Developed on 2026-11-15 on top of the first production release. It fixes the findings of a review brief of 2026-11-15
-(section 8). Migration `0008_security_pass.sql` and client `0.3.0` go together. Deployed to staging and production on 2026-11-15 (see Live checks owed).
+A security review of the first production release, and its fixes. Migration `0008_security_pass.sql` and client
+`0.3.0` go together. The release was deployed to the reference deployment's staging and production on 2026-11-15
+(see [Live checks owed](#live-checks-owed)).
 
 ## Findings and fixes
 
@@ -31,7 +32,7 @@ Hygiene, also done: Turnstile's CSP origin only on the sign-in page; `email` cla
 failed discovery not cached; `error_description` kept out of `IdentityError.message`; late `prompt=none` failures
 redirect with an OAuth error; revocation events are `secevent+jwt` with an issuer-relative type; resources have one
 canonical form; refresh can narrow scope; a 10-second refresh grace that cannot be chained; expiry indexes for
-every swept table; `/register` no longer runs a full-table delete; stale "not deployed" docs corrected.
+every swept table; `/register` no longer runs a full-table delete.
 
 Not changed, on purpose: `localhost` stays an accepted loopback redirect host, because common agents register
 `http://localhost:<port>/callback` (RFC 8252 prefers literal addresses; refusing would break them).
@@ -71,6 +72,6 @@ and single-use claims. It found six issues, all fixed in a follow-up commit, eac
 
 ## Live checks owed
 
-Deployed 2026-11-15: on staging and production, migrations applied cleanly, discovery, JWKS (unchanged key), sign-in pages, `/authorize` redirect validation, cross-origin refusal, magic-link delivery and the scheduled handler were checked. Still to prove: per-client rate limits from a deployed app Worker (S2),
+Checked on the reference deployment's staging and production on 2026-11-15: migrations applied cleanly; discovery, JWKS (unchanged key), sign-in pages, `/authorize` redirect validation, cross-origin refusal, email-link delivery and the scheduled handler worked. Still to prove: per-client rate limits from a deployed app Worker (S2),
 egress and DNS rebinding for metadata and `jwks_uri` fetches (S10), Queue delivery of `secevent+jwt` events to a
 real app, the D1 migration's backfill on production data, and the trigger's `strftime('now')` on D1.

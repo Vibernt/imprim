@@ -1,59 +1,73 @@
 # Configuration
 
-`apps/server/wrangler.jsonc` declares the Worker environment. Operators set deployment IDs and secrets after review. The repository has placeholder D1/KV IDs, no active custom-domain route, `workers_dev:false` and `preview_urls:false`. See [Operations](OPERATIONS.md) before deployment. No setting below is a browser secret unless marked public.
+`apps/server/wrangler.jsonc` declares the Worker. Its top level is a neutral template for `wrangler dev`, with a
+placeholder D1 id, `workers_dev: false` and `preview_urls: false`. Real deployments are environments (`staging`,
+`production`) with their own database, queues, rate-limit namespaces and custom-domain routes. Brands, provider
+credentials and admins are not in Wrangler: they live in D1 as [realms](REALMS.md). See [Deploying](DEPLOY.md) for
+setup and [Operations](OPERATIONS.md) for running it. Nothing below is a browser secret unless marked public.
 
-## Worker values and bindings
+## Worker bindings and values
 
-| Name | Kind and checked-in default | Set by and when |
+| Name | Kind | Notes |
 |---|---|---|
-| Realms | D1 table `realms` | Issuer host, display name and config per brand ([Realms](REALMS.md)). Set with `scripts/realm.mjs` or the platform console. |
-| Admins | D1 table `admins` | Per-realm roster (`platform` or `realm`). Never a committed variable. |
-| `EMAIL_FROM` | Var, production env only: `signin@vibernt.ai` (read by the default realm's config) | vibernt.ai is enabled and configured in Cloudflare Email Sending (shared with Assay's `ci@vibernt.ai`). |
-| `TURNSTILE_SITE_KEY` | Public var: `0x4AAAAAAF0OXQdsR3N-CAwj` (widget `vibernt-identity`, hostname `id.vibernt.ai`) | Operator; its secret is `TURNSTILE_SECRET`. Tests use their own fake keys. |
-| `SEALING_KEY` | Secret: absent; 64 hex characters | Operator sets before key creation; back up separately. |
-| `GITHUB_CLIENT_ID` | Secret: absent | Operator sets before enabling GitHub. |
-| `GITHUB_CLIENT_SECRET` | Secret: absent | Operator sets with GitHub client ID. |
-| `GOOGLE_CLIENT_ID` | Secret: absent | Operator sets before enabling Google. |
-| `GOOGLE_CLIENT_SECRET` | Secret: absent | Operator sets with Google client ID. |
-| `TURNSTILE_SECRET` | Secret: absent | Operator sets with site key. Both absent disable challenge for local/development; partial config fails. |
-| `DB` | D1 `vibernt-identity`; database ID placeholder | Operator provisions and replaces ID before migration/deploy. |
-| `EMAIL` | Cloudflare `send_email` binding | Operator provisions and verifies delivery before live sign-in. |
-| `AUTH_LIMITER` | Rate binding namespace `5101`, 20/60 seconds | Operator reviews namespace and config before deploy. Missing binding fails. |
-| `API_LIMITER` | Rate binding namespace `5102`, 120/60 seconds | Operator reviews namespace and config before deploy. Missing binding fails. |
-| `LOGOUT_QUEUE` | Producer for `vibernt-identity-logout` | Operator provisions before agent revocation delivery. |
-| Queue consumer | Same queue, three retries, `vibernt-identity-logout-dlq` | Operator provisions DLQ and tests receipt/retry. |
-| Cron | `* * * * *` | Checked-in every-minute schedule; operator verifies live triggers. |
-| Custom-domain route | Commented out | Operator enables for reviewed production deploy. |
-| Observability | Enabled; invocation logs disabled | Operator reviews log retention and redaction at deployment. |
+| `DB` | D1 | All state, migrations `0001`–`0019` in `apps/server/migrations`. |
+| `EMAIL` | Cloudflare `send_email` binding | Sign-in links and security notices. Each realm's sender domain must be enabled for Email sending. |
+| `AUTH_LIMITER` | Rate limit, 20 per 60 seconds | Sign-in routes, per address (IPv6 /64). A missing binding fails the request. |
+| `API_LIMITER` | Rate limit, 120 per 60 seconds | Other routes per address; `/token`, `/userinfo` and `/v1/invitations` per authenticated client. Missing fails. |
+| `LOGOUT_QUEUE` | Queue producer | Back-channel logout, agent revocation and user events. |
+| Queue consumer | Same queue, batches of 10, 5 retries, then a dead-letter queue | Each environment names its own queue and dead-letter queue. |
+| Cron | `* * * * *` | Delivery, key rotation per realm, expiry and retention ([Operations](OPERATIONS.md#retention-and-the-scheduled-handler)). |
+| Static assets | `"assets": { "directory": "public" }` | The [Fire](fire/README.md) design system at `/fire/*` and the branding editor module at `/imprim/*`, served before the Worker runs, with headers from `public/_headers`. No binding name. |
+| Routes | One `{ "pattern": "<host>", "custom_domain": true }` per realm host, per environment | An unknown host gets `404 unknown_realm`. |
+| `compatibility_flags` | `global_fetch_strictly_public` | Back-channel deliveries and metadata fetches go over the public internet. |
+| Observability | On; invocation logs off | Invocation logs would record OAuth callback query credentials. Application logs are structured and redacted. |
+| `SEALING_KEY` | Secret, 64 hex characters | Seals every realm's signing keys and TOTP secrets. Set before first use and back up separately. Not a rotation toggle. |
+| Realm secrets and vars | Secrets (or public vars) | Whatever names a realm's config references as `{"env":"NAME"}`. The `default` realm created by migration `0009` reads `EMAIL_FROM`, `TURNSTILE_SITE_KEY` (public), `TURNSTILE_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. |
 
-GitHub callback is `/auth/github/callback`; Google callback is `/login/google/callback`. Neither upstream credential is needed for a client that does not enable that method. `SEALING_KEY` is not a signing-key rotation toggle; replacing it requires a migration of sealed keys.
+Turnstile: both keys absent turns the challenge off (for development); one without the other fails with
+`turnstile_config`. Provider credentials are needed only for apps that enable that provider. Provider callbacks are
+listed in [Operations](OPERATIONS.md#provider-apps-per-realm).
 
-## App client row (`clients`)
+## App client settings (`clients`)
 
-A trusted operator inserts or updates a row after review. `scripts/seed-client.mjs` validates a JSON file and prints insert SQL; it never writes D1. Every app setting is below. JSON column defaults are shown as decoded values.
+A realm admin creates and edits clients in the console or with `POST /admin/api/clients`
+([Control plane](CONTROL_PLANE.md)). `scripts/seed-client.mjs` turns a JSON file into reviewed insert SQL offline
+and never writes D1. JSON columns are shown decoded.
 
-| Setting | Default | Who sets it and when |
+| Setting | Default | Notes |
 |---|---|---|
-| `id` | Required, unique | Operator chooses stable app client ID at registration. |
-| `secret_hash` | Required in seed: SHA-256 hex or explicit `null` | Operator stores hash; app stores plaintext secret. `null` is public PKCE client. |
-| `redirect_uris` | Required nonempty list | App owner and operator review exact callback URLs before registration. |
-| `post_logout_uris` | `[]` | App owner and operator review exact return URLs before use. |
-| `backchannel_uri` | `null` | App owner and operator review HTTPS receiver before agent revocation delivery. Human logout sending is pending. |
-| `signup_policy` | `invited` | Operator chooses `invited` or `open` before accepting new people. |
-| `allowed_domains` | `[]` | Operator sets exact email domains for invited admission. |
-| `branding` | `{}` | Operator or app owner sets name, theme, copy, links and logo ids over the realm's ([Branding](BRANDING.md)); validated and contrast-checked on save. |
-| `dev` | `0` | Operator sets `1` only for clients requiring exact HTTP loopback redirects. |
-| `sign_in_methods` | SQL migration default `["email","github"]`; seed requires explicit list | Operator sets ordered enabled methods per app. |
-| `google_hosted_domains` | `[]` | Operator sets signed Google `hd` restrictions if needed. |
-| `agent_access` | `off` | Operator enables only after resource and scope review. |
-| `agent_registration_methods` | `["metadata_document"]` | Operator may also allow `dynamic`. |
-| `agent_allowlist` | `[]` | Operator optionally restricts agent client ID URLs or hosts. |
-| `agent_scope_catalogue` | `{}` | App owner defines scope descriptions; required when access is on. |
-| `agent_resource_prefixes` | `[]` | App owner and operator register canonical HTTPS ownership; required when on. |
-| `agent_max_grant_days` | `90` | Operator caps consent duration in positive whole days. |
+| `id` | Required, unique | Stable client id; cannot change. |
+| `secret_hash` | Generated | The console generates the secret, shows it once and stores its SHA-256. The seed script needs a hash or explicit `null` (a public PKCE client). |
+| `redirect_uris` | Required, nonempty | Exact HTTPS callback URLs. |
+| `post_logout_uris` | `[]` | Exact return URLs after sign-out. |
+| `backchannel_uri` | Required in the console | HTTPS receiver for `logout_token`, `revocation_token` and `event_token` POSTs. |
+| `signup_policy` | `invited` | `invited` or `open`. |
+| `allowed_domains` | `[]` | Exact email domains admitted under `invited`, with mailbox proof. |
+| `sign_in_methods` | `["email"]` (the column default); the seed script requires an explicit list | Ordered, distinct: `email`, `password`, `passkey`, `github`, `google`, or a provider id from the realm's config such as `microsoft`. |
+| `google_hosted_domains` | `[]` | Signed Google `hd` values this app accepts. |
+| `mfa` | `off` | `off`, `optional` (required once the person has a factor) or `required`. |
+| `mfa_trusted_device_days` | `0` | 0 to 90 days a browser may skip this app's second factor; 0 means never. |
+| `agent_consent_mfa` | `off` | `required` asks for a second factor within 15 minutes before approving an agent. |
+| `branding` | `{}` | Name, Fire `look`, copy, links and logo asset ids over the realm's ([Branding](BRANDING.md)). |
+| `dev` | `0` | `1` allows exact HTTP loopback redirects. |
+| `agent_access` | `off` | `on` enables agent grants after resource and scope review. Turning it off revokes every live grant. |
+| `agent_registration_methods` | `["metadata_document"]` | Add `dynamic` to allow RFC 7591 registration. |
+| `agent_allowlist` | `[]` | Optional client ID URLs or hosts. It narrows; it does not authenticate. |
+| `agent_scope_catalogue` | `{}` | Scope descriptions; required when agent access is on. |
+| `agent_resource_prefixes` | `[]` | Canonical HTTPS resource ownership; required when agent access is on. |
+| `agent_max_grant_days` | `90` | Caps consent in whole days. |
+| `agent_dpop` | `optional` | `required` refuses agent tokens that are not DPoP-bound. |
+| `token_exchange_from` | `{}` | Other client ids that may exchange tokens into this app, each with the scopes it may obtain. |
+| `user_events` | `off` | `on` sends signed user lifecycle events to `backchannel_uri`. |
+| `version` | `0` | Incremented on every edit; an edit must send the current version. |
 
-The seed script requires explicit `sign_in_methods`, `redirect_uris` and `secret_hash`. It validates known keys, URI shape, methods, domains, branding and agent settings. Existing rows are not overwritten by its insert. Changing a row is a reviewed policy edit. An app secret rotation changes both the app secret and stored hash together; there is no overlapping-secret grace period.
+The seed script accepts the original sign-in, branding and agent settings. Set `mfa`, `mfa_trusted_device_days`,
+`agent_consent_mfa`, `agent_dpop`, `token_exchange_from` and `user_events` in the console or the admin API. The seed
+script never overwrites an existing client. Rotating a secret (console or `rotate-secret`) invalidates the old one
+at once; there is no overlap, so switch the app's secret in the same window.
 
 ## Runtime limits
 
-D1 `rate_limits` adds email/IP, degraded Turnstile and agent action budgets. These are code constants, not Wrangler vars. Agent metadata is cached in D1, not `CONFIG_CACHE`. See [Architecture](ARCHITECTURE.md) for budgets and [Security](SECURITY.md) for the failure mode of missing dependencies.
+D1 `rate_limits` holds email, address, degraded-Turnstile and agent-action budgets. They are code constants, not
+Wrangler vars ([Architecture](ARCHITECTURE.md#limits-challenge-and-records)). Agent metadata documents are cached in
+D1 (`agent_metadata_cache`).

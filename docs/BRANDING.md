@@ -71,7 +71,7 @@ Values outside these are refused, not clamped. **Contrast** is Fire's job: its p
 ```
 
 An app sets its own `branding` in the console's client editor or the seed script ([Clients](CLIENTS.md)), for
-example `{"name": "Assay", "look": {"palette": "iris"}}`.
+example `{"name": "My app", "look": {"palette": "iris"}}`.
 
 ## How it is applied
 

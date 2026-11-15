@@ -19,11 +19,8 @@ export async function getAdminClient(env, id) {
     invariant(row, 'not_found', 'Client not found.', 404);
     return publicClient(row);
 }
-function validate(config, realmBranding = {}) {
-    invariant(typeof config.id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(config.id), 'invalid_request', 'Invalid client id.');
-    const { methods, domains } = validateSignInSettings(config.sign_in_methods, config.google_hosted_domains);
-    const agent = validateAgentSettings(config);
-    invariant(['invited','open'].includes(config.signup_policy) && [0,1].includes(config.dev), 'invalid_request', 'Invalid signup policy or dev flag.');
+// Second-factor, DPoP, user-event and token-exchange policy. Shared with scripts/seed-client.mjs.
+export function validatePolicySettings(config, agent) {
     invariant(['off','optional','required'].includes(config.mfa ?? 'off') && ['off','required'].includes(config.agent_consent_mfa ?? 'off') &&
         Number.isInteger(config.mfa_trusted_device_days ?? 0) && (config.mfa_trusted_device_days ?? 0) >= 0 && (config.mfa_trusted_device_days ?? 0) <= 90,
         'invalid_request', 'mfa is off, optional or required; agent_consent_mfa is off or required; mfa_trusted_device_days is 0 to 90.');
@@ -33,6 +30,13 @@ function validate(config, realmBranding = {}) {
     invariant(exchange && typeof exchange === 'object' && !Array.isArray(exchange) && Object.keys(exchange).length <= 20 &&
         Object.entries(exchange).every(([id, scopes]) => /^[A-Za-z0-9_-]{1,200}$/.test(id) && id !== config.id && Array.isArray(scopes) && scopes.length > 0 &&
             scopes.every(scope => Object.hasOwn(agent.agent_scope_catalogue, scope))), 'invalid_request', 'token_exchange_from maps other client ids to scopes from this app\'s catalogue.');
+}
+function validate(config) {
+    invariant(typeof config.id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(config.id), 'invalid_request', 'Invalid client id.');
+    const { methods, domains } = validateSignInSettings(config.sign_in_methods, config.google_hosted_domains);
+    const agent = validateAgentSettings(config);
+    invariant(['invited','open'].includes(config.signup_policy) && [0,1].includes(config.dev), 'invalid_request', 'Invalid signup policy or dev flag.');
+    validatePolicySettings(config, agent);
     for (const name of ['redirect_uris','post_logout_uris']) {
         invariant(Array.isArray(config[name]) && config[name].length <= 100 && (name !== 'redirect_uris' || config[name].length), 'invalid_request', 'Invalid URI list.');
         for (const uri of config[name]) registeredUri({ dev: config.dev, [name]: JSON.stringify(config[name]) }, uri, name);
@@ -60,7 +64,7 @@ export async function saveClient(env, actor, id, input) {
         allowed_domains: [], branding: { name: '' }, dev: 0, sign_in_methods: ['email'], google_hosted_domains: [], ...old, ...input };
     let value;
     try {
-        value = validate(config, env.REALM?.branding || {});
+        value = validate(config);
         for (const key of ['logo_light', 'logo_dark', 'mark']) if (config.branding?.[key]) invariant(await assetExists(env, config.branding[key]), 'branding', `branding.${key} is not an uploaded asset.`);
     }
     catch (error) {

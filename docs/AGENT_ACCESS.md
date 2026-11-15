@@ -1,10 +1,10 @@
 # Agent access
 
-An agent acts for a person, within one app resource. Identity proves the person and records consent. The app checks workspace membership and role on every call. This guide covers both the app developer and the person connecting an agent. Exact parameters and errors are in [Protocol](PROTOCOL.md).
+An agent acts for a person, within one app resource. Imprim proves the person and records consent. The app checks workspace membership and role on every call. This guide covers both the app developer and the person connecting an agent. Exact parameters and errors are in [Protocol](PROTOCOL.md).
 
 ## App developer: publish a resource
 
-Register an app client first using [Clients](CLIENTS.md). Set `agent_access` to `on`, a nonempty `agent_scope_catalogue`, and a canonical HTTPS `agent_resource_prefixes` entry. Keep prefixes unambiguous across apps. A resource can be a workspace MCP URL such as `https://app.example/w/team-one/mcp`. Identity checks its registered owner; it does not check that the person belongs to that workspace.
+Register an app client first using [Clients](CLIENTS.md). Set `agent_access` to `on`, a nonempty `agent_scope_catalogue`, and a canonical HTTPS `agent_resource_prefixes` entry. Keep prefixes unambiguous across apps. A resource can be a workspace MCP URL such as `https://app.example/w/team-one/mcp`. Imprim checks its registered owner; it does not check that the person belongs to that workspace.
 
 Serve protected resource metadata at the resource's advertised metadata URL. On an unauthenticated MCP request, return 401 with `WWW-Authenticate: Bearer resource_metadata="..."`. The client package provides `protectedResourceMetadata({resource,scopes})` and `wwwAuthenticate({resourceMetadataUrl,error?})`. Metadata names the issuer in `authorization_servers` and the app's supported scopes. Derive the expected audience from the trusted resource route. Call `verifyAccessToken(token,{audience:resource})`, then intersect token scopes with the person's current membership and role. Never derive the expected audience from the token or a caller-controlled parameter.
 
@@ -16,11 +16,11 @@ const claims = await client.verifyAccessToken(token, { audience: resource });
 await requireCurrentMembershipAndScope(claims.sub, resource, claims.scope);
 ```
 
-The app owns `requireCurrentMembershipAndScope`. Identity does not issue app API tokens. An access JWT is valid for at most 60 seconds, with no positive expiration leeway; revocation delivery also notifies the app. A queued agent revocation event is distinct from OIDC human logout; see [Protocol](PROTOCOL.md).
+The app owns `requireCurrentMembershipAndScope`. Imprim does not issue app API tokens. An access JWT is valid for at most 60 seconds, with no positive expiration leeway; revocation delivery also notifies the app. A queued agent revocation event is distinct from OIDC human logout; see [Protocol](PROTOCOL.md).
 
 ## Person and agent: connect
 
-1. Give the agent the app's MCP resource URL. The app's 401 challenge points to protected resource metadata; that metadata names identity. Identity exposes `/.well-known/oauth-authorization-server` and OIDC discovery.
+1. Give the agent the app's MCP resource URL. The app's 401 challenge points to protected resource metadata; that metadata names Imprim. Imprim exposes `/.well-known/oauth-authorization-server` and OIDC discovery.
 2. The agent identifies itself with an HTTPS client ID metadata document, or calls `POST /register` if the app allows `dynamic`. The document must identify its own URL, name and redirect URIs. Dynamic registration returns a public ID without a secret. Registration alone grants no access.
 3. The agent requests `response_type=code`, `state`, PKCE S256, scopes and exactly one `resource` at `/authorize`. Agent authorization does not request an ID token. The person signs in through the owning app's enabled method.
 4. The consent page shows agent name and host (or unverified dynamic status), app, workspace/resource, scope descriptions and grant duration. Consent is explicit every time. It is browser-bound, same-origin and CSRF-protected.
@@ -48,7 +48,7 @@ Policies are rechecked before consent, code/device redemption and refresh. A gra
 
 ## Metadata and redirect boundaries
 
-Client ID metadata fetches accept HTTPS JSON only. The document's `client_id` must equal its URL. Fetches have one five-second deadline over DNS, HTTPS and body reads, a 64 KiB DNS/body cap, no redirects, and public-address checks for both A and AAAA records. Literal private, loopback, link-local and other special-purpose targets fail. The fixed Cloudflare DNS-over-HTTPS resolver and Workers public-network egress are part of this boundary; DNS checking is not IP pinning. Cache freshness is HTTP-controlled, at most one hour and 1,000 D1 rows. Expired failures do not use stale documents. Deployment must still qualify egress and rebinding behavior.
+Client ID metadata fetches accept HTTPS JSON only. The document's `client_id` must equal its URL. Fetches have one five-second deadline over DNS, HTTPS and body reads, a 64 KiB DNS/body cap, no redirects, and public-address checks for both A and AAAA records. Literal private, loopback, link-local and other special-purpose targets fail. The fixed Cloudflare DNS-over-HTTPS resolver and Workers public-network egress are part of this boundary; DNS checking is not IP pinning. Cache freshness is HTTP-controlled, at least five minutes and at most one hour, in at most 2,000 D1 rows. Expired failures do not use stale documents. Deployment must still qualify egress and rebinding behavior.
 
 Agent redirects are exact HTTPS URLs or HTTP loopback on `localhost`, `127.0.0.1` or `[::1]`. Only the loopback port can vary at authorization; exchange uses the exact requested URI. Resources are canonical HTTPS URLs with no query, fragment or encoded slash, backslash or dot. A request with duplicate `resource` parameters or multiple owners fails. Agent codes are single-use and live 60 seconds. Dynamic registrations unused for 30 days are rejected and swept. No failed metadata fetch switches to dynamic registration.
 

@@ -39,7 +39,19 @@ By contributing, you agree that your contribution is licensed under the [MIT lic
   origin, CSRF token, replay, or race must fail.
 - Tests use `node:test` and the real SQLite harness in `tests/support`. Node 22.13 or later.
 - Keep `sub` stable. Apps own authorisation; Imprim only proves identity and records consent.
+- Build UI with the vendored [Fire](docs/fire/README.md) design system: read `docs/fire/GUIDE.md`, render components
+  with `apps/server/src/pages/ui.mjs`, use only classes in `docs/fire/VOCABULARY.md`, and never edit
+  `apps/server/public/fire/`. No custom CSS, `<style>` blocks or `style` attributes: the CSP forbids them. Write
+  on-screen text to `docs/fire/WRITING.md`.
 - Update the docs in the same pull request when behaviour changes (`docs/PROTOCOL.md` for anything on the wire).
+
+## Documentation
+
+The site at https://vibernt.github.io/imprim/ is built from `docs/` with Jekyll by `.github/workflows/pages.yml`,
+which copies `apps/server/public/fire` into the site so pages use Fire's documentation shell
+(`docs/_layouts/default.html`). Each page's first `# ` heading becomes its title, so keep exactly one at the top.
+Add a new page to the navigation in `docs/_data/nav.yml`. Write docs to the same voice as the product
+(`docs/fire/WRITING.md`): plain, specific, sentence case, with one command per fenced `bash` block.
 
 ## Working with a coding agent
 

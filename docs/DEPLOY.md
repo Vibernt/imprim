@@ -1,8 +1,10 @@
 # Deploying on Cloudflare
 
 The service is one Worker with D1, a Queue with a dead-letter queue, two rate-limit bindings, the Email sending
-binding and a cron trigger. It has no build step and no runtime dependencies. `apps/server/wrangler.jsonc` holds a
-neutral template plus a `staging` and a `production` environment. Run every command from `apps/server`.
+binding, a cron trigger and static assets (the [Fire](fire/README.md) design system in `apps/server/public/`). It
+has no build step and no runtime dependencies. `apps/server/wrangler.jsonc` holds a neutral top-level template plus
+a `staging` and a `production` environment; those two carry the reference deployment's names and ids, so replace
+them with your own or add environments. Run every command from `apps/server`.
 
 ## New deployment
 
@@ -21,7 +23,8 @@ neutral template plus a `staging` and a `production` environment. Run every comm
    ```
 
    Put the database id, queue names and two unused rate-limit namespace ids into `env.staging` (or a new
-   environment). Add each realm host under `routes` as `{ "pattern": "<host>", "custom_domain": true }`.
+   environment). Add each realm host under `routes` as `{ "pattern": "<host>", "custom_domain": true }`. Keep the
+   top-level `"assets": { "directory": "public" }`: `wrangler deploy` uploads `public/` with the Worker.
 2. **Email.** Enable Cloudflare Email sending for each sender domain a realm uses (for example `signin@example.com`).
 3. **Sealing secret.** Generate 32 random bytes as hex and keep an offline copy: `openssl rand -hex 32`. Then:
 
@@ -54,8 +57,9 @@ neutral template plus a `staging` and a `production` environment. Run every comm
    wrangler deploy --env staging
    ```
 
-8. **Check.** Fetch `https://<host>/.well-known/openid-configuration` and `/.well-known/jwks.json`. Then sign in at
-   `https://<host>/login` as the platform admin and open `/admin`.
+8. **Check.** Fetch `https://<host>/.well-known/openid-configuration`, `/.well-known/jwks.json` and
+   `/fire/fire.css` (static assets, with `X-Content-Type-Options: nosniff`). Then sign in at `https://<host>/login`
+   as the platform admin, add a second factor at `/account/mfa` when asked, and open `/admin`.
 9. **Register apps** in the console or with `scripts/seed-client.mjs`. See [Integrating](INTEGRATE.md).
 
 ## Releases
@@ -73,66 +77,81 @@ Every release goes through staging first:
 Rollback: `wrangler rollback --env production` returns to the previous Worker version. Migrations are not rolled
 back automatically. Restore the backup only if a migration itself is wrong, and treat that as an incident.
 
-## Upgrading the existing Vibernt deployment to realms
+## Upgrading an existing deployment
 
-The live deployment predates migrations `0008` (security pass) and `0009` (realms). It uses the `production`
-environment, which keeps the deployed names (`vibernt-identity`).
+Migrations run in order, `0001` to `0019`, and each one is applied once. A Worker built from this repository expects
+every migration in it, and an older Worker cannot always run against a newer schema, so apply, configure and deploy
+**back to back**, in a quiet minute. Rehearse the whole sequence on staging first.
 
-The old Worker cannot run against the new schema. After `0009`, its GitHub, Google and new-user sign-ins fail,
-because their conflict targets no longer exist. Apply, configure and deploy back to back, in a quiet minute:
-
-1. Back up production:
+1. **Back up** the database:
 
    ```bash
-   wrangler d1 export vibernt-identity --remote --env production --output pre-realms.sql
+   wrangler d1 export <database> --remote --env production --output pre-upgrade.sql
    ```
 
-2. Write `default.json` with the live issuer, the Vibernt name and the owner as platform admin:
+2. **Prepare the realm**, if the database predates realms (migration `0009`). That migration moves existing users,
+   clients and keys into a realm called `default`, whose config reads the earlier variable and secret names
+   (`EMAIL_FROM`, `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`). Its issuer is empty, so no host answers until you set it. Write
+   `default.json` with your live issuer and at least one platform admin:
 
    ```json
-   { "id": "default", "issuer": "https://id.vibernt.ai", "display_name": "Vibernt", "update": true,
+   { "id": "default", "issuer": "https://id.example.com", "display_name": "Acme", "update": true,
      "config": {
        "email": { "from": { "env": "EMAIL_FROM" } },
        "turnstile": { "site_key": { "env": "TURNSTILE_SITE_KEY" }, "secret": { "env": "TURNSTILE_SECRET" } },
        "providers": {
          "github": { "client_id": { "env": "GITHUB_CLIENT_ID" }, "client_secret": { "env": "GITHUB_CLIENT_SECRET" } },
          "google": { "client_id": { "env": "GOOGLE_CLIENT_ID" }, "client_secret": { "env": "GOOGLE_CLIENT_SECRET" } } } },
-     "admins": [{ "email": "<owner email>", "role": "platform" }] }
+     "admins": [{ "email": "ops@example.com", "role": "platform" }] }
    ```
 
-   Then `node ../../scripts/realm.mjs default.json > default.sql`, and review it.
-3. Apply the migrations, the realm SQL, then deploy:
+   Generate the SQL and review it:
 
    ```bash
-   wrangler d1 migrations apply vibernt-identity --remote --env production
+   node ../../scripts/realm.mjs default.json > default.sql
+   ```
+
+3. **Apply** the migrations, then the realm SQL if you wrote one, then deploy:
+
+   ```bash
+   wrangler d1 migrations apply <database> --remote --env production
    ```
 
    ```bash
-   wrangler d1 execute vibernt-identity --remote --env production --file default.sql
+   wrangler d1 execute <database> --remote --env production --file default.sql
    ```
 
    ```bash
    wrangler deploy --env production
    ```
 
-4. Check discovery, JWKS (the existing `kid` must still be listed), an admin sign-in, and one app sign-in.
-5. Remove the `ADMIN_EMAILS` variable from the Worker if the dashboard still shows it. The code no longer reads it.
-6. Upgrade each app to client `0.3.0` (see [Security pass](SECURITY_PASS.md#rollout)).
+4. **Check** discovery, JWKS (the existing `kid` must still be listed), `/fire/fire.css`, an admin sign-in and one
+   app sign-in.
+5. **Clean up.** Earlier releases read an `ADMIN_EMAILS` variable; admins now come from the realm roster, so remove
+   it if the dashboard still shows it. Upgrade each app to client `0.3.0` or later
+   ([Security pass](SECURITY_PASS.md#rollout)).
 
-Without `--env production`, `wrangler deploy` creates a separate Worker called `identity` with no routes. It does
-not replace production.
+Without `--env production`, `wrangler deploy` creates a separate Worker named after the top-level `name`, with no
+routes. It does not replace production.
 
-## Upgrading to migrations 0010–0018
+## Upgrading to migrations 0010–0019
 
 These add passwords, two-factor, the account page, passkeys, the provider registry, service clients, DPoP and token
-exchange, user events and branding. They need no new bindings or secrets, and every new feature is off until an app
-or realm turns it on: existing apps keep their `sign_in_methods`, `mfa` is `off`, `user_events` is `off`.
+exchange, user events and branding, and `0019` moves branding to Fire looks. They need no new bindings or secrets, and every new feature is off until an app
+or realm turns it on: existing apps keep their `sign_in_methods`, `mfa` is `off`, `user_events` is `off`. The same
+release serves every page with Fire, so the Worker now needs its static assets (`"assets"` in `wrangler.jsonc`,
+uploaded by `wrangler deploy`).
 
-Follow [Releases](#releases): staging first, then production with a backup. Two things change on the day:
+Follow [Releases](#releases): staging first, then production with a backup. Three things change on the day:
 
 - **Administrators need a second factor.** The console refuses an admin without one
   (`mfa_enrolment_required`). Before deploying production, have each admin add an authenticator app or passkey at
   `/account/mfa` on staging to try it, then on production straight after the deploy.
+- **Branding is a Fire look.** Branding saved before Fire may hold `theme` or `theme_dark` colour tokens.
+  Migration `0019` removes them from realm and client branding, and leaves every other branding field as it was.
+  Choose a `look` on the console's Branding page afterwards ([Branding](BRANDING.md)); until then pages use Fire's
+  default look.
 - **Apps** can stay on client `0.3.0`. Upgrade to `0.6.0` to use step-up (`acrValues`, `maxAge`), DPoP
   verification or user events ([Clients](CLIENTS.md)).
 
@@ -141,10 +160,11 @@ Follow [Releases](#releases): staging first, then production with a backup. Two 
 | Binding | Kind | Notes |
 |---|---|---|
 | `DB` | D1 | All state. Migrations in `apps/server/migrations`. |
-| `LOGOUT_QUEUE` | Queue producer and consumer | Back-channel logout and agent revocation events. Dead-letter queue after 5 retries. |
+| `LOGOUT_QUEUE` | Queue producer and consumer | Back-channel logout, agent revocation and user events. Dead-letter queue after 5 retries. |
 | `AUTH_LIMITER` | Rate limit | Sign-in routes, per address (IPv6 /64). |
 | `API_LIMITER` | Rate limit | Other routes per address; `/token`, `/userinfo` and invitations per authenticated client. |
-| `EMAIL` | Email sending | Magic links. |
+| `EMAIL` | Email sending | Sign-in links and security notices. |
+| Static assets | `"assets": { "directory": "public" }` | Fire's CSS, modules and fonts at `/fire/*`, and the branding editor at `/imprim/*`, served before the Worker runs. Headers in `public/_headers`. No binding name; other paths reach the Worker. |
 | Cron `* * * * *` | Trigger | Outbox dispatch, expiry sweeps, key rotation per realm, retention. |
 | `SEALING_KEY` | Secret | AES-256-GCM key for every realm's signing keys. |
 | Realm secrets | Secrets | Whatever each realm's config names. |

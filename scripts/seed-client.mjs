@@ -5,11 +5,13 @@ import { pathToFileURL } from 'node:url';
 import { validateSignInSettings } from '../apps/server/src/oidc/sign-in-methods.mjs';
 import { validateAgentSettings, settingNames } from '../apps/server/src/agents/settings.mjs';
 import { registeredUri } from '../apps/server/src/oidc/clients.mjs';
+import { validatePolicySettings } from '../apps/server/src/admin/clients.mjs';
+const POLICY = ['mfa', 'mfa_trusted_device_days', 'agent_consent_mfa', 'agent_dpop', 'token_exchange_from', 'user_events'];
 const sql = value => value === null ? 'NULL' : typeof value === 'number' ? String(value) : `'${value.replaceAll("'", "''")}'`;
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 export function clientSeedSql(config) {
     assert(config && typeof config === 'object' && !Array.isArray(config), 'Client configuration must be an object');
-    const allowed = [...settingNames,'id','secret_hash','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev','sign_in_methods','google_hosted_domains'];
+    const allowed = [...settingNames, ...POLICY,'id','secret_hash','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev','sign_in_methods','google_hosted_domains'];
     assert(Object.keys(config).every(key => allowed.includes(key)), 'Unknown client setting');
     assert(typeof config.id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(config.id), 'Invalid client id');
     assert(config.secret_hash === null || /^[a-f0-9]{64}$/.test(config.secret_hash || ''), 'Provide a SHA-256 secret_hash or explicit null for a public client');
@@ -21,13 +23,16 @@ export function clientSeedSql(config) {
         sign_in_methods: JSON.stringify(methods), google_hosted_domains: JSON.stringify(domains) };
     const agent = validateAgentSettings(Object.fromEntries(settingNames.filter(key => config[key] !== undefined).map(key => [key, config[key]])));
     for (const [key, value] of Object.entries(agent)) client[key] = typeof value === 'object' ? JSON.stringify(value) : value;
+    // The same policy rules as the console; a missing value keeps the column default.
+    try { validatePolicySettings(config, agent); } catch (error) { assert(false, `Invalid policy: ${error.message}`); }
+    for (const key of POLICY) if (config[key] !== undefined) client[key] = typeof config[key] === 'object' ? JSON.stringify(config[key]) : config[key];
     assert(['invited','open'].includes(client.signup_policy), 'Invalid signup_policy');
     assert([0,1].includes(client.dev), 'dev must be 0 or 1');
     assert(Array.isArray(config.redirect_uris) && config.redirect_uris.length > 0, 'At least one redirect URI required');
     assert(Array.isArray(config.post_logout_uris ?? []), 'post_logout_uris must be an array');
     for (const field of ['redirect_uris','post_logout_uris']) for (const uri of JSON.parse(client[field])) registeredUri(client, uri, field);
     validateSignInSettings(methods, config.allowed_domains ?? []);
-    // Same token rules as the console; contrast is checked against the realm's branding when the app is saved there.
+    // The same branding rules as the console.
     try { validateBranding(config.branding, { app: true }); } catch (error) { assert(false, `Invalid branding: ${error.message}`); }
     if (client.backchannel_uri !== null) registeredUri({ redirect_uris: JSON.stringify([client.backchannel_uri]), dev: 0 }, client.backchannel_uri);
     return `-- Review before applying. No upsert: an existing client requires a deliberate policy edit.\nINSERT INTO clients(${Object.keys(client).join(',')}) VALUES(${Object.values(client).map(sql).join(',')});\n`;
