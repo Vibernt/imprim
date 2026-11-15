@@ -1,5 +1,13 @@
+# The docs site: Jekyll renders the Markdown into Fire's documentation shell (_layouts/default.html).
+# The Pages workflow (.github/workflows/pages.yml) copies Fire from apps/server/public/fire to assets/fire first.
 title: Imprim
 description: Identity for people and the agents that act for them. OpenID Connect and OAuth 2.1 on Cloudflare Workers.
-theme: jekyll-theme-cayman
-plugins: [jekyll-relative-links]
+repository: Vibernt/imprim
+plugins: [jekyll-optional-front-matter, jekyll-relative-links, jekyll-readme-index]
 relative_links: { enabled: true, collections: false }
+markdown: kramdown
+kramdown: { input: GFM, hard_wrap: false, syntax_highlighter_opts: { disable: true } }
+defaults:
+  - scope: { path: "" }
+    values: { layout: default }
+exclude: [Gemfile, Gemfile.lock, vendor]

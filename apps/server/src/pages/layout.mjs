@@ -62,8 +62,9 @@ export async function withBrand(response, env) {
     const notes = [b.copy?.footer && `<span>${escapeHtml(b.copy.footer)}</span>`, b.legal_name && `<span>© ${escapeHtml(b.legal_name)}</span>`].filter(Boolean);
     const footer = links.length || notes.length ? `<footer class="fd-band" data-pad="sm"><div class="fd-row fd-small fd-muted" data-justify="between" data-wrap data-gap="3"><div class="fd-row" data-wrap data-gap="3">${notes.join('')}</div><nav class="fd-row" data-gap="4" aria-label="Legal">${links.join('')}</nav></div></footer>` : '';
     const head = `<link rel="stylesheet" href="/assets/theme.css${client ? `?client=${encodeURIComponent(client.id)}` : ''}">${b.mark ? `<link rel="icon" href="${asset(b.mark)}">` : ''}`;
-    html = html.replace('<html lang="en">', `<html lang="${b.locale || 'en'}"${lookAttributes(b.look)}>`).replaceAll(BRAND, name).replace(HEAD, head)
-        .replace(HEADER, `<div class="fd-brand fd-row" data-gap="3">${logo}</div>`).replace(FOOTER, footer);
+    // Replacements are functions, so `$&`, `$'` or `$\`` in a brand's text is inserted as text, never as a pattern.
+    const header = `<div class="fd-brand fd-row" data-gap="3">${logo}</div>`, open = `<html lang="${b.locale || 'en'}"${lookAttributes(b.look)}>`;
+    html = html.replace(/<!--identity:client:[A-Za-z0-9_-]{1,200}-->/, '').replace('<html lang="en">', () => open).replaceAll(BRAND, () => name).replace(HEAD, () => head).replace(HEADER, () => header).replace(FOOTER, () => footer);
     return new Response(html, { status: response.status, headers: response.headers });
 }
 export { icon };

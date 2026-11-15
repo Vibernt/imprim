@@ -4,6 +4,16 @@ Gaps found while building Imprim's screens with Fire v0.2.0 (GUIDE.md section 7)
 `localCss` (`apps/server/src/pages/layout.mjs`), served as `/assets/local.css`, with `x-` classes and Fire tokens only.
 Delete the stopgap when Fire ships the request.
 
+## 5. Tweaks panel under a strict CSP (bug)
+
+- **Kind:** bug
+- **What you were building:** the admin Branding page, which opens the Tweaks panel under `style-src 'self'`.
+- **What is missing:** `js/tweaks.js` builds `<span class="fd-tweaks-rule" style="--_tw-w: …px">` with `innerHTML`; a
+  strict CSP blocks the attribute, so the panel's rules lose their widths and the console logs violations.
+- **Proposed shape:** set the width with `element.style.setProperty` (CSSOM, allowed by CSP) or a `data-w` attribute.
+- **Where else it applies:** any product with a strict CSP that offers the panel.
+- **Stopgap in use:** none; the rules show at their default width.
+
 ## 4. `fd-divider` cannot grow in a row (bug)
 
 - **Kind:** bug

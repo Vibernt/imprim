@@ -12,6 +12,10 @@ const summary = document.getElementById('look-summary');
 const errorBox = document.getElementById('branding-error');
 const errorText = document.getElementById('branding-error-text');
 
+// The saved look's stylesheet would sit under the panel's live values (a value moved back to its default would still
+// show the saved one), so the editor previews from the panel alone.
+document.querySelector('link[rel=stylesheet][href^="/assets/theme.css"]')?.remove();
+
 // Tweaks keeps a viewer's own look in localStorage. Here the realm's saved look wins: start from the default, note it,
 // then apply the saved look, so only real differences are saved.
 const defaults = tweaks.reset();

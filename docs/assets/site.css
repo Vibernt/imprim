@@ -1,0 +1,3 @@
+/* Docs-site stopgaps until Fire has them (docs/fire/REQUESTS.md). x- classes and Fire tokens only. */
+/* Request 1: a wide wordmark beside fd-brand-name. */
+.x-wordmark { block-size: var(--fd-icon-lg); inline-size: auto; color: var(--fd-accent); flex: none; }

@@ -9,3 +9,6 @@ coverage/
 exports/
 imports/
 dist/
+docs/assets/fire/
+docs/_site/
+docs/.jekyll-cache/

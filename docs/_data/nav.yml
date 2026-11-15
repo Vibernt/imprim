@@ -1,0 +1,32 @@
+# The docs site's navigation, in reading order. `path` is the Markdown file under docs/, `url` its page.
+- label: Start here
+  items:
+    - { title: Overview, path: README.md, url: "", desc: "Identity for people and the agents that act for them." }
+    - { title: Getting started, path: GETTING_STARTED.md, url: GETTING_STARTED.html, desc: "Run Imprim, add sign-in to an app, and let agents in, with a prompt for each." }
+    - { title: Deploying, path: DEPLOY.md, url: DEPLOY.html, desc: "Run Imprim on Cloudflare: staging first, then production." }
+    - { title: Integrating, path: INTEGRATE.md, url: INTEGRATE.html, desc: "Sign people in to your app and accept agents on your MCP server." }
+- label: Concepts
+  items:
+    - { title: Agent access, path: AGENT_ACCESS.md, url: AGENT_ACCESS.html, desc: "How an agent connects for a person, and how apps protect resources." }
+    - { title: Realms, path: REALMS.md, url: REALMS.html, desc: "Several brands on one deployment, each with its own users and keys." }
+    - { title: Branding, path: BRANDING.md, url: BRANDING.html, desc: "Logos, looks, words and links, per realm and per app." }
+    - { title: Architecture, path: ARCHITECTURE.md, url: ARCHITECTURE.html, desc: "Components, schema and request flows." }
+- label: Reference
+  items:
+    - { title: Protocol, path: PROTOCOL.md, url: PROTOCOL.html, desc: "Every route, parameter, claim and error." }
+    - { title: Clients, path: CLIENTS.md, url: CLIENTS.html, desc: "App registration and the imprim-client package." }
+    - { title: Configuration, path: CONFIGURATION.md, url: CONFIGURATION.html, desc: "Worker bindings, secrets and settings." }
+    - { title: Control plane, path: CONTROL_PLANE.md, url: CONTROL_PLANE.html, desc: "The admin console and back-channel delivery." }
+- label: Operate
+  items:
+    - { title: Operations, path: OPERATIONS.md, url: OPERATIONS.html, desc: "Keys, retention, monitoring, backups and releases." }
+    - { title: Security, path: SECURITY.md, url: SECURITY.html, desc: "Threat model, controls, and what is not yet verified live." }
+    - { title: Security review, path: SECURITY_PASS.md, url: SECURITY_PASS.html, desc: "The review of 2026-11-15 and its fixes." }
+    - { title: Roadmap, path: ROADMAP.md, url: ROADMAP.html, desc: "What is done and what comes next." }
+- label: Design system
+  items:
+    - { title: Fire in Imprim, path: fire/README.md, url: fire/, desc: "How every Imprim screen is built with Fire." }
+    - { title: Building screens, path: fire/GUIDE.md, url: fire/GUIDE.html, desc: "Layout, components, theming, and what to do when Fire lacks something." }
+    - { title: Writing, path: fire/WRITING.md, url: fire/WRITING.html, desc: "How to write the words on a screen." }
+    - { title: Vocabulary, path: fire/VOCABULARY.md, url: fire/VOCABULARY.html, desc: "Every Fire class and attribute." }
+    - { title: Requests, path: fire/REQUESTS.md, url: fire/REQUESTS.html, desc: "Gaps Imprim fills with stopgaps until Fire has them." }

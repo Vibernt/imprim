@@ -1,0 +1,157 @@
+{%- comment -%}
+  Imprim docs: each Markdown page inside Fire's documentation shell (docs/fire/README.md). Built by GitHub Pages
+  (.github/workflows/pages.yml), which copies Fire to assets/fire. Navigation lives in _data/nav.yml. The page's
+  first <h1> becomes the shell's title; docsite.js builds "On this page" from the h2 and h3 headings.
+{%- endcomment -%}
+{%- assign base = site.baseurl -%}
+{%- assign all = "" | split: "" -%}
+{%- for g in site.data.nav -%}{%- for it in g.items -%}{%- assign all = all | push: it -%}{%- endfor -%}{%- endfor -%}
+{%- assign current = nil -%}{%- assign group = "Documentation" -%}{%- assign at = -1 -%}
+{%- for g in site.data.nav -%}{%- for it in g.items -%}{%- if it.path == page.path -%}{%- assign current = it -%}{%- assign group = g.label -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
+{%- for it in all -%}{%- if it.path == page.path -%}{%- assign at = forloop.index0 -%}{%- endif -%}{%- endfor -%}
+{%- assign parts = content | split: '</h1>' -%}
+{%- if parts.size > 1 -%}
+  {%- assign heading = parts[0] | strip_html | strip -%}
+  {%- assign body = content | remove_first: parts[0] | remove_first: '</h1>' -%}
+{%- else -%}
+  {%- assign heading = current.title | default: page.title | default: site.title -%}
+  {%- assign body = content -%}
+{%- endif -%}
+{%- if at > 0 -%}{%- assign prev_i = at | minus: 1 -%}{%- assign prev = all[prev_i] -%}{%- else -%}{%- assign prev = nil -%}{%- endif -%}
+{%- assign next_i = at | plus: 1 -%}{%- if at > -1 and next_i < all.size -%}{%- assign next = all[next_i] -%}{%- else -%}{%- assign next = nil -%}{%- endif -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ heading }} · Imprim docs</title>
+<meta name="description" content="{{ current.desc | default: site.description | escape }}">
+<link rel="icon" href="{{ base }}/assets/imprim.svg" type="image/svg+xml">
+<script src="{{ base }}/assets/fire/boot.js"></script>
+<link rel="stylesheet" href="{{ base }}/assets/fire/fire.css">
+<link rel="stylesheet" href="{{ base }}/assets/site.css">
+<script type="module" src="{{ base }}/assets/fire/fire.js"></script>
+</head>
+<body>
+<div class="fd-doc" data-section="docs">
+<header class="fd-doc-top">
+  <div class="fd-doc-top-row" data-row="tools">
+    <div class="fd-doc-top-start">
+      <a class="fd-brand fd-row" data-gap="2-5" href="{{ base }}/" aria-label="Imprim docs home">{% include dots.svg %}<span class="fd-brand-name">Imprim</span><span class="fd-doc-brand-tag">docs</span></a>
+    </div>
+    <button class="fd-doc-search" type="button" data-fd-command-open="docs-command" aria-label="Search the docs" aria-keyshortcuts="Meta+K Control+K"><i data-icon="search"></i><span>Search…</span><kbd class="fd-kbd">⌘K</kbd></button>
+    <div class="fd-doc-top-end">
+      <a class="fd-doc-repo" href="https://github.com/{{ site.repository }}" target="_blank" rel="noopener" data-doc-hide="sm" aria-label="Repository on GitHub"><i data-icon="git-branch"></i><span class="fd-doc-repo-name">{{ site.repository }}</span></a>
+      <button class="fd-btn" type="button" data-variant="ghost" data-icon-only data-fd-theme-toggle data-fd-tooltip="Theme" aria-label="Theme"><i data-icon="monitor"></i></button>
+      <button class="fd-btn" type="button" data-variant="ghost" data-icon-only data-doc-show="sm" data-fd-command-open="docs-command" aria-label="Search the docs"><i data-icon="search"></i></button>
+    </div>
+  </div>
+  <div class="fd-doc-top-row" data-row="crumbs">
+    <button class="fd-doc-crumbs" type="button" data-fd-doc-nav-open aria-label="Open navigation"><i data-icon="menu"></i><span>{{ group }}</span><i data-icon="chevron-right"></i><span aria-current="page">{{ heading }}</span></button>
+  </div>
+</header>
+<div class="fd-doc-body">
+  <nav class="fd-doc-nav" aria-label="Documentation">
+    <div class="fd-doc-nav-scroll">
+      {%- for g in site.data.nav %}
+      <div class="fd-doc-nav-group">
+        <p class="fd-doc-nav-label">{{ g.label }}</p>
+        {%- for it in g.items %}
+        <a class="fd-doc-nav-item" href="{{ base }}/{{ it.url }}"{% if it.path == page.path %} aria-current="page"{% endif %}><span class="fd-doc-nav-text">{{ it.title }}</span></a>
+        {%- endfor %}
+      </div>
+      {%- endfor %}
+    </div>
+  </nav>
+  <main class="fd-doc-main">
+    <div class="fd-doc-content">
+      <article class="fd-doc-article">
+        <header class="fd-doc-head">
+          <p class="fd-doc-eyebrow">{{ group }}</p>
+          <h1 class="fd-doc-title">{{ heading }}</h1>
+          <div class="fd-btn-group fd-doc-copy" role="group" aria-label="Copy page">
+            <button class="fd-btn" type="button" data-variant="outline" data-fd-doc-copy-page><i data-icon="copy"></i><span class="fd-btn-swap"><span>Copy page</span><span>Copied</span></span></button>
+          </div>
+          {%- if current.desc %}
+          <p class="fd-doc-lead">{{ current.desc }}</p>
+          {%- endif %}
+        </header>
+        <details class="fd-disclosure fd-doc-otp">
+          <summary class="fd-disclosure-trigger"><i data-icon="align-left"></i><span>On this page</span><i data-icon="chevron-down"></i></summary>
+          <div class="fd-disclosure-panel"><div class="fd-disclosure-inner"><nav class="fd-doc-otp-list" aria-label="On this page"></nav></div></div>
+        </details>
+        <div class="fd-prose">
+{{ body }}
+        </div>
+        <footer class="fd-doc-foot">
+          <div class="fd-doc-foot-row">
+            <div class="fd-doc-foot-links">
+              <a class="fd-btn-text" href="https://github.com/{{ site.repository }}/edit/main/docs/{{ page.path }}" target="_blank" rel="noopener"><i data-icon="square-pen"></i><span>Suggest edits</span></a>
+              <a class="fd-btn-text" href="https://github.com/{{ site.repository }}/issues/new" target="_blank" rel="noopener"><i data-icon="bug"></i><span>Raise an issue</span></a>
+            </div>
+          </div>
+          {%- if prev or next %}
+          <nav class="fd-doc-pager" aria-label="Previous and next page">
+            {%- if prev %}<a class="fd-doc-pager-link" data-dir="prev" href="{{ base }}/{{ prev.url }}"><span class="fd-doc-pager-eyebrow">Previous</span><span class="fd-doc-pager-title"><i data-icon="arrow-left"></i>{{ prev.title }}</span></a>{% endif %}
+            {%- if next %}<a class="fd-doc-pager-link" data-dir="next" href="{{ base }}/{{ next.url }}"><span class="fd-doc-pager-eyebrow">Next</span><span class="fd-doc-pager-title">{{ next.title }}<i data-icon="arrow-right"></i></span></a>{% endif %}
+          </nav>
+          {%- endif %}
+        </footer>
+      </article>
+      <aside class="fd-doc-aside" aria-label="On this page">
+        <nav class="fd-toc fd-doc-toc" data-fd-scrollspy data-offset="128" aria-labelledby="docs-toc-title">
+          <p class="fd-toc-title fd-doc-toc-title" id="docs-toc-title"><i data-icon="align-left"></i>On this page</p>
+          <div class="fd-toc-list" data-fd-doc-toc></div>
+        </nav>
+      </aside>
+    </div>
+    <footer class="fd-doc-footer">
+      <div class="fd-doc-footer-inner">
+        <div class="fd-doc-footer-brand">
+          <a class="fd-brand fd-row" data-gap="2-5" href="{{ base }}/">{% include dots.svg %}<span class="fd-brand-name">Imprim</span></a>
+          <p class="fd-doc-footer-note">{{ site.description }}</p>
+        </div>
+        {%- for g in site.data.nav limit: 3 %}
+        <div class="fd-doc-footer-col"><p>{{ g.label }}</p>{% for it in g.items %}<a href="{{ base }}/{{ it.url }}">{{ it.title }}</a>{% endfor %}</div>
+        {%- endfor %}
+      </div>
+      <div class="fd-doc-footer-bar">
+        <span>MIT licence · Built with the Fire design system</span>
+        <div class="fd-row">
+          <a class="fd-link" href="https://github.com/{{ site.repository }}">GitHub</a>
+          <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" data-icon-only data-fd-theme-toggle aria-label="Theme"><i data-icon="monitor"></i></button>
+        </div>
+      </div>
+    </footer>
+  </main>
+</div>
+<dialog class="fd-command" id="docs-command" aria-label="Search the docs" data-fd-doc-search>
+  <div class="fd-command-search">
+    <i data-icon="search"></i>
+    <input class="fd-command-input" type="text" placeholder="Search pages…" aria-label="Search the docs" autocomplete="off" spellcheck="false">
+    <kbd class="fd-kbd">esc</kbd>
+  </div>
+  <div class="fd-command-list">
+    {%- for g in site.data.nav %}
+    <div class="fd-command-group">
+      <p class="fd-command-group-label">{{ g.label }}</p>
+      {%- for it in g.items %}
+      <a class="fd-command-item" href="{{ base }}/{{ it.url }}" data-keywords="{{ g.label | escape }} {{ it.desc | escape }}" data-fd-doc-text="{{ it.desc | escape }}"><i data-icon="file-text"></i><span class="fd-command-item-label">{{ it.title }}</span><span class="fd-command-item-hint">{{ g.label }}</span></a>
+      {%- endfor %}
+    </div>
+    {%- endfor %}
+  </div>
+  <div class="fd-command-empty" hidden>
+    <i data-icon="search"></i>
+    <p class="fd-command-empty-title">No pages match “<span data-fd-command-query></span>”</p>
+    <p class="fd-command-empty-text">Try a route like /token, a word like passkey, or a page title.</p>
+  </div>
+  <div class="fd-command-foot">
+    <span><kbd class="fd-kbd">↑</kbd><kbd class="fd-kbd">↓</kbd>navigate</span>
+    <span><kbd class="fd-kbd">↵</kbd>open</span>
+    <span><kbd class="fd-kbd">esc</kbd>close</span>
+  </div>
+</dialog>
+</div>
+</body>
+</html>

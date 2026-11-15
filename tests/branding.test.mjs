@@ -217,3 +217,26 @@ test('agent consent uses the merged realm and app branding', async t => {
     assert.match(html, /<dt class="fd-kv-key">App<\/dt><dd class="fd-kv-value"><span class="fd-kv-text">Example App<\/span><\/dd>/);
     assert.match(html, /theme\.css\?client=app/);
 });
+test('replacement patterns in brand text are inserted as text, not as String.replace patterns', async t => {
+    const w = await world(t);
+    w.env.DB.db.prepare("UPDATE realms SET config=json_set(config,'$.branding',json(?)) WHERE id='default'").run(JSON.stringify({ name: "Acme $& $' Co", legal_name: 'Acme $` Ltd', copy: { footer: "Run $' by $&" } }));
+    forgetRealms(w.env);
+    const html = await (await w.authorize()).text();
+    assert.equal((html.match(/<html/g) || []).length, 1); assert.equal((html.match(/id="email-form"/g) || []).length, 1);
+    assert.ok(!html.includes('<!--identity:'), 'no marker reinserted');
+    assert.match(html, /<span class="fd-brand-name">Acme \$&amp; \$&#39; Co<\/span>/);
+    assert.match(html, /© Acme \$` Ltd/); assert.match(html, /Run \$&#39; by \$&amp;/);
+});
+test('the looks migration removes the old colour tokens, so later saves are not refused', async t => {
+    const w = await world(t); turnstile(t);
+    w.env.DB.db.prepare("UPDATE realms SET config=json_set(config,'$.branding',json(?)) WHERE id='default'").run(JSON.stringify({ name: 'Old', theme: { primary: '#123456' }, theme_dark: { primary: '#abcdef' } }));
+    w.env.DB.db.prepare("UPDATE clients SET branding=? WHERE id='app'").run(JSON.stringify({ name: 'App', theme: { primary: '#123456' } }));
+    const { readFileSync } = await import('node:fs');
+    w.env.DB.db.exec(readFileSync(new URL('../apps/server/migrations/0019_branding_looks.sql', import.meta.url), 'utf8'));
+    assert.deepEqual(JSON.parse(w.env.DB.db.prepare("SELECT json_extract(config,'$.branding') b FROM realms WHERE id='default'").get().b), { name: 'Old' });
+    assert.deepEqual(JSON.parse(w.env.DB.db.prepare("SELECT branding FROM clients WHERE id='app'").get().branding), { name: 'App' });
+    forgetRealms(w.env);
+    const admin = await adminLogin(w);
+    const { version, branding } = await (await admin.get('branding')).json();
+    assert.equal((await admin.post('branding', { version, branding: { ...branding, name: 'New' } })).status, 200);
+});
