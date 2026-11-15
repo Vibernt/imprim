@@ -16,7 +16,7 @@ at creation. Network/key failures throw `IdentityError`; no alternate issuer or 
 
 ## Back-channel events
 
-Apps must expire a session minted from identity sign-in within 30 days of that sign-in; Assay uses seven days.
+Apps must expire a session minted from identity sign-in within 30 days of that sign-in; shorter is better (seven days is a good default).
 The issuer retains each app-session association for 30 days after creation. Block, delete, logout and merge
 send human logout events only to clients with an unexpired association. A local session renewal does not extend
 the association; use a new identity sign-in before creating a session beyond this limit.
@@ -101,21 +101,16 @@ logout delivery; access-token expiry does not end them.
 Resource servers also use `client.protectedResourceMetadata({ resource, scopes })` and
 `client.wwwAuthenticate({ resourceMetadataUrl, error? })`; `wwwAuthenticate` is a named export.
 
-Assay must replace its vendored `src/auth/imprim-client.mjs` with the rebuilt `dist/imprim-client.mjs`, update
-its version/hash check to 0.2.0 and the emitted **body** SHA-256, and route both POST fields through `verifyBackchannel`.
-Touchstone must update its local/package dependency to 0.2.0 and use the same dispatcher. This repository's package
-is still `private`; this task does not publish it to npm. Both apps must configure their own client ID/resource
-prefixes, implement durable dedupe and the effects above, and check `(sub, aud, grant_id)` on agent requests.
-Deploy the server emitting `grant_id` before switching app verification; older access tokens lacking it are refused
-by 0.2.0. Wait out the previous server's token lifetime: 60 seconds on this M4 implementation, or longer if the
-production issuer still emits older tokens. No compatibility fallback is provided.
+**Vendoring.** An app without a package manager can copy `dist/imprim-client.mjs`, built by
+`node scripts/build-client.mjs` with a version and body SHA-256 header. Check the header when you update it, and route
+both back-channel POST fields through `verifyBackchannel`. Each app configures its own client ID and resource prefixes,
+deduplicates events durably, and checks `(sub, aud, grant_id)` on agent requests. Tokens without `grant_id` are refused;
+deploy the server before switching app verification and wait out the previous token lifetime (60 seconds).
 
-`node scripts/build-client.mjs` builds the optional vendored file with version/body-hash header. Source/artifact
-parity, real server tokens, negative boundaries, grant denial and expiry are smoke-tested. Local tests can additionally
-check the actual Assay copy read-only:
+The tests can also check an app's vendored copy:
 
 ```sh
-ASSAY_IDENTITY_CLIENT_PATH=/absolute/assay/src/auth/imprim-client.mjs node --test tests/server-backchannel.test.mjs
+IMPRIM_CLIENT_PATH=/absolute/path/to/app/src/auth/imprim-client.mjs node --test tests/server-backchannel.test.mjs
 ```
 
 Access-token `iat` and optional `nbf` permit up to 60 seconds of future clock skew by default. Pass

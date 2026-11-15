@@ -5,7 +5,7 @@
 import { PALETTES, DEFAULT_PALETTE, PALETTE_TOKENS, TONE_DEFAULT, TONE_RANGE, paletteTokens, toneTokens, cssValue, isDefaultTone } from '../../public/fire/js/palettes.js';
 import { TYPEFACES, DEFAULT_TYPEFACE } from '../../public/fire/js/typefaces.js';
 import { invariant } from '../lib/errors.mjs';
-export const LOOK_DEFAULTS = Object.freeze({ palette: DEFAULT_PALETTE, type: DEFAULT_TYPEFACE, tone: TONE_DEFAULT, theme: 'system', density: 'comfortable',
+const LOOK_DEFAULTS = Object.freeze({ palette: DEFAULT_PALETTE, type: DEFAULT_TYPEFACE, tone: TONE_DEFAULT, theme: 'system', density: 'comfortable',
     corners: 1, lines: 1, textSize: 'md', contrast: 'default', motion: 'default', texture: 1 });
 const CHOICES = { theme: ['light', 'dark', 'system'], density: ['compact', 'comfortable', 'spacious'], textSize: ['sm', 'md', 'lg'], contrast: ['default', 'high'],
     motion: ['off', 'default', 'slow'], lines: [1, 1.5, 2] };

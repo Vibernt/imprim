@@ -96,7 +96,7 @@ test('a credential cannot be used as another person\'s second factor', async t =
     assert.equal((await api(w, '/v1/auth/passkey/verify', { purpose: 'mfa', ...await device.get(mfa.publicKey) }, jar)).status, 400);
 });
 
-// Review findings on the passkeys milestone.
+// Review findings: passkeys.
 test('review 1 and 2: a first passkey brings recovery codes; removing the last factor voids them', async t => {
     const w = await world(t);
     const { flow, cookie } = await login(w, t);

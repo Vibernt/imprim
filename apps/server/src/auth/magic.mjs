@@ -1,4 +1,4 @@
-// Assay magic.mjs: neutral async delivery, hash-only tokens, explicit verification and shared session issuance.
+// Email links: neutral async delivery, hash-only tokens, explicit verification and shared session issuance.
 import { readBody, json, tokenShape, redirect } from '../lib/http.mjs';
 import { randomToken, sha256, safeEqual } from '../lib/crypto.mjs';
 import { invariant } from '../lib/errors.mjs';

@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { agentWorld, metadataId, resource, error } from './support/agents.mjs';
 
-test('M2 migration preserves populated M1 identities, clients, sessions and pending requests', () => {
+test('the agent-access migration preserves existing identities, clients, sessions and pending requests', () => {
     const db = new DatabaseSync(':memory:');
     const read = name => readFileSync(new URL('../apps/server/migrations/' + name, import.meta.url), 'utf8');
     try {

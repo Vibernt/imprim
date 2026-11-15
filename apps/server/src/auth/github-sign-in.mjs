@@ -1,4 +1,4 @@
-// Ported from Assay: PKCE S256, browser nonce, hashed single-use state, no network within D1 transactions.
+// GitHub sign-in: PKCE S256, browser nonce, hashed single-use state, no network within D1 transactions.
 import { randomToken, sha256, challengeOf, safeEqual } from '../lib/crypto.mjs';
 import { tokenShape, uniqueParams, redirect } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';

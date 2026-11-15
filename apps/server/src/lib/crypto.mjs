@@ -1,4 +1,4 @@
-// Assay src/lib/crypto.mjs primitives, narrowed to the identity protocol.
+// Web Crypto primitives used across the identity protocol.
 import { invariant } from './errors.mjs';
 const encoder = new TextEncoder();
 export const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');

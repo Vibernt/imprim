@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { importSql } from '../scripts/import-assay.mjs';
+import { importSql } from '../scripts/import-users.mjs';
 import { d1Database } from './support/sqlite.mjs';
 const sample = () => ({ principals: [
     { id: "principal'1", email: 'Member@Example.com', created_at: 100 },
@@ -47,7 +47,7 @@ test('CLI emits only SQL on stdout, operator instructions on stderr, and no outp
     const dir = mkdtempSync(join(tmpdir(), 'identity-import-'));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     const file = join(dir, 'export.json'); writeFileSync(file, JSON.stringify(sample()));
-    const script = new URL('../scripts/import-assay.mjs', import.meta.url);
+    const script = new URL('../scripts/import-users.mjs', import.meta.url);
     const good = spawnSync(process.execPath, [script.pathname, file], { encoding: 'utf8' });
     assert.equal(good.status, 0); assert.match(good.stdout, /INSERT INTO users/); assert.match(good.stderr, /no network calls/);
     writeFileSync(file, '{invalid');

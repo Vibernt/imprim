@@ -160,7 +160,7 @@ test('the sign-in page offers password, link and set-password actions only where
     assert.ok(only.includes('id="password-sign-in"') && only.includes('id="set-password"') && !only.includes('id="send-link"'));
 });
 
-// Review findings on the password milestone.
+// Review findings: password.
 test('review 1: a parallel burst of guesses cannot pass the account limit', async t => {
     const { w } = await passwordWorld(t);
     await setPassword(w);

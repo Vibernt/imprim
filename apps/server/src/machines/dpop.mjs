@@ -1,7 +1,7 @@
 // DPoP proofs (RFC 9449): a JWT signed by the client's key, bound to the method and URL, fresh and single-use.
 import { invariant } from '../lib/errors.mjs';
 import { b64url, from64, sha256 } from '../lib/crypto.mjs';
-export const DPOP_ALGS = ['ES256', 'RS256', 'EdDSA'];
+const DPOP_ALGS = ['ES256', 'RS256', 'EdDSA'];
 const ALG = { ES256: [{ name: 'ECDSA', namedCurve: 'P-256' }, { name: 'ECDSA', hash: 'SHA-256' }], RS256: [{ name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, { name: 'RSASSA-PKCS1-v1_5' }], EdDSA: [{ name: 'Ed25519' }, { name: 'Ed25519' }] };
 const fail = message => invariant(false, 'invalid_dpop_proof', message, 400);
 // RFC 7638 thumbprint over the required members, in lexicographic order.

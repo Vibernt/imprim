@@ -4,7 +4,7 @@
 import { invariant } from '../lib/errors.mjs';
 import { from64 } from '../lib/crypto.mjs';
 import { realmId } from '../realms/realm.mjs';
-export const MAX_ASSET = 262144;
+const MAX_ASSET = 262144;
 const MAGIC = { 'image/png': [0x89, 0x50, 0x4e, 0x47], 'image/jpeg': [0xff, 0xd8, 0xff], 'image/webp': [0x52, 0x49, 0x46, 0x46] };
 // SVGs are checked against an allowlist, not cleaned: plain shapes, paths and gradients, presentation attributes, no
 // prefixed names, no processing instructions, doctype, CDATA, entities, links or references other than url(#id).

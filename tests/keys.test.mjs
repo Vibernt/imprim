@@ -1,4 +1,4 @@
-// Rotation and concurrency scenarios ported from Assay tests/workload-identity.test.mjs.
+// Signing key rotation and concurrency.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { world } from './support/world.mjs';

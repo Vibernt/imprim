@@ -133,7 +133,7 @@ test('an admin MFA reset needs a reason, removes factors, ends sessions and tell
     assert.ok(w.mails.some(m => m.to === 'person@example.com' && /two-factor authentication was reset/.test(m.subject)));
 });
 
-// Review findings on the account milestone.
+// Review findings on the account page.
 test('review 1: with a second factor, changing the email needs it, so mailbox control alone cannot move the account', async t => {
     const w = await world(t);
     const { jar } = await signedIn(w, t);

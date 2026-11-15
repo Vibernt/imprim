@@ -1,7 +1,7 @@
 // The admin console, in Fire markup. Every page is server-rendered; only the Branding page loads JavaScript (Fire's
 // Tweaks panel and the logo upload). Copy follows docs/fire/WRITING.md.
 import { page, escapeHtml as e } from '../pages/layout.mjs';
-import { heading, button, linkButton, field, hidden, callout, setting, kv, list, empty, status, badge, code, table, actions, checkbox, dotLogo } from '../pages/ui.mjs';
+import { heading, button, linkButton, field, hidden, callout, setting, kv, list, empty, status, code, table, actions, checkbox, dotLogo } from '../pages/ui.mjs';
 import { COPY_KEYS } from '../branding/tokens.mjs';
 const SECTIONS = [['clients', 'Clients'], ['services', 'Services'], ['branding', 'Branding'], ['users', 'Users'], ['audit', 'Audit log'], ['keys', 'Keys'], ['realms', 'Realms'], ['settings', 'Settings']];
 const link = (url, label) => `<a class="fd-link" href="${e(url)}">${e(label)}</a>`;
@@ -10,7 +10,7 @@ const when = ms => ms ? new Date(ms).toISOString().slice(0, 16).replace('T', ' '
 const cap = value => String(value ?? '').replace(/^./, c => c.toUpperCase());
 const STATUS_TONE = { active: 'success', blocked: 'danger', deleted: 'neutral', disabled: 'neutral', retired: 'neutral', pending: 'warning', published: 'warning' };
 // Admin pages have no script unless they ask for modules; fonts and Fire's data: images are same-origin or inline.
-export function adminPage(title, body, { description = '', active = '', modules = [] } = {}) {
+function adminPage(title, body, { description = '', active = '', modules = [] } = {}) {
     const nav = `<nav class="fd-chip-nav" aria-label="Admin">${SECTIONS.map(([id, label]) => `<a class="fd-chip" href="/admin/${id}"${id === active ? ' aria-current="page"' : ''}>${e(label)}</a>`).join('')}<a class="fd-chip" href="/login">Sign in again</a></nav>`;
     const response = page(title, heading(title, description) + body, { wide: true, nav, modules });
     response.headers.set('content-security-policy', `default-src 'none'; ${modules.length ? "script-src 'self'; connect-src 'self'; " : ''}style-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);

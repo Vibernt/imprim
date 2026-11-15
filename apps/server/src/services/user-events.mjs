@@ -17,7 +17,7 @@ export function userEventStatements(env, userId, event, payload = {}, onlyIf = n
         WHERE a.user_id=? AND c.user_events='on' AND c.backchannel_uri IS NOT NULL${onlyIf ? ` AND ${onlyIf.sql}` : ''}`)
         .bind(event, JSON.stringify(payload), Date.now(), userId, ...(onlyIf?.args ?? []))];
 }
-export const userEventType = (issuer, event) => `${issuer}/events/${event}`;
+const userEventType = (issuer, event) => `${issuer}/events/${event}`;
 export async function deliverUserEvent(base, message) {
     const row = await base.DB.prepare('SELECT * FROM user_event_outbox WHERE id=?').bind(message.body.event_id).first();
     invariant(row, 'invalid_request', 'Unknown user event.');

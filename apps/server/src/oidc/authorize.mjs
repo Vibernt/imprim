@@ -24,7 +24,7 @@ export async function authorize(request, env) {
         invariant(query.max_age === undefined || /^\d{1,9}$/.test(query.max_age), 'invalid_request', 'max_age must be whole seconds.');
         invariant(query.acr_values === undefined || (query.acr_values.length <= 512 && /^[\x21-\x7e]+( [\x21-\x7e]+)*$/.test(query.acr_values)), 'invalid_request', 'Invalid acr_values.');
         for (const name of ['request', 'request_uri', 'claims', 'id_token_hint'])
-            invariant(query[name] === undefined, 'invalid_request', `${name} is not supported in M1.`);
+            invariant(query[name] === undefined, 'invalid_request', `${name} is not supported.`);
     } catch (error) {
         if (!error.code) throw error;
         return authorizationResponse(env, { ...query, state: query.state || '' }, { error: error.code });

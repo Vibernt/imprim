@@ -21,7 +21,7 @@ export async function revokeGrant(env, id, userId, reason = 'agent_revoke') {
 }
 export const queueRevocation = (env, ctx, eventId) => queueEvent(env, ctx, 'agent_revocation_outbox', 'agent_revocation', eventId);
 // RFC 8417 security event. The event type is issuer-relative, so each realm names its own events.
-export const revocationEventType = issuer => `${issuer}/events/agent-revoked`;
+const revocationEventType = issuer => `${issuer}/events/agent-revoked`;
 export async function deliverRevocation(base, message) {
     let env = base;
     const row = await env.DB.prepare('SELECT * FROM agent_revocation_outbox WHERE id=?').bind(message.body.event_id).first();

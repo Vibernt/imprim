@@ -6,11 +6,11 @@ import { adminLogin, clientConfig } from './support/admin.mjs';
 for (const action of ['edit','rotate']) test(`client ${action} rolls back secret/configuration/version when its audit fails`, async t => {
     const w = await world(t); turnstile(t); const a = await adminLogin(w);
     await a.post('clients', clientConfig);
-    const before = w.env.DB.db.prepare("SELECT * FROM clients WHERE id='touchstone'").get();
+    const before = w.env.DB.db.prepare("SELECT * FROM clients WHERE id='notes'").get();
     w.env.DB.db.exec(`CREATE TRIGGER fail_client_audit BEFORE INSERT ON audit WHEN NEW.event='admin_client_${action === 'edit' ? 'update' : 'secret_rotate'}' BEGIN SELECT RAISE(ABORT,'injected audit failure'); END`);
-    const response = await a.post('clients/touchstone' + (action === 'rotate' ? '/rotate-secret' : ''), action === 'edit' ? { version: before.version, signup_policy: 'open' } : {});
+    const response = await a.post('clients/notes' + (action === 'rotate' ? '/rotate-secret' : ''), action === 'edit' ? { version: before.version, signup_policy: 'open' } : {});
     assert.equal(response.status, 500);
-    assert.deepEqual(w.env.DB.db.prepare("SELECT * FROM clients WHERE id='touchstone'").get(), before);
+    assert.deepEqual(w.env.DB.db.prepare("SELECT * FROM clients WHERE id='notes'").get(), before);
 });
 test('a concurrent secret rotation prevents stale client configuration from committing', async t => {
     const w = await world(t); turnstile(t); const a = await adminLogin(w);
@@ -18,11 +18,11 @@ test('a concurrent secret rotation prevents stale client configuration from comm
     const original = w.env.DB.batch;
     w.env.DB.batch = async statements => {
         w.env.DB.batch = original;
-        assert.equal((await a.post('clients/touchstone/rotate-secret')).status, 200);
+        assert.equal((await a.post('clients/notes/rotate-secret')).status, 200);
         return original(statements);
     };
-    assert.equal((await a.post('clients/touchstone', { version: first.client.version, signup_policy: 'open' })).status, 409);
-    const current = await (await a.get('clients/touchstone')).json();
+    assert.equal((await a.post('clients/notes', { version: first.client.version, signup_policy: 'open' })).status, 409);
+    const current = await (await a.get('clients/notes')).json();
     assert.equal(current.signup_policy, 'invited'); assert.equal(current.version, first.client.version + 1);
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_client_update'").get().n, 0);
 });

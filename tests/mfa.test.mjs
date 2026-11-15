@@ -198,7 +198,7 @@ test('imprim-client passes acr_values and max_age for step-up', async () => {
     await assert.rejects(client.startLogin({ maxAge: -1 }));
 });
 
-// Review findings on the two-factor milestone.
+// Review findings: two-factor.
 test('review 1: a sign-in without the second factor cannot enrol another authenticator', async t => {
     const w = await mfaWorld(t);
     const { mfa } = await enrolThroughApp(w, t);

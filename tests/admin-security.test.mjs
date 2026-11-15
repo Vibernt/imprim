@@ -37,35 +37,35 @@ test('client edits require a version; concurrent edits have one winner and stale
     const { w, a } = await setup(t);
     const created = await (await a.post('clients', clientConfig)).json(), version = created.client.version ?? 0;
     const changes = [{ branding: { name: 'First' } }, { signup_policy: 'open' }];
-    const responses = await Promise.all(changes.map(change => a.post('clients/touchstone', { ...change, version })));
+    const responses = await Promise.all(changes.map(change => a.post('clients/notes', { ...change, version })));
     assert.deepEqual(responses.map(r => r.status).sort(), [200,409]);
-    const current = await (await a.get('clients/touchstone')).json(); assert.equal(current.version, version + 1);
+    const current = await (await a.get('clients/notes')).json(); assert.equal(current.version, version + 1);
     const firstWon = responses[0].status === 200;
     assert.equal(current.branding.name, firstWon ? 'First' : clientConfig.branding.name);
     assert.equal(current.signup_policy, firstWon ? 'invited' : 'open');
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_client_update'").get().n, 1);
-    assert.equal((await a.post('clients/touchstone', { branding: { name: 'Missing version' } })).status, 400);
-    assert.equal((await a.post('clients/touchstone', { version, branding: { name: 'Stale' } })).status, 409);
-    const html = await (await w.call('/admin/clients/touchstone', { headers: { cookie: a.cookie } })).text();
+    assert.equal((await a.post('clients/notes', { branding: { name: 'Missing version' } })).status, 400);
+    assert.equal((await a.post('clients/notes', { version, branding: { name: 'Stale' } })).status, 409);
+    const html = await (await w.call('/admin/clients/notes', { headers: { cookie: a.cookie } })).text();
     assert.match(html, new RegExp(`type="hidden" name="version" value="${current.version}"`));
-    const form = await w.call('/admin/clients/touchstone', { method: 'POST', headers: { cookie: a.cookie, origin: w.env.ISSUER, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: a.csrf, version: String(version), signup_policy: 'open' }) });
+    const form = await w.call('/admin/clients/notes', { method: 'POST', headers: { cookie: a.cookie, origin: w.env.ISSUER, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: a.csrf, version: String(version), signup_policy: 'open' }) });
     assert.equal(form.status, 409);
 });
 test('public secret rotation requires explicit conversion and audits it; rotation invalidates stale editors', async t => {
     const { w, a } = await setup(t);
     await a.post('clients', clientConfig);
-    w.env.DB.db.exec("UPDATE clients SET secret_hash=NULL WHERE id='touchstone'");
+    w.env.DB.db.exec("UPDATE clients SET secret_hash=NULL WHERE id='notes'");
     for (const body of [{}, { make_confidential: false }, { make_confidential: 'true' }]) {
-        assert.equal((await a.post('clients/touchstone/rotate-secret', body)).status, 400);
-        assert.equal(w.env.DB.db.prepare("SELECT secret_hash FROM clients WHERE id='touchstone'").get().secret_hash, null);
+        assert.equal((await a.post('clients/notes/rotate-secret', body)).status, 400);
+        assert.equal(w.env.DB.db.prepare("SELECT secret_hash FROM clients WHERE id='notes'").get().secret_hash, null);
     }
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_client_secret_rotate'").get().n, 0);
-    const before = await (await a.get('clients/touchstone')).json();
-    const response = await a.post('clients/touchstone/rotate-secret', { make_confidential: true }); assert.equal(response.status, 200);
+    const before = await (await a.get('clients/notes')).json();
+    const response = await a.post('clients/notes/rotate-secret', { make_confidential: true }); assert.equal(response.status, 200);
     assert.ok((await response.json()).client_secret);
     const audit = w.env.DB.db.prepare("SELECT detail FROM audit WHERE event='admin_client_secret_rotate'").get();
     assert.equal(JSON.parse(audit.detail).made_confidential, true);
-    assert.equal((await a.post('clients/touchstone', { version: before.version, signup_policy: 'open' })).status, 409);
+    assert.equal((await a.post('clients/notes', { version: before.version, signup_policy: 'open' })).status, 409);
 });
 test('mixed-case stored admin email retains admin access and matches roster', async t => {
     const { w, a } = await setup(t);

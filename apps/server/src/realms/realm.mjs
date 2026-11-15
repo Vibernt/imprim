@@ -6,8 +6,8 @@ import { validateBranding } from '../branding/tokens.mjs';
 const isRef = value => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 1 && typeof value.env === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value.env);
 const at = (object, path) => path.reduce((value, key) => value?.[key], object);
 // Upstream providers by id. github and google keep their built-in flows; any other id names its type.
-export const PROVIDER_ID = /^[a-z][a-z0-9-]{1,39}$/;
-export const RESERVED_METHODS = ['email', 'password', 'passkey'];
+const PROVIDER_ID = /^[a-z][a-z0-9-]{1,39}$/;
+const RESERVED_METHODS = ['email', 'password', 'passkey'];
 const PROVIDER_FIELDS = {
     github: { scalar: ['client_id', 'name'], secret: ['client_secret'] },
     google: { scalar: ['client_id', 'name'], secret: ['client_secret'] },
@@ -15,7 +15,7 @@ const PROVIDER_FIELDS = {
     microsoft: { scalar: ['client_id', 'name', 'tenant'], secret: ['client_secret'], list: ['trusted_domains'] },
     apple: { scalar: ['client_id', 'name', 'team_id', 'key_id'], secret: ['private_key'] }
 };
-export const providerType = (id, config) => ['github', 'google'].includes(id) ? id : config?.type;
+const providerType = (id, config) => ['github', 'google'].includes(id) ? id : config?.type;
 export function validateRealmConfig(config) {
     const fail = message => invariant(false, 'realm_config', message, 400);
     if (!config || typeof config !== 'object' || Array.isArray(config)) fail('Realm config must be an object.');

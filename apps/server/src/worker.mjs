@@ -29,7 +29,7 @@ import { logout } from './oidc/logout.mjs';
 import { invite } from './services/invitations.mjs';
 import { scheduled, queue } from './services/maintenance.mjs';
 import { loginPage, signInScript } from './pages/sign-in.mjs';
-import { page, localCss, errorPage, signedOutPage, withBrand, escapeHtml } from './pages/layout.mjs';
+import { page, localCss, errorPage, signedOutPage, withBrand } from './pages/layout.mjs';
 import { heading, linkButton } from './pages/ui.mjs';
 import { themeResponse } from './branding/theme.mjs';
 import { serveAsset } from './branding/assets.mjs';

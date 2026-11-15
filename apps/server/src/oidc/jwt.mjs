@@ -1,4 +1,4 @@
-// ES256 compact signing ported from Assay services/workload-identity.mjs.
+// ES256 compact JWS signing.
 import { signingKey } from './keys.mjs';
 import { b64url } from '../lib/crypto.mjs';
 export async function signIdToken(env, session, code) {

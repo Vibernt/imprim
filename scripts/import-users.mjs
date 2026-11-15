@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-/** Offline import. Input JSON shape (Assay's existing export column names):
+/** Offline import of existing users, so they keep their ids as `sub` when an app moves to Imprim. Input JSON shape:
  * {"principals":[{"id":"principal-id","email":"member@example.com","created_at":1700000000000}],
  *  "principal_identities":[{"provider":"github","subject":"123","principal_id":"principal-id",
  *    "login":"octocat","created_at":1700000000000}]}
  * A principal with email "deleted:<id>", status "deleted", or a non-null deleted_at is imported deleted.
- * Optional status "blocked" and boolean email_verified are honored. Assay principals without that flag were
- * created only after verified sign-in, so active imports use email_verified=1. Deleted imports use 0.
- * Usage: node scripts/import-assay.mjs export.json [realm] > import.sql   (realm defaults to 'default')
+ * Optional status "blocked" and boolean email_verified are honored. Principals without that flag are taken as
+ * created after a verified sign-in, so active imports use email_verified=1. Deleted imports use 0.
+ * Usage: node scripts/import-users.mjs export.json [realm] > import.sql   (realm defaults to 'default')
  * No network, subprocess, credentials, or remote writes. SQL is printed only after the entire input validates.
  * Re-running preserves ids and does not reactivate a blocked/deleted destination user or relink a provider id.
  */
@@ -39,7 +39,7 @@ export function importSql(data, realm = 'default') {
         assert(i.login == null || (typeof i.login === 'string' && /^[A-Za-z0-9-]{1,39}$/.test(i.login)), 'Invalid GitHub login');
         return { ...i, created_at: timestamp(i.created_at) };
     });
-    const output = ['-- Offline Assay identity import. Review before applying; ids are preserved as sub.', '-- No explicit BEGIN: D1 owns transaction boundaries. Back up before applying.'];
+    const output = ['-- Offline user import. Review before applying; ids are preserved as sub.', '-- No explicit BEGIN: D1 owns transaction boundaries. Back up before applying.'];
     for (const u of users) output.push(`INSERT INTO users(id,realm_id,email,email_verified,status,created) VALUES(${[u.id,realm,u.email,u.verified,u.status,u.created].map(sql).join(',')})
 ON CONFLICT(id) DO UPDATE SET
  email=CASE WHEN users.status='deleted' THEN users.email ELSE excluded.email END,
@@ -53,7 +53,7 @@ ON CONFLICT(realm_id,provider,provider_id) DO UPDATE SET
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     try {
-        assert(process.argv.length === 3 || process.argv.length === 4, 'Usage: node scripts/import-assay.mjs export.json [realm] > import.sql');
+        assert(process.argv.length === 3 || process.argv.length === 4, 'Usage: node scripts/import-users.mjs export.json [realm] > import.sql');
         const output = importSql(JSON.parse(readFileSync(process.argv[2], 'utf8')), process.argv[3]);
         process.stdout.write(output);
         process.stderr.write('Generated SQL only; no network calls made. Review/backup first, then an operator may run:\nwrangler d1 execute vibernt-identity --remote --config apps/server/wrangler.jsonc --file import.sql\n');

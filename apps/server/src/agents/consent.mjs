@@ -21,14 +21,14 @@ export { hidden };
 //   redirect - the code is delivered only to an HTTPS address the metadata document lists;
 //   claimed  - device codes and loopback redirects reach whoever started the flow, so the host is only a claim;
 //   none     - dynamically registered: nothing about the name is checked.
-export function agentAssurance(row, agent, method) {
+function agentAssurance(row, agent, method) {
     if (method !== 'metadata_document') return 'none';
     if (agent.token_endpoint_auth_method === 'private_key_jwt') return 'key';
     return !row.device_hash && row.redirect_uri?.startsWith('https://') ? 'redirect' : 'claimed';
 }
 // Shown whenever the code or callback can reach someone other than the person at this screen.
 const phishing = callout('Only approve your own connection', 'Approve only if you started it just now, on this device or your own. If someone sent you this link or code, choose Deny: approving gives them access as you.', { tone: 'danger' });
-export function consentPage(request, env, row, context) {
+function consentPage(request, env, row, context) {
     const { agent, app, settings, method } = context;
     const assurance = agentAssurance(row, agent, method), name = agent.client_name;
     const host = method === 'metadata_document' ? code(new URL(agent.client_id).host) : '';

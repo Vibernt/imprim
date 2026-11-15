@@ -1,4 +1,4 @@
-// Adapted from Assay tests/github-sign-in.test.mjs: state, PKCE, numeric identity and admission boundaries.
+// GitHub sign-in: state, PKCE, numeric identity and admission boundaries.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { world, begin, cookieJar } from './support/world.mjs';

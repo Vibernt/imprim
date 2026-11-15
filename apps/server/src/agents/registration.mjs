@@ -9,7 +9,7 @@ import { realmId } from '../realms/realm.mjs';
 const GRANTS = ['authorization_code','refresh_token','urn:ietf:params:oauth:grant-type:device_code'];
 // Bidirectional overrides and control characters let a name render differently from what it says (S11).
 export const displayName = value => value.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, '').trim();
-export function validateMetadata(document, id) {
+function validateMetadata(document, id) {
     invariant(document && typeof document === 'object' && !Array.isArray(document), 'invalid_client_metadata', 'Expected a metadata object.');
     invariant(!id || document.client_id === id, 'invalid_client_metadata', 'Metadata client_id must equal its URL.');
     invariant(typeof document.client_name === 'string' && displayName(document.client_name).length > 0 && document.client_name.length <= 200,

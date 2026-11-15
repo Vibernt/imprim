@@ -2,7 +2,7 @@
 // parameters are stored per hash, so a stronger scheme can replace a hash at the next successful sign-in.
 import { b64url, from64, safeEqual } from '../lib/crypto.mjs';
 import { invariant } from '../lib/errors.mjs';
-export const PASSWORD_ITERATIONS = 100000;
+const PASSWORD_ITERATIONS = 100000;
 const encoder = new TextEncoder(), DUMMY_SALT = new Uint8Array(16);
 async function derive(password, salt, iterations) {
     // NFKC so the same password typed on different keyboards or platforms derives the same key (NIST SP 800-63B).

@@ -7,9 +7,9 @@ const fail = message => invariant(false, 'invalid_grant', message, 400);
 const sha = async bytes => new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
 const equal = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 const decode = value => { try { return from64(value); } catch { fail('Malformed WebAuthn field.'); } };
-export const FLAGS = { UP: 1, UV: 4, BE: 8, BS: 16, AT: 64, ED: 128 };
+const FLAGS = { UP: 1, UV: 4, BE: 8, BS: 16, AT: 64, ED: 128 };
 // COSE_Key to Web Crypto: ES256 (P-256), RS256 and EdDSA (Ed25519).
-export function coseToJwk(cose) {
+function coseToJwk(cose) {
     invariant(cose instanceof Map, 'invalid_grant', 'Invalid credential public key.', 400);
     const kty = cose.get(1), alg = cose.get(3), bytes = (key, length) => { const v = cose.get(key); if (!(v instanceof Uint8Array) || (length && v.length !== length)) fail('Invalid credential public key.'); return b64url(v); };
     if (kty === 2 && alg === -7 && cose.get(-1) === 1) return { alg: -7, jwk: { kty: 'EC', crv: 'P-256', x: bytes(-2, 32), y: bytes(-3, 32) } };

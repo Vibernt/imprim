@@ -1,4 +1,4 @@
-// Assay registration.mjs admission only: workspace permissions and operator roster stay in apps.
+// Admission: who may sign in to which app. Workspace permissions and rosters stay in apps.
 import { invariant } from '../lib/errors.mjs';
 export function normalizeEmail(value) {
     invariant(typeof value === 'string' && value.length <= 254 && /^[^\s@<>\x00-\x1f]+@[^\s@<>\x00-\x1f]+\.[^\s@<>\x00-\x1f]+$/.test(value), 'invalid_request', 'A valid email is required.');

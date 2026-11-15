@@ -34,19 +34,19 @@ test('client create/edit/secret rotation audit and show-once secret; HTML screen
     const created = await a.post('clients', clientConfig); assert.equal(created.status, 200, await created.clone().text());
     const first = await created.json(); assert.ok(first.client_secret);
     assert.equal(w.env.DB.db.prepare('SELECT secret_hash FROM clients WHERE id=?').get(clientConfig.id).secret_hash, await sha256(first.client_secret));
-    const edit = { redirect_uris: ['https://touchstone.example/new'], post_logout_uris: ['https://touchstone.example/out'],
-        backchannel_uri: 'https://touchstone.example/logout', sign_in_methods: ['google','email'], branding: { name: '<script>bad</script>' },
-        signup_policy: 'open', agent_access: 'on', agent_resource_prefixes: ['https://touchstone.example/w/'], agent_scope_catalogue: { read: 'Read' } };
-    assert.equal((await a.post('clients/touchstone', { ...edit, version: first.client.version })).status, 200);
-    const rotated = await a.post('clients/touchstone/rotate-secret'), second = await rotated.json();
+    const edit = { redirect_uris: ['https://notes.example/new'], post_logout_uris: ['https://notes.example/out'],
+        backchannel_uri: 'https://notes.example/logout', sign_in_methods: ['google','email'], branding: { name: '<script>bad</script>' },
+        signup_policy: 'open', agent_access: 'on', agent_resource_prefixes: ['https://notes.example/w/'], agent_scope_catalogue: { read: 'Read' } };
+    assert.equal((await a.post('clients/notes', { ...edit, version: first.client.version })).status, 200);
+    const rotated = await a.post('clients/notes/rotate-secret'), second = await rotated.json();
     assert.notEqual(first.client_secret, second.client_secret);
     assert.equal(w.env.DB.db.prepare('SELECT secret_hash FROM clients WHERE id=?').get(clientConfig.id).secret_hash, await sha256(second.client_secret));
-    for (const path of ['clients','clients/touchstone','audit','keys','settings']) {
+    for (const path of ['clients','clients/notes','audit','keys','settings']) {
         const response = await a.get(path), text = await response.text(); assert.equal(response.status, 200, text);
         assert.equal(response.headers.get('cache-control'), 'no-store');
         for (const secret of [first.client_secret, second.client_secret, await sha256(second.client_secret)]) assert.ok(!text.includes(secret));
     }
-    for (const path of ['/admin','/admin/clients','/admin/clients/new','/admin/clients/touchstone','/admin/users','/admin/audit','/admin/keys','/admin/settings']) {
+    for (const path of ['/admin','/admin/clients','/admin/clients/new','/admin/clients/notes','/admin/users','/admin/audit','/admin/keys','/admin/settings']) {
         const response = await w.call(path, { headers: { cookie: a.cookie } });
         assert.equal(response.status, 200, path); assert.equal(response.headers.get('cache-control'), 'no-store');
         assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
@@ -67,7 +67,7 @@ for (const input of [{ redirect_uris: ['javascript:alert(1)'] }, { backchannel_u
     test(`admin refuses invalid client update ${JSON.stringify(input)}`, async t => {
         const w = await world(t); turnstile(t); const a = await adminLogin(w);
         await a.post('clients', clientConfig);
-        assert.equal((await a.post('clients/touchstone', { ...input, version: 0 })).status, 400);
+        assert.equal((await a.post('clients/notes', { ...input, version: 0 })).status, 400);
         assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_client_update'").get().n, 0);
     });
 
@@ -98,7 +98,7 @@ test('HTML client forms submit JSON fields and never redisplay a secret', async 
         agent_registration_methods: '["metadata_document"]', agent_allowlist: '[]', agent_scope_catalogue: '{}', agent_resource_prefixes: '[]', agent_max_grant_days: '90' });
     const response = await w.call('/admin/clients', { method: 'POST', headers: { origin: w.env.ISSUER, cookie: a.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body });
     assert.equal(response.status, 200, await response.clone().text()); assert.match(await response.text(), /Copy the new client secret now/);
-    const get = await w.call('/admin/clients/touchstone', { headers: { cookie: a.cookie } }); assert.ok(!(await get.text()).includes('client_secret'));
+    const get = await w.call('/admin/clients/notes', { headers: { cookie: a.cookie } }); assert.ok(!(await get.text()).includes('client_secret'));
 });
 
 for (const endpoint of ['clients','clients/app','clients/app/rotate-secret','keys/rotate','users/target/block'])

@@ -1,4 +1,4 @@
-// Adapted from Assay services/oidc-keys.mjs and oidc-seal.mjs. Generation races converge via INSERT OR IGNORE.
+// Signing keys per realm, sealed at rest. Generation races converge via INSERT OR IGNORE.
 import { seal, unseal } from '../lib/crypto.mjs';
 import { invariant, AppError } from '../lib/errors.mjs';
 import { audit } from '../services/audit.mjs';
@@ -53,7 +53,7 @@ async function retireKey(env, row, now) {
     const latest = (await rows(env)).at(-1);
     await createKey(env, latest.generation + 1, now, row.activates_at > now ? row.activates_at : now);
 }
-export async function publishedKeys(env, now = Date.now()) {
+async function publishedKeys(env, now = Date.now()) {
     let keys = await rows(env);
     if (!keys.length) { await createKey(env, 1, now, now); keys = await rows(env); }
     invariant(keys.length, 'key_unavailable', 'No signing key is available.', 503);

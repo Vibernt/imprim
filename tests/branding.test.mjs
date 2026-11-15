@@ -73,20 +73,20 @@ test('admins upload a logo and set realm branding; pages show it with a sandboxe
 test('an app overrides the realm: name, copy and theme on its sign-in page and in its sign-in email', async t => {
     const w = await world(t);
     w.env.DB.db.prepare("UPDATE realms SET config=json_set(config,'$.branding',json(?)) WHERE id='default'").run(JSON.stringify({ support_email: 'help@vibernt.example', legal_name: 'Vibernt Ltd' }));
-    w.env.DB.db.prepare("UPDATE clients SET branding=? WHERE id='app'").run(JSON.stringify({ name: 'Assay', look: { palette: 'iris', corners: 0.5 }, copy: { sign_in_heading: 'Welcome to Assay', sign_in_help: 'Use your work email.' } }));
+    w.env.DB.db.prepare("UPDATE clients SET branding=? WHERE id='app'").run(JSON.stringify({ name: 'Acme', look: { palette: 'iris', corners: 0.5 }, copy: { sign_in_heading: 'Welcome to Acme', sign_in_help: 'Use your work email.' } }));
     forgetRealms(w.env);
     const html = await (await w.authorize()).text();
-    assert.match(html, /<h1 class="fd-h1">Welcome to Assay<\/h1><p class="fd-muted">Use your work email\.<\/p>/);
+    assert.match(html, /<h1 class="fd-h1">Welcome to Acme<\/h1><p class="fd-muted">Use your work email\.<\/p>/);
     assert.match(html, /<html lang="en" data-palette="iris">/);
     assert.match(html, /<link rel="stylesheet" href="\/assets\/theme.css\?client=app">/);
-    assert.match(html, /<span class="fd-brand-name">Assay<\/span>/);
+    assert.match(html, /<span class="fd-brand-name">Acme<\/span>/);
     assert.match(await (await w.call('/assets/theme.css?client=app')).text(), /--fd-radius-scale:0.5/);
     assert.equal(await (await w.call('/assets/theme.css?client=other')).text(), '');
     turnstile(t);
     const flow = await begin(w);
     await w.post('/v1/auth/magic/request', { request_id: flow.request_id, email: 'person@example.com', turnstile: crypto.randomUUID() }, flow.cookie);
     await w.drain();
-    assert.equal(w.mails.at(-1).subject, 'Sign in to Assay');
+    assert.equal(w.mails.at(-1).subject, 'Sign in to Acme');
     assert.match(w.mails.at(-1).text, /Help: help@vibernt\.example\n© Vibernt Ltd$/);
 });
 test('app branding is validated when saved, look included', async t => {

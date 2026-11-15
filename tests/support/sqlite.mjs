@@ -1,4 +1,4 @@
-// Ported from Assay tests/support/sqlite.mjs: real SQLite, D1-shaped API, atomic batch rollback.
+// A D1-shaped API over real SQLite (node:sqlite), with atomic batch rollback.
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 export function d1Database() {

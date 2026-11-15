@@ -115,7 +115,7 @@ test('discovery lists token exchange and DPoP algorithms', async t => {
     assert.deepEqual(d.dpop_signing_alg_values_supported, ['ES256', 'RS256', 'EdDSA']);
 });
 
-// Review findings on the machines milestone.
+// Review findings: machines.
 test('review 1: a service token cannot be exchanged into a token for another app', async t => {
     const { w } = await exchangeWorld(t);
     const { signAgentJwt } = await import('../apps/server/src/agents/grants.mjs');

@@ -9,9 +9,9 @@ import { underPrefix } from '../agents/uris.mjs';
 import { signAgentJwt } from '../agents/grants.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { verifyDpop } from './dpop.mjs';
-export const SERVICE_TOKEN_SECONDS = 60;
-export const serviceSubject = id => `service:${id}`;
-export async function activeService(env, id) {
+const SERVICE_TOKEN_SECONDS = 60;
+const serviceSubject = id => `service:${id}`;
+async function activeService(env, id) {
     invariant(typeof id === 'string' && /^[a-z0-9-]{3,60}$/.test(id), 'invalid_client', 'Unknown service client.', 401);
     const service = await env.DB.prepare("SELECT * FROM service_clients WHERE id=? AND realm_id=? AND status='active'").bind(id, realmId(env)).first();
     invariant(service, 'invalid_client', 'Unknown or disabled service client.', 401);

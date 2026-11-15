@@ -32,5 +32,5 @@ export async function adminLogin(w) {
     const get = path => w.call('/admin/api/' + path, { headers: { cookie } });
     return { cookie, csrf, post, get, mfa };
 }
-export const clientConfig = { id: 'touchstone', redirect_uris: ['https://touchstone.example/callback'], post_logout_uris: ['https://touchstone.example/bye'],
-    backchannel_uri: 'https://touchstone.example/backchannel', branding: { name: 'Touchstone' } };
+export const clientConfig = { id: 'notes', redirect_uris: ['https://notes.example/callback'], post_logout_uris: ['https://notes.example/bye'],
+    backchannel_uri: 'https://notes.example/backchannel', branding: { name: 'Notes' } };

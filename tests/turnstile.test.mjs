@@ -1,4 +1,4 @@
-// Adapted from Assay tests/turnstile.test.mjs, excluding its explicitly unsupported degraded mode.
+// Turnstile: configuration, verification, replay and the degraded mode.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { world, begin, turnstile } from './support/world.mjs';

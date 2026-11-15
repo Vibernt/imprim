@@ -1,4 +1,4 @@
-// Assay rate-limit.mjs binding path; missing bindings fail explicitly, with no D1 fallback.
+// Rate limits: Workers rate-limit bindings per address, plus D1 budgets. A missing binding fails explicitly, with no D1 fallback.
 import { invariant } from '../lib/errors.mjs';
 import { sha256 } from '../lib/crypto.mjs';
 // IPv6 clients control at least a /64, so every per-address budget is keyed on the /64 (S7, S8).
@@ -12,7 +12,7 @@ export function clientAddress(request) {
     return groups.slice(0, 4).map(group => group.replace(/^0+(?=.)/, '')).join(':') + '::/64';
 }
 // Binding limiters: `key` names the bucket; callers pass an authenticated client id where one exists (S2).
-export async function limitKey(env, binding, key) {
+async function limitKey(env, binding, key) {
     invariant(typeof env[binding]?.limit === 'function', 'rate_limit_config', `${binding} is not configured.`, 503);
     const result = await env[binding].limit({ key: await sha256(key) });
     invariant(result?.success === true, 'rate_limit', 'Too many requests.', 429);

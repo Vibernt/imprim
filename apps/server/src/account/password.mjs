@@ -2,7 +2,7 @@
 // purpose 'password', which is fresh mailbox proof, so the current password is not asked for.
 import { readBody, redirect, uniqueParams } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
-import { getSession, requireCsrf, cookies, CSRF_COOKIE, issueSession, cookie, SESSION_COOKIE } from '../auth/session.mjs';
+import { getSession, requireCsrf, cookies, CSRF_COOKIE, issueSession } from '../auth/session.mjs';
 import { validatePassword } from '../auth/password-policy.mjs';
 import { assertNotBreached } from '../auth/breach.mjs';
 import { hashPassword, verifyPassword } from '../auth/password-hash.mjs';

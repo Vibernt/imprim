@@ -55,7 +55,7 @@ test('admin authorization is checked again inside the mutation transaction', asy
     const w = await world(t); turnstile(t); const a = await adminLogin(w), original = w.env.DB.batch;
     w.env.DB.batch = async statements => { w.env.DB.db.exec('DELETE FROM sessions'); w.env.DB.batch = original; return original(statements); };
     assert.equal((await a.post('clients', clientConfig)).status, 409);
-    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM clients WHERE id='touchstone'").get().n, 0);
+    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM clients WHERE id='notes'").get().n, 0);
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_client_create'").get().n, 0);
 });
 

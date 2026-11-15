@@ -1,4 +1,4 @@
-// Ported from Assay session.mjs and magic.mjs; host-only cookies, 30 days, strict Origin for mutations.
+// Identity sessions: host-only cookies, 30 days, strict Origin for mutations.
 import { randomToken, sha256, safeEqual } from '../lib/crypto.mjs';
 import { isAdmin } from '../services/admission.mjs';
 import { invariant } from '../lib/errors.mjs';

@@ -20,7 +20,7 @@ function generator(degree) {
     }
     return poly;
 }
-export function reedSolomon(data, degree) {
+function reedSolomon(data, degree) {
     const gen = generator(degree), rest = [...data, ...new Array(degree).fill(0)];
     for (let i = 0; i < data.length; i++) {
         const factor = rest[i];
@@ -54,8 +54,8 @@ function bch(value, poly, bits) {
     while (v && 31 - Math.clz32(v) >= top) v ^= poly << (31 - Math.clz32(v) - top);
     return (value << bits) | v;
 }
-export const formatBits = mask => bch((LEVEL_M << 3) | mask, 0x537, 10) ^ 0x5412;
-export const versionBits = version => bch(version, 0x1f25, 12);
+const formatBits = mask => bch((LEVEL_M << 3) | mask, 0x537, 10) ^ 0x5412;
+const versionBits = version => bch(version, 0x1f25, 12);
 const MASKS = [(r, c) => (r + c) % 2 === 0, r => r % 2 === 0, (r, c) => c % 3 === 0, (r, c) => (r + c) % 3 === 0,
     (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0, (r, c) => (r * c) % 2 + (r * c) % 3 === 0,
     (r, c) => ((r * c) % 2 + (r * c) % 3) % 2 === 0, (r, c) => ((r + c) % 2 + (r * c) % 3) % 2 === 0];

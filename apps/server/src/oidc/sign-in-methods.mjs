@@ -2,7 +2,7 @@ import { invariant } from '../lib/errors.mjs';
 // Ordered per client.
 // Built-in methods, plus registry provider ids from the realm's config (checked when used: requireProvider).
 export const METHODS = ['email', 'password', 'passkey', 'github', 'google'];
-export const isMethod = method => typeof method === 'string' && (METHODS.includes(method) || /^[a-z][a-z0-9-]{1,39}$/.test(method));
+const isMethod = method => typeof method === 'string' && (METHODS.includes(method) || /^[a-z][a-z0-9-]{1,39}$/.test(method));
 const domainPattern = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 export function validateSignInSettings(methods, domains = []) {
     invariant(Array.isArray(methods) && methods.length > 0 && methods.length <= 16 &&

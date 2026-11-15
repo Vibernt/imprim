@@ -6,7 +6,7 @@ import { prepareAsset, storeStatement, assetExists } from '../branding/assets.mj
 import { forgetRealms } from '../realms/realm.mjs';
 import { signInPage } from '../pages/sign-in.mjs';
 import { auditStatement } from './auth.mjs';
-export const ASSET_FIELDS = ['logo_light', 'logo_dark', 'mark'];
+const ASSET_FIELDS = ['logo_light', 'logo_dark', 'mark'];
 export async function realmBranding(env) {
     const row = await env.DB.prepare('SELECT config,version FROM realms WHERE id=?').bind(env.REALM.id).first();
     return { branding: JSON.parse(row.config).branding || {}, version: row.version };

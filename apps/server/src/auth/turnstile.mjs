@@ -1,4 +1,4 @@
-// Ported from Assay: bounded siteverify, replay protection and existing-user outage mode.
+// Turnstile: bounded siteverify, replay protection and an existing-user outage mode.
 import { invariant } from '../lib/errors.mjs';
 import { sha256 } from '../lib/crypto.mjs';
 export async function requireTurnstile(env, token, request) {

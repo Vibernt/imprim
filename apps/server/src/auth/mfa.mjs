@@ -6,7 +6,7 @@ import { cookies, cookie } from './session.mjs';
 import { matchingStep, base32 } from './totp.mjs';
 export const ACR_MFA = 'urn:imprim:acr:mfa', ACR_SINGLE = 'urn:imprim:acr:sf';
 export const DEVICE_COOKIE = '__Host-vi_device', FRESH_MFA_MS = 600000, AGENT_MFA_MS = 900000, ADMIN_MFA_MS = 3600000;
-export const RECOVERY_CODES = 10;
+const RECOVERY_CODES = 10;
 // Authenticator apps and passkeys both count as second factors.
 export async function confirmedFactors(env, userId) {
     return (await env.DB.prepare(`SELECT id,type,name,created,last_used FROM mfa_factors WHERE user_id=?1 AND confirmed=1
@@ -14,7 +14,7 @@ export async function confirmedFactors(env, userId) {
 }
 const acrRequested = row => (row?.acr_values || '').split(' ').includes(ACR_MFA);
 // What this sign-in needs: 'none', 'verify' (has a factor) or 'enrol' (must add one first).
-export async function mfaNeed(env, { client, session, row, agent = false }) {
+async function mfaNeed(env, { client, session, row, agent = false }) {
     const factors = await confirmedFactors(env, session.user_id);
     const policy = client.mfa === 'required' || acrRequested(row) || (agent && client.agent_consent_mfa === 'required')
         || (client.mfa === 'optional' && factors.length > 0);
@@ -27,7 +27,7 @@ export async function mfaNeed(env, { client, session, row, agent = false }) {
     return 'verify';
 }
 // A trusted browser stands in for the second factor only where the app allows it and nothing demands a real one.
-export async function trustedDevice(env, request, client, session, row, agent) {
+async function trustedDevice(env, request, client, session, row, agent) {
     if (!client.mfa_trusted_device_days || acrRequested(row) || (agent && client.agent_consent_mfa === 'required')) return false;
     const token = cookies(request)[DEVICE_COOKIE];
     if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;

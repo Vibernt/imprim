@@ -13,7 +13,7 @@ import { audit } from '../services/audit.mjs';
 export const UPSTREAM_COOKIE = '__Host-vi_up';
 const STATE_MS = 600000;
 const unavailable = (id, message = 'Sign-in provider request failed.') => invariant(false, 'provider_unavailable', `${id}: ${message}`, 502);
-export function providerConfig(env, id) {
+function providerConfig(env, id) {
     const provider = env.PROVIDERS?.[id];
     invariant(provider, 'provider_config', 'That sign-in provider is not configured for this realm.', 503);
     invariant(provider.client_id && (provider.type === 'apple' ? provider.private_key && provider.team_id && provider.key_id : provider.client_secret),

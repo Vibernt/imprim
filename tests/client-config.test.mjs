@@ -26,7 +26,7 @@ for (const field of ['sign_in_methods', 'google_hosted_domains']) test(`SQL reje
         assert.throws(() => w.env.DB.db.prepare(`INSERT INTO clients(id,redirect_uris,${field}) VALUES('invalid','[]',?)`).run(value));
     }
 });
-test('second migration preserves populated M1 state and foreign-key cascades', () => {
+test('the sign-in-methods migration preserves existing state and foreign-key cascades', () => {
     const db = new DatabaseSync(':memory:');
     try {
         const read = name => readFileSync(new URL('../apps/server/migrations/' + name, import.meta.url), 'utf8');

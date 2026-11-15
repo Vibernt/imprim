@@ -3,7 +3,7 @@ import { invariant } from '../lib/errors.mjs';
 import { normalizeEmail } from '../services/admission.mjs';
 import { googleKey } from './google-jwks.mjs';
 import { googleJson } from './google-http.mjs';
-export async function verifyGoogleToken(env, token, nonce) {
+async function verifyGoogleToken(env, token, nonce) {
     invariant(typeof token === 'string' && token.length <= 16384 && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token),
         'invalid_grant', 'Invalid Google ID token.', 401);
     const parts = token.split('.');

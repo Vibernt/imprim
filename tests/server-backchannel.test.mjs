@@ -54,10 +54,10 @@ for (const kind of ['logout', 'revocation']) test(`server ${kind} token passes s
                 assert.equal(event.claims.resource, resource);
             } else assert.equal((await client.verifyLogoutToken(token)).sid, w.signed.session.sid);
         }
-        // Opt-in read-only check against the actual Assay copy; no cross-repository dependency in normal CI.
-        if (kind === 'logout' && process.env.ASSAY_IDENTITY_CLIENT_PATH) {
-            const assay = await import(pathToFileURL(process.env.ASSAY_IDENTITY_CLIENT_PATH));
-            const verified = await assay.createClient(options(w)).handleBackchannelLogout(new Request(uri, { method: 'POST', body: form }));
+        // Opt-in check against an app's vendored copy of the client (IMPRIM_CLIENT_PATH); no cross-repository dependency in CI.
+        if (kind === 'logout' && process.env.IMPRIM_CLIENT_PATH) {
+            const vendored = await import(pathToFileURL(process.env.IMPRIM_CLIENT_PATH));
+            const verified = await vendored.createClient(options(w)).handleBackchannelLogout(new Request(uri, { method: 'POST', body: form }));
             assert.equal(verified.sub, w.user.id); assert.equal(verified.jti, row.id);
         }
         return new Response(null, { status: 204 });
