@@ -4,7 +4,7 @@ export const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&'
 // Every user-supplied string is escaped, so `<` can never reach the output from input and the marker cannot be forged.
 export const BRAND = '<!--identity:brand-->', HEADER = '<!--identity:header-->', HEAD = '<!--identity:head-->', FOOTER = '<!--identity:footer-->';
 // The base design reads only CSS variables, which /assets/theme.css sets from the realm's and app's tokens.
-export const pageCss = `:root{--primary:#2346d8;--primary-text:#fff;--bg:#f4f5f7;--surface:#fff;--text:#14181d;--muted:#525c67;--border:#d5dae0;--radius:10px;--font:system-ui,sans-serif}
+export const pageCss = `:root{--primary:#2346d8;--primary-text:#fff;--bg:#f4f5f7;--surface:#fff;--text:#14181d;--muted:#525c67;--border:#d5dae0;--danger:#b42318;--radius:10px;--font:system-ui,sans-serif}
 *{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:6vh 1rem 2rem;font:16px/1.55 var(--font);color:var(--text);background:var(--bg)}
 .brand{display:flex;align-items:center;gap:.6rem;font-weight:650;font-size:1.05rem;margin:0 0 1.25rem;max-width:30rem;width:100%}.brand img{height:2rem;width:auto;max-width:12rem}.brand .mark{width:2rem;height:2rem}
 main{width:100%;max-width:30rem;background:var(--surface);border:1px solid var(--border);border-radius:calc(var(--radius) * 1.4);padding:clamp(1.25rem,4vw,2rem);box-shadow:0 1px 2px rgb(0 0 0/.04),0 8px 24px rgb(0 0 0/.06)}
@@ -18,7 +18,7 @@ a[href^="/v1/auth/"]{display:block;text-align:center;text-decoration:none;font-w
 #request>p{margin:0}#email-form+p,#request>p:first-of-type{margin-top:1.25rem}li{margin:.4rem 0}li form{display:inline}li form button{display:inline-block;width:auto;margin:0 0 0 .5rem;padding:.25rem .6rem;font-size:.85rem}
 section{border-top:1px solid var(--border);padding-top:.5rem;margin-top:.75rem}ul{padding-left:1.2rem}code{font-family:ui-monospace,monospace;font-size:.9em;overflow-wrap:anywhere}
 pre{overflow:auto;font-size:.82rem;background:var(--bg);padding:.75rem;border-radius:var(--radius)}textarea{min-height:6rem;font-family:ui-monospace,monospace;font-size:.85rem}
-nav{display:flex;flex-wrap:wrap;gap:.4rem .9rem;font-size:.9rem;margin-bottom:1rem}p[role=alert]{color:#9b1c1c;font-weight:600}p[role=status]{color:var(--muted)}
+nav{display:flex;flex-wrap:wrap;gap:.4rem .9rem;font-size:.9rem;margin-bottom:1rem}p[role=alert]{color:var(--danger);font-weight:600}p[role=status]{color:var(--muted)}
 figure{margin:1rem 0;display:flex;justify-content:center}figure svg{max-width:100%;height:auto;background:#fff;padding:.5rem;border-radius:var(--radius)}
 footer{max-width:30rem;width:100%;margin-top:1.25rem;font-size:.85rem;color:var(--muted);text-align:center}footer a{color:var(--muted)}footer p{margin:.25rem 0}
 @media (prefers-reduced-motion:no-preference){button{transition:filter .15s}button:hover{filter:brightness(1.07)}}`;
@@ -53,6 +53,6 @@ export async function withBrand(response, env) {
         b.support_url ? `<a href="${escapeHtml(b.support_url)}">Help</a>` : b.support_email && `<a href="mailto:${escapeHtml(b.support_email)}">Help</a>`].filter(Boolean).join(' · ');
     const footer = links || b.legal_name || b.copy?.footer ? `<footer>${b.copy?.footer ? `<p>${escapeHtml(b.copy.footer)}</p>` : ''}${links ? `<p>${links}</p>` : ''}${b.legal_name ? `<p>© ${escapeHtml(b.legal_name)}</p>` : ''}</footer>` : '';
     const head = `<link rel="stylesheet" href="/assets/theme.css${client ? `?client=${encodeURIComponent(client.id)}` : ''}">${b.mark ? `<link rel="icon" href="${asset(b.mark)}">` : ''}`;
-    html = html.replaceAll(BRAND, name).replace(HEAD, head).replace(HEADER, `<header class="brand">${logo}</header>`).replace(FOOTER, footer);
+    html = html.replace('<html lang="en">', `<html lang="${b.locale || 'en'}">`).replaceAll(BRAND, name).replace(HEAD, head).replace(HEADER, `<header class="brand">${logo}</header>`).replace(FOOTER, footer);
     return new Response(html, { status: response.status, headers: response.headers });
 }

@@ -32,7 +32,8 @@ refuses a literal Turnstile secret or provider client secret, so no secret is ev
   "providers": {
     "google": { "client_id": "1234.apps.googleusercontent.com", "client_secret": { "env": "ACME_GOOGLE_CLIENT_SECRET" } },
     "github": { "client_id": { "env": "ACME_GITHUB_CLIENT_ID" }, "client_secret": { "env": "ACME_GITHUB_CLIENT_SECRET" } }
-  }
+  },
+  "branding": { "name": "Acme", "legal_name": "Acme Ltd", "theme": { "primary": "#0b5d1e" } }
 }
 ```
 
@@ -49,6 +50,9 @@ refuses a literal Turnstile secret or provider client secret, so no secret is ev
 
 A client offers a provider by listing its id in `sign_in_methods`. The callback to register with the provider is
 `<issuer>/login/provider/<id>/callback`.
+
+`branding` is the realm's default look for every app in it: see [Branding](BRANDING.md). It is usually edited on
+the console's Branding page, which checks contrast and keeps uploaded logos in the realm.
 - **Email trust:** a provider's email is a provider claim, not proof of the mailbox, unless the provider lists the
   email's domain in `trusted_domains`. Microsoft also needs a pinned tenant id for that. Only then does the
   provider's email link an existing account or satisfy `allowed_domains`.

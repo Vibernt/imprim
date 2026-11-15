@@ -11,10 +11,12 @@ export function d1Database() {
         try { db.exec(readFileSync(new URL(name, root), 'utf8')); db.exec('COMMIT'); }
         catch (error) { db.exec('ROLLBACK'); throw new Error(`${name}: ${error.message}`); }
     }
+    // D1 returns a BLOB column as an Array of numbers; node:sqlite returns a Uint8Array. Match D1.
+    const shape = row => row && Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Uint8Array ? Array.from(value) : value]));
     const statement = (sql, args = []) => ({
         bind(...values) { return statement(sql, values); },
-        async first() { return db.prepare(sql).get(...args) || null; },
-        async all() { return { results: db.prepare(sql).all(...args) }; },
+        async first() { return shape(db.prepare(sql).get(...args)) || null; },
+        async all() { return { results: db.prepare(sql).all(...args).map(shape) }; },
         async run() { return { success: true, meta: { changes: db.prepare(sql).run(...args).changes } }; },
         batched() {
             const query = db.prepare(sql);

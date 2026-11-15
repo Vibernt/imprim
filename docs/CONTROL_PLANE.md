@@ -37,6 +37,12 @@ admin login; never put these in source control or logs. There is no cross-origin
 | GET `keys` | Public key metadata, activation/retirement and status; no sealed/private JWK |
 | POST `keys/rotate` | `{}`; new kid and activation timestamp |
 | GET `settings` | Turnstile state, rate-limit configuration description and pending delivery counts |
+| GET `branding` | `{branding, version}` for the realm |
+| POST `branding` | `{branding, version}`; validated and contrast-checked; stale version returns 409 ([Branding](BRANDING.md)) |
+| POST `branding/assets` | `{content_type, data}` (base64, at most 256 KiB); returns `{id, url}` |
+
+The Branding page (`/admin/branding`) edits the realm's branding and previews any app's sign-in page at
+`/admin/branding/preview?client=<id>`.
 
 JSON POSTs use `Content-Type: application/json`, `Origin: https://id.vibernt.ai`, the session/CSRF cookies and
 `X-CSRF-Token`. A `csrf` body field is also accepted. HTML forms use the same actions without `/api`.

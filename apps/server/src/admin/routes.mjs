@@ -79,7 +79,8 @@ export async function admin(request, env, ctx) {
         }
     }
     if (request.method === 'POST') {
-        const body = await readBody(request, api ? 'json' : 'form');
+        // A logo upload carries up to 256 KiB as base64; every other admin body keeps the 16 KiB bound.
+        const body = await readBody(request, api ? 'json' : 'form', section === 'branding' && id === 'assets' ? 360000 : undefined);
         // Every write is destructive: a client edit changes redirect URIs, back-channel and agent policy (S14).
         const destructive = true;
         await adminMutation(request, env, session, body, destructive);

@@ -1,7 +1,7 @@
 // The theme stylesheet for a realm (and optionally one app), from tokens only. Served from the identity host because
 // CSP allows style-src 'self' and no inline styles.
 import { FONTS, brandingFor } from './tokens.mjs';
-const vars = t => `--primary:${t.primary};--primary-text:${t.primary_text};--bg:${t.background};--surface:${t.surface};--text:${t.text};--muted:${t.muted};--border:${t.border}`;
+const vars = t => `--primary:${t.primary};--primary-text:${t.primary_text};--bg:${t.background};--surface:${t.surface};--text:${t.text};--muted:${t.muted};--border:${t.border};--danger:${t.danger}`;
 export function themeCss(branding) {
     const light = branding.theme, dark = { ...light, ...branding.theme_dark };
     return `:root{${vars(light)};--radius:${light.radius}px;--font:${FONTS[light.font] || FONTS.system};color-scheme:light dark}

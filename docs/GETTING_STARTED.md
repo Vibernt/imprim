@@ -66,6 +66,7 @@ and scopes it gets. You can see and revoke every connected agent at `https://id.
 ## Next
 
 - [Realms](REALMS.md): run several brands on one deployment.
+- [Branding](BRANDING.md): your logo, colours, fonts, copy and links, per realm and per app.
 - [Agent access](AGENT_ACCESS.md) and [Protocol](PROTOCOL.md): the exact flows, tokens and errors.
 - [Security](SECURITY.md): the threat model and what still needs live verification.
 - [Roadmap](ROADMAP.md): what is planned next, and where to help.

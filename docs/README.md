@@ -8,6 +8,7 @@ Identity for people and the agents that act for them: OpenID Connect and OAuth 2
 |---|---|
 | [Deploying](DEPLOY.md) | Running Imprim on Cloudflare, staging releases and upgrades |
 | [Realms](REALMS.md) | Several brands on one deployment: hosts, keys, users, providers, admins |
+| [Branding](BRANDING.md) | Logos, colours, fonts, copy and links per realm and per app, with contrast checks |
 | [Integrating](INTEGRATE.md) | Adding sign-in to an app, accepting agents on an MCP server, building an agent |
 | [Clients](CLIENTS.md) | Client registration settings and the `imprim-client` package |
 | [Agent access](AGENT_ACCESS.md) | How agents connect for a person, and how apps protect resources |

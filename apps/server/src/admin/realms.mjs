@@ -3,6 +3,7 @@ import { invariant } from '../lib/errors.mjs';
 import { validateRealmConfig, forgetRealms } from '../realms/realm.mjs';
 import { normalizeEmail } from '../services/admission.mjs';
 import { auditStatement } from './auth.mjs';
+import { checkRealmBranding, realmVersionGuard } from './branding.mjs';
 export async function listRealms(env) {
     const { results } = await env.DB.prepare('SELECT id,issuer,display_name,config,status,version,created FROM realms ORDER BY id').all();
     const admins = (await env.DB.prepare('SELECT realm_id,email,role FROM admins ORDER BY realm_id,email').all()).results;
@@ -27,6 +28,7 @@ export async function saveRealm(env, actor, id, input) {
     invariant(['active', 'disabled'].includes(value.status), 'invalid_request', 'status is active or disabled.');
     invariant(realm !== env.REALM.id || value.status === 'active', 'invalid_request', 'You cannot disable the realm you are signed in to.');
     validateRealmConfig(value.config);
+    if (value.config.branding) value.config.branding = await checkRealmBranding(env, realm, value.config.branding);
     if (old) invariant(input.version === old.version, 'conflict', 'Realm changed; reload before editing.', 409);
     const statement = old
         ? env.DB.prepare('UPDATE realms SET issuer=?,display_name=?,config=?,status=?,version=version+1 WHERE id=? AND version=?')
@@ -34,7 +36,8 @@ export async function saveRealm(env, actor, id, input) {
         : env.DB.prepare('INSERT INTO realms(id,issuer,display_name,config,status,created) VALUES(?,?,?,?,?,?)')
             .bind(realm, value.issuer, value.display_name, JSON.stringify(value.config), value.status, Date.now());
     try {
-        const [result] = await env.DB.batch([statement, auditStatement(env, actor, old ? 'admin_realm_update' : 'admin_realm_create', realm, { fields: Object.keys(input) })]);
+        const results = await env.DB.batch([...(old ? [realmVersionGuard(env, realm, old.version)] : []), statement, auditStatement(env, actor, old ? 'admin_realm_update' : 'admin_realm_create', realm, { fields: Object.keys(input) })]);
+        const result = results[old ? 1 : 0];
         invariant(result.meta.changes === 1, 'conflict', 'Realm changed; reload before editing.', 409);
     } catch (error) {
         if (String(error.message).includes('UNIQUE')) invariant(false, 'conflict', 'That realm id or issuer is already in use.', 409);

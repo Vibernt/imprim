@@ -24,6 +24,8 @@ remain `sub`. This implementation is not yet OpenID-certified; see the release g
 | `GET /login/google/callback` | Consumes Google state, verifies RS256 ID token with cached Google JWKS, links Google sub. |
 | `GET /login` | Email fragment confirmation, or operator-only standalone email request with no client registered. |
 | `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; signed-in page requires a current identity session. |
+| `GET /assets/theme.css[?client=id]` | Branding tokens as CSS variables for the realm, or an app in it; five-minute cache ([Branding](BRANDING.md)). |
+| `GET /assets/brand/<sha256>` | An uploaded logo or mark of this realm, sandboxed (`CSP: default-src 'none'; sandbox`, `nosniff`); 404 otherwise. |
 
 The email-request UI loads Turnstile's script/frame only when both keys are configured. With neither key configured,
 the email button works without a challenge for local/development use. Every HTML page has a strict CSP allowing only

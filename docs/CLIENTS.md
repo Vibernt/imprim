@@ -72,7 +72,7 @@ person only when the sign-in proves the mailbox: an email link, or Google with a
 GitHub's verified flag does not. Under `signup_policy='invited'` a person is admitted once they have reached this
 client before, hold a current invitation, or match an allowed domain. An account created through another app is
 not admitted here because it exists; the app gets `error=access_denied` at its redirect URI. `open` allows new verified identities;
-it grants no permission inside your app. `branding` currently uses only `name`, escaped as text. Back-channel URI receives distinct `revocation_token` agent events and `logout_token` human events through the M4 durable outboxes. `dev=1` permits exact HTTP localhost redirects
+it grants no permission inside your app. `branding` overrides the realm's branding for this app: name, theme, copy, links and logos ([Branding](BRANDING.md)). Back-channel URI receives distinct `revocation_token` agent events and `logout_token` human events through the M4 durable outboxes. `dev=1` permits exact HTTP localhost redirects
 (including the registered port); production clients must use HTTPS. Never register broad wildcard callback handlers.
 
 A public client has `secret_hash=NULL`; it must use PKCE, and cannot call the invitations endpoint. Confidential

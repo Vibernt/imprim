@@ -5,6 +5,7 @@ import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { cookies, getSession, requireCsrf, CSRF_COOKIE } from '../auth/session.mjs';
 import { pendingRequest, authorizationResponse } from '../oidc/requests.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
+import { brandingFor } from '../branding/tokens.mjs';
 import { validateAgentRequest } from './authorize.mjs';
 import { workspace } from './uris.mjs';
 import { admitSession, admissionGuard } from '../services/admission.mjs';
@@ -25,7 +26,7 @@ export function agentAssurance(row, agent, method) {
     return !row.device_hash && row.redirect_uri?.startsWith('https://') ? 'redirect' : 'claimed';
 }
 const phishing = '<p role="alert"><strong>Only approve a connection you started yourself, on this device or your own, just now.</strong> If someone sent you this link or code, choose Deny: approving gives them access as you.</p>';
-export function consentPage(request, row, context) {
+export function consentPage(request, env, row, context) {
     const { agent, app, settings, method } = context;
     const assurance = agentAssurance(row, agent, method), name = e(agent.client_name);
     const host = method === 'metadata_document' ? e(new URL(agent.client_id).host) : '';
@@ -34,9 +35,9 @@ export function consentPage(request, row, context) {
         claimed: `<p>Agent host: ${host} — <strong>claimed, not verified</strong>. Any program can use this name.</p>`,
         none: '<p>This agent registered itself. Its name is not verified.</p>' }[assurance];
     const scopes = row.scope.split(' ').map(scope => `<li><strong>${e(scope)}</strong>: ${e(settings.agent_scope_catalogue[scope])}</li>`).join('');
-    const intro = context.app && JSON.parse(context.app.branding || '{}').copy?.consent_intro;
+    const brand = brandingFor(env, app), intro = brand.copy?.consent_intro;
     return page('Connect agent', `<h1>${heading}</h1>${intro ? `<p>${e(intro)}</p>` : ''}${identity}${assurance === 'key' || assurance === 'redirect' ? '' : phishing}
-<p>App: ${e(JSON.parse(app.branding).name || app.id)}</p><p>Workspace: ${e(workspace(row.resource))}</p>
+<p>App: ${e(brand.name || app.id)}</p><p>Workspace: ${e(workspace(row.resource))}</p>
 <p>Resource: ${e(row.resource)}</p><ul>${scopes}</ul><p>Access lasts at most ${settings.agent_max_grant_days} days. The app still checks your permissions on every call.</p>
 <form method="post" action="/agent/consent">${hidden('request_id', row.id)}${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}
 <button name="decision" value="approve">Approve</button><button name="decision" value="deny">Deny</button></form>`,
@@ -53,7 +54,7 @@ export async function consent(request, env) {
     await admitSession(env, context.app, session);
     const gate = await mfaGate(env, request, { client: context.app, session, row, agent: true });
     if (gate) return redirect(`${env.ISSUER}${gate}`);
-    if (request.method === 'GET') return consentPage(request, row, context);
+    if (request.method === 'GET') return consentPage(request, env, row, context);
     invariant(['approve','deny'].includes(body.decision), 'invalid_request', 'Choose approve or deny.');
     const approve = body.decision === 'approve', now = Date.now(), grantId = crypto.randomUUID();
     const code = randomToken(), codeHash = await sha256(code);

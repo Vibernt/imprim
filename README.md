@@ -15,7 +15,9 @@ step.
 - **Apps keep authorisation.** Imprim proves who someone is and what they consented to. Your app keeps workspaces,
   memberships, roles and its own sessions, and checks them on every request.
 - **Many brands, one deployment.** Each realm has its own issuer host, signing keys, users, provider credentials,
-  email sender and admins.
+  email sender, admins and branding; each app can override the logo, colours, copy and links.
+- **Machines too.** Service clients (`client_credentials` with `private_key_jwt`), introspection, revocation,
+  DPoP-bound tokens, token exchange between apps, and signed user lifecycle events.
 
 📖 **Docs: https://vibernt.github.io/imprim/**. Start with [Getting started](docs/GETTING_STARTED.md).
 
@@ -23,16 +25,17 @@ step.
 
 ```text
 Person ── browser ───────────┐                         ┌── D1: realms, users, clients, sessions, grants, keys, audit
-Agent ─── code / device ─────┼──> Imprim (Worker) ─────┼── Queue: back-channel logout and revocation events
-App ───── OIDC / OAuth ──────┘        │                ├── Email: sign-in links
-                                      │                └── GitHub, Google, Turnstile
+Agent ─── code / device ─────┼──> Imprim (Worker) ─────┼── Queue: logout, revocation and user events
+App ───── OIDC / OAuth ──────┤        │                ├── Email: sign-in links and security notices
+Service ── private_key_jwt ──┘        │                └── GitHub, Google, Microsoft, Apple, OIDC, Turnstile
 App MCP server <── signed access tokens ── verified with imprim-client, intersected with the person's role
 ```
 
 Standards: OIDC Core with PKCE S256 and `iss` in responses (RFC 9207); OAuth 2.0 Authorization Server Metadata
 (RFC 8414); Protected Resource Metadata (RFC 9728); Resource Indicators (RFC 8707); Client ID Metadata Documents and
 Dynamic Client Registration (RFC 7591); Device Authorization (RFC 8628); `private_key_jwt` (RFC 7523); Back-Channel
-Logout; Security Event Tokens (RFC 8417).
+Logout; Security Event Tokens (RFC 8417); Token Introspection (RFC 7662) and Revocation (RFC 7009); Token Exchange
+(RFC 8693); DPoP (RFC 9449); WebAuthn Level 2 passkeys; TOTP (RFC 6238).
 
 ## Get started
 
@@ -68,8 +71,10 @@ npm run check
 
 ## Status
 
-Imprim runs in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`. The current
-release (the security pass of 2026-11-15, realms, and the rename) is described in [Security pass](docs/SECURITY_PASS.md) and [Deploying](docs/DEPLOY.md).
+Imprim runs in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`. Both run
+the 2026-11-15 release (the security pass, realms and the rename; see [Security pass](docs/SECURITY_PASS.md)).
+Passwords, two-factor, the account page, passkeys, the provider registry, machines, DPoP, user events and branding
+(migrations `0010`–`0018`) are in this repository and tested, but not yet deployed; upgrade with [Deploying](docs/DEPLOY.md).
 What has not yet been verified against live Cloudflare is listed in [Security](docs/SECURITY.md). What comes next
 is in the [Roadmap](docs/ROADMAP.md).
 

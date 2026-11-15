@@ -122,6 +122,20 @@ because their conflict targets no longer exist. Apply, configure and deploy back
 Without `--env production`, `wrangler deploy` creates a separate Worker called `identity` with no routes. It does
 not replace production.
 
+## Upgrading to migrations 0010–0018
+
+These add passwords, two-factor, the account page, passkeys, the provider registry, service clients, DPoP and token
+exchange, user events and branding. They need no new bindings or secrets, and every new feature is off until an app
+or realm turns it on: existing apps keep their `sign_in_methods`, `mfa` is `off`, `user_events` is `off`.
+
+Follow [Releases](#releases): staging first, then production with a backup. Two things change on the day:
+
+- **Administrators need a second factor.** The console refuses an admin without one
+  (`mfa_enrolment_required`). Before deploying production, have each admin add an authenticator app or passkey at
+  `/account/mfa` on staging to try it, then on production straight after the deploy.
+- **Apps** can stay on client `0.3.0`. Upgrade to `0.6.0` to use step-up (`acrValues`, `maxAge`), DPoP
+  verification or user events ([Clients](CLIENTS.md)).
+
 ## Bindings reference
 
 | Binding | Kind | Notes |

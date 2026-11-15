@@ -1,23 +1,25 @@
 # Architecture
 
-Identity is a Cloudflare Worker with D1 state, an email binding, rate-limit bindings, a Queue and an every-minute trigger. `CONFIG_CACHE` KV is declared but not read. The client package runs in app Workers or Node. Apps keep authorization, workspace membership, API tokens and their own sessions. See [Protocol](PROTOCOL.md) for exact endpoint contracts and [Operations](OPERATIONS.md) for deployment order.
+Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindings, a Queue and an every-minute trigger. `CONFIG_CACHE` KV is declared but not read. The client package runs in app Workers or Node. Apps keep authorization, workspace membership, API tokens and their own sessions. See [Protocol](PROTOCOL.md) for exact endpoint contracts and [Operations](OPERATIONS.md) for deployment order.
 
 ## Components
 
 | Component | Work |
 |---|---|
-| Worker routes | OIDC and agent OAuth endpoints, sign-in pages, account grants. |
+| Worker routes | OIDC and agent OAuth endpoints, sign-in pages, account page, admin console, machine endpoints. |
+| Realms | The request host selects a realm; every query is scoped to it ([Realms](REALMS.md)). |
 | D1 | Users, client policy, short-lived requests, sessions, keys, grants, audit. |
 | Email binding | Sends a magic link after neutral request acceptance. |
-| GitHub and Google | Upstream provider sign-in; tokens are not stored. |
+| Upstream providers | GitHub, Google, Microsoft, Apple and any OIDC issuer; their tokens are not stored. |
+| Have I Been Pwned | Range API (k-anonymity) for breached-password checks; only a 5-character hash prefix leaves. |
 | Turnstile | Checks email requests when both keys are configured. |
 | `AUTH_LIMITER`, `API_LIMITER` | Per-IP Workers rate bindings. |
-| `LOGOUT_QUEUE` | Delivers agent revocation events; failures retry and reach the DLQ. |
+| `LOGOUT_QUEUE` | Delivers back-channel logout, agent revocation and user lifecycle events; failures retry and reach the DLQ. |
 | Every-minute trigger | Rotates keys, deletes expired state and flushes pending revocations. |
 
 ## D1 schema
 
-Migrations `0001` through `0004` create or extend these tables. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0018` create or extend these tables. Every realm-owned row carries `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|
@@ -42,6 +44,17 @@ Migrations `0001` through `0004` create or extend these tables. Timestamps are s
 | `agent_refresh_tokens` | Hashed current/spent refresh values and replacement links. |
 | `agent_devices` | Hashed device/user codes, poll state and grant reference. |
 | `agent_revocation_outbox` | Durable app revocation notification pending queue send. |
+| `realms`, `admins` | Realm host, issuer, config (secrets only as `{"env":…}` references) and the admin roster. |
+| `client_admissions` | Which people each app has admitted, and by what proof. |
+| `app_sessions`, `logout_outbox` | Sessions per app, and durable back-channel logout delivery. |
+| `user_passwords` | PBKDF2 password hash, failure count and lockout. |
+| `mfa_factors`, `recovery_codes`, `trusted_devices` | TOTP secrets (sealed), hashed recovery codes, per-app remembered browsers. |
+| `webauthn_credentials`, `webauthn_challenges` | Passkey public keys and sign counters; single-use ceremony challenges. |
+| `seen_devices`, `email_changes` | New-device notices and pending, link-confirmed email changes. |
+| `service_clients` | Machine identities: public JWKS, scopes and resource prefixes under one app. |
+| `dpop_proofs` | DPoP proof `jti` replay records. |
+| `user_event_outbox` | Signed user lifecycle events pending delivery to apps that opted in. |
+| `brand_assets` | Realm-scoped, content-addressed logos and marks. |
 
 `audit` rejects updates and deletes through triggers. App client IDs and agent client IDs use separate tables. Imported Assay principal IDs become `users.id` and remain token `sub`.
 
@@ -55,11 +68,23 @@ Migrations `0001` through `0004` create or extend these tables. Timestamps are s
 
 **SSO.** A top-level `/authorize` redirect reuses a valid identity session if its method and Google domain satisfy the current app policy. `prompt=none` returns `login_required` when it cannot proceed without sign-in. Agent requests still require consent and return `consent_required` for `prompt=none`.
 
-**Logout.** `GET /logout` validates the app and optional registered return URI, then shows a confirmation if a session exists. The same-origin CSRF-protected POST deletes the identity session, associated codes and UserInfo tokens. App sessions remain the app's responsibility. The client package can verify an OIDC `logout_token`, but this Worker does not yet send human back-channel logout. Agent grant revocation sends a distinct signed `revocation_token` through the queue.
+**Logout.** `GET /logout` validates the app and optional registered return URI, then shows a confirmation if a session exists. The same-origin CSRF-protected POST deletes the identity session, associated codes and UserInfo tokens. App sessions remain the app's responsibility; each app with a session is sent a signed back-channel `logout_token` through the queue. Agent grant revocation sends a distinct signed `revocation_token`.
 
 **Invitations.** A confidential app calls `POST /v1/invitations` with Basic authentication. Identity stores a normalized, client-scoped email for 30 days. Sign-in admission can use it, but app workspace membership stays local.
 
 **Agent flow.** A resource challenge leads to issuer discovery. The public agent uses an HTTPS metadata document or dynamic registration, then PKCE authorization or device code. The person signs in through the owning app and approves the resource and scopes. Identity issues a short ES256 access JWT and rotating refresh token. See [Agent access](AGENT_ACCESS.md).
+
+**Passwords and second factors.** A password sign-in counts the attempt atomically before checking the hash, so
+parallel guesses cannot pass the lockout. A first password, and every reset, needs a fresh email link. When the app
+or the person requires a second factor, sign-in continues to a TOTP, passkey or recovery-code challenge before the
+session is issued; `acr_values` and `max_age` force a fresh or stronger sign-in. See [Protocol](PROTOCOL.md).
+
+**Machines.** A service client proves its key with `private_key_jwt` and gets a 60-second token for resources under
+its app as `service:<id>`. Agents may bind tokens to a DPoP key, and an app may exchange a token it received for one
+aimed at another app that trusts it (RFC 8693).
+
+**Branding.** Pages are rendered with markers that `withBrand` fills from the realm's and the app's branding:
+header, theme stylesheet link, favicon and footer. Everything inserted is escaped or an asset id ([Branding](BRANDING.md)).
 
 ## Keys and maintenance
 

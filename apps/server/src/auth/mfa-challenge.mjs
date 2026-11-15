@@ -9,7 +9,7 @@ import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { notify } from '../services/notify.mjs';
 // Where a finished second factor may send the person when there is no authorization request.
 export const safeNext = value => typeof value === 'string' && /^\/(admin|account)(\/[A-Za-z0-9/_.-]*)?(\?[A-Za-z0-9=&%_.-]*)?$/.test(value) ? value : '/account';
-function challenge(request, values, { trust, message = '', passkey = false }) {
+function challenge(request, values, { trust, message = '', passkey = false, client = null }) {
     return page('Two-factor check', `<h1>Enter your code</h1>${message ? `<p role="alert">${e(message)}</p>` : ''}
 <p>Open your authenticator app and enter the six-digit code. Lost it? Enter one of your recovery codes instead.</p>
 <form method="post" action="/mfa"><input type="hidden" name="csrf" value="${e(cookies(request)[CSRF_COOKIE] || '')}">
@@ -17,7 +17,7 @@ function challenge(request, values, { trust, message = '', passkey = false }) {
 <label for="code">Code</label><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="11" required autofocus>
 ${trust ? `<label><input type="checkbox" name="trust" value="1"> Trust this browser for ${trust} days</label>` : ''}
 <button>Continue</button></form>${passkey ? `<p><button id="passkey-mfa" type="button" data-request-id="${e(values.request_id || '')}" data-next="${e(values.next || '')}">Use a passkey instead</button></p>` : ''}
-<p id="message" role="status"></p>`, { status: message ? 401 : 200, script: passkey ? '/assets/passkey.js' : '' });
+<p id="message" role="status"></p>`, { status: message ? 401 : 200, script: passkey ? '/assets/passkey.js' : '', client });
 }
 async function context(env, request, values) {
     if (!values.request_id) return { pending: null, trust: 0 };
@@ -32,12 +32,13 @@ export async function mfaChallenge(request, env, ctx) {
     const values = request.method === 'POST' ? await readBody(request, 'form') : uniqueParams(new URL(request.url).searchParams);
     const { pending, trust } = await context(env, request, values);
     const passkey = (await confirmedFactors(env, session.user_id)).some(f => f.type === 'passkey');
-    if (request.method === 'GET') return challenge(request, values, { trust, passkey });
+    const client = pending?.client ?? null;
+    if (request.method === 'GET') return challenge(request, values, { trust, passkey, client });
     await requireCsrf(request, env, session, values.csrf);
     const key = mfaFailureKey(session.user_id);
     invariant(await attempt(env, key), 'rate_limit', 'Too many attempts. Wait fifteen minutes and try again.', 429);
     const result = await verifySecondFactor(env, session.user_id, values.code);
-    if (!result) return challenge(request, values, { trust, passkey, message: 'That code is not valid. Try the newest code.' });
+    if (!result) return challenge(request, values, { trust, passkey, client, message: 'That code is not valid. Try the newest code.' });
     await clearFailures(env, key);
     await env.DB.batch([mfaStatement(env, session, result.amr),
         env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,'{}',?,?)").bind(result.kind === 'recovery' ? 'recovery_code_used' : 'mfa_verified', session.user_id, Date.now(), env.REALM.id)]);

@@ -41,7 +41,7 @@ A trusted operator inserts or updates a row after review. `scripts/seed-client.m
 | `backchannel_uri` | `null` | App owner and operator review HTTPS receiver before agent revocation delivery. Human logout sending is pending. |
 | `signup_policy` | `invited` | Operator chooses `invited` or `open` before accepting new people. |
 | `allowed_domains` | `[]` | Operator sets exact email domains for invited admission. |
-| `branding` | `{}` | Operator may set escaped `name` for sign-in page. |
+| `branding` | `{}` | Operator or app owner sets name, theme, copy, links and logo ids over the realm's ([Branding](BRANDING.md)); validated and contrast-checked on save. |
 | `dev` | `0` | Operator sets `1` only for clients requiring exact HTTP loopback redirects. |
 | `sign_in_methods` | SQL migration default `["email","github"]`; seed requires explicit list | Operator sets ordered enabled methods per app. |
 | `google_hosted_domains` | `[]` | Operator sets signed Google `hd` restrictions if needed. |
