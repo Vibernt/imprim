@@ -1,7 +1,7 @@
 # Fire in Imprim
 
 Every Imprim page is built with **Fire**, a design system of plain CSS and ES modules with no build step. Fire
-v0.3.1 is vendored at `apps/server/public/fire/` and served as static files (Workers Static Assets, see
+v0.4.0 is vendored at `apps/server/public/fire/` and served as static files (Workers Static Assets, see
 `apps/server/wrangler.jsonc`). It is MIT licensed (`apps/server/public/fire/LICENSE`); its fonts are SIL OFL 1.1 and
 its icons are Lucide (ISC).
 
@@ -19,10 +19,13 @@ How Imprim uses it:
   for sign-in, consent and results (`pages/layout.mjs`), and Fire's app shell for the console and the account pages
   (`pages/shell.mjs`).
 - Sign-in and consent screens load no Fire JavaScript. Shell pages load `/imprim/shell.js`, which brings in Fire's
-  shell and texture modules for the sidebar, the phone menu and the hero texture. A screen with a 6-digit code loads
-  `/imprim/otp.js`, which brings in Fire's forms module for the one-time-code boxes; the field is an ordinary input
-  until then, so the form works without it. Only the admin Branding page loads all of `fire.js`, for the Tweaks
+  shell and texture modules for the sidebar, the phone menu and the hero texture. A screen with a 6-digit code, and a console page with a list, a name-and-value editor or a code field, loads
+  `/imprim/forms.js`, which brings in Fire's forms module; each control is an ordinary input or text area until then,
+  so the form works without it. Only the admin Branding page loads all of `fire.js`, for the Tweaks
   panel.
+- Form controls are chosen by the kind of value (GUIDE.md section 5, "Forms") and rendered by
+  `apps/server/src/pages/forms.mjs`: a list, names with values, a choice, a switch, a number with a unit, raw JSON.
+  Nobody types JSON, `0` or `1`, or an option's name.
 - A brand's **look** is Fire's tweak state (palette, tone, type set, density, corners, lines, text size, contrast,
   motion, texture, theme). `apps/server/src/branding/look.mjs` applies it as `<html>` attributes plus
   `/assets/theme.css`, using Fire's own palette engine (`public/fire/js/palettes.js`), exactly as the Tweaks panel

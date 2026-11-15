@@ -11,10 +11,24 @@ import { rotateNow, keyList, revokeKeyNow } from '../oidc/keys.mjs';
 import { audit } from '../services/audit.mjs';
 import { cookies, CSRF_COOKIE, getSession } from '../auth/session.mjs';
 import { json, readBody, redirect } from '../lib/http.mjs';
-import { invariant } from '../lib/errors.mjs';
+import { invariant, AppError } from '../lib/errors.mjs';
 import * as pages from './pages.mjs';
 import { clientDelivery } from './delivery.mjs';
+import { clientFromForm } from './client-form.mjs';
+// A form the console posted and the server refused: the console says why, in place. Scripts and the admin API (which
+// do not ask for HTML) still get the JSON error from the worker.
 export async function admin(request, env, ctx) {
+    try { return await handle(request, env, ctx); }
+    catch (error) {
+        const path = new URL(request.url).pathname;
+        if (!(error instanceof AppError) || request.method !== 'POST' || path.startsWith('/admin/api/') || !request.headers.get('accept')?.includes('text/html') || !env.SEEN?.role) throw error;
+        // Back to the page the form was on: /admin/clients posts from /admin/clients/new, the rest from their own page.
+        const [section = 'clients', id] = path.slice(7).split('/').filter(Boolean);
+        const back = section === 'clients' && !id ? '/admin/clients/new' : ['clients', 'users'].includes(section) && id ? `/admin/${section}/${id}` : `/admin/${section}`;
+        return pages.failedPage(error.message, error.status, back, section);
+    }
+}
+async function handle(request, env, ctx) {
     const url = new URL(request.url), api = url.pathname.startsWith('/admin/api/');
     if (request.method === 'GET' && !api && !await getSession(request, env)) return redirect(env.ISSUER + '/login');
     let session;
@@ -37,10 +51,12 @@ export async function admin(request, env, ctx) {
             return pages.mergeConfirmation(source, survivor, csrf);
         }
         if (section === 'clients' && !action) {
-            if (id === 'new' && !api) return pages.clientEditor(null, csrf, true);
+            // This realm's upstream providers, as sign-in methods an app can turn on.
+            const providers = Object.fromEntries(Object.entries(env.PROVIDERS || {}).map(([key, provider]) => [key, provider.name || key]));
+            if (id === 'new' && !api) return pages.clientEditor(null, csrf, { providers });
             if (id) {
                 const value = await getAdminClient(env, id), delivery = await clientDelivery(env, id);
-                return api ? json({ ...value, delivery }) : pages.clientEditor(value, csrf, false, delivery);
+                return api ? json({ ...value, delivery }) : pages.clientEditor(value, csrf, { delivery, providers });
             }
             const rows = (await env.DB.prepare('SELECT * FROM clients WHERE realm_id=? ORDER BY id').bind(realmId(env)).all()).results.map(publicClient);
             return api ? json({ clients: rows }) : pages.clientList(rows);
@@ -88,14 +104,7 @@ export async function admin(request, env, ctx) {
         delete body.csrf;
         let result;
         if (section === 'clients' && !action) {
-            if (!api) {
-                try {
-                    for (const field of ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains','token_exchange_from',
-                        'agent_registration_methods','agent_allowlist','agent_scope_catalogue','agent_resource_prefixes']) if (body[field] !== undefined) body[field] = JSON.parse(body[field]);
-                    for (const field of ['dev','agent_max_grant_days','version','mfa_trusted_device_days']) if (body[field] !== undefined) body[field] = Number(body[field]);
-                } catch { invariant(false, 'invalid_request', 'List and branding fields must contain valid JSON.'); }
-            }
-            result = await saveClient(writeEnv, session.user_id, id, body);
+            result = await saveClient(writeEnv, session.user_id, id, api ? body : clientFromForm(body));
             ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'admin_dispatch_failed', session.user_id, { pending: true })));
         } else if (section === 'clients' && id && action === 'rotate-secret') {
             if (!api && body.make_confidential === 'true') body.make_confidential = true;

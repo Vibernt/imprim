@@ -6,7 +6,8 @@ import { attempt, clearFailures, mfaFailureKey } from './rate-limit.mjs';
 import { verifySecondFactor, mfaStatement, trustBrowser, confirmedFactors, ACR_MFA } from './mfa.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { page, escapeHtml } from '../pages/layout.mjs';
-import { result, field, otp, OTP_MODULE, checkbox, hidden, button, orDivider as or } from '../pages/ui.mjs';
+import { result, field, otp, checkbox, hidden, button, orDivider as or } from '../pages/ui.mjs';
+import { FORMS_MODULE } from '../pages/forms.mjs';
 import { notify } from '../services/notify.mjs';
 // Where a finished second factor may send the person when there is no authorization request.
 export const safeNext = value => typeof value === 'string' && /^\/(admin|account)(\/[A-Za-z0-9/_.-]*)?(\?[A-Za-z0-9=&%_.-]*)?$/.test(value) ? value : '/account';
@@ -28,7 +29,7 @@ ${trust ? checkbox('trust', `Trust this browser for ${trust} days`) : ''}${butto
     const head = recovery ? result('shield-check', 'accent', 'Enter a recovery code', 'Use it in place of your authenticator app.')
         : result('shield-check', 'accent', 'Enter your code', 'Open your authenticator app and enter the 6-digit code.');
     return page('Second step', head + `<section class="fd-stack" data-gap="3">${form}${alternative}</section>${swap}<p class="fd-small" id="message" role="status" aria-live="polite"></p>`,
-        { status: message ? 401 : 200, script: passkey ? '/assets/passkey.js' : '', modules: recovery ? [] : [OTP_MODULE], client });
+        { status: message ? 401 : 200, script: passkey ? '/assets/passkey.js' : '', modules: recovery ? [] : [FORMS_MODULE], client });
 }
 async function context(env, request, values) {
     if (!values.request_id) return { pending: null, trust: 0 };

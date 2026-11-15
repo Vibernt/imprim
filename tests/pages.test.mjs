@@ -84,9 +84,9 @@ test('the console wears the app shell: scripts only from this origin, and naviga
     // Only the Branding page may call the admin API.
     assert.match((await read('/admin/branding')).response.headers.get('content-security-policy'), /script-src 'self'; connect-src 'self';/);
 });
-test('the one-time-code script loads Fire\'s forms module and makes no request of its own', async () => {
+test('the forms script loads Fire\'s forms module and makes no request of its own', async () => {
     const { readFileSync } = await import('node:fs');
-    const script = readFileSync(new URL('../apps/server/public/imprim/otp.js', import.meta.url), 'utf8');
+    const script = readFileSync(new URL('../apps/server/public/imprim/forms.js', import.meta.url), 'utf8');
     assert.deepEqual([...script.matchAll(/import\('([^']+)'\)/g)].map(m => m[1]), ['/fire/js/forms.js']);
     assert.ok(!/fetch\(|XMLHttpRequest|https?:/.test(script));
 });

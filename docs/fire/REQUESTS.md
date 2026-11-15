@@ -16,7 +16,9 @@ after Fire converts them.
 
 | Request | Fire | What Imprim uses now |
 |---|---|---|
-| A one-time code field that posts in a plain form | 0.3.1 | `fd-otp` holding one named input; `/imprim/otp.js` loads Fire's forms module |
+| A list and a name-and-value editor that post in a plain form; a long-form pattern; a JSON code field | 0.4.0 | `fd-tag-input`, `fd-pairs`, `fd-codefield`, `fd-form-section` and radio `fd-segmented` in the client editor (`admin/client-editor.mjs`, `pages/forms.mjs`) |
+| A button that lines up with a labelled field; a card title above setting rows; a value in a field's shape | 0.4.0 | `fd-row[data-align="end"]` on the search rows; `fd-title` card titles; the sample email on Branding |
+| A one-time code field that posts in a plain form | 0.3.1 | `fd-otp` holding one named input; `/imprim/forms.js` loads Fire's forms module |
 | The app shell without the demo's script | 0.3.0 | `templates/shell-static.html` as the reference for `pages/shell.mjs`; `icon()` injects its own sprite, so `/imprim/shell.js` loads only Fire's shell and texture modules |
 | A centred screen | 0.3.0 | `fd-screen`, `fd-screen-head`, `fd-screen-note`, `fd-band[data-align="center"]` |
 | Tweaks panel under a strict CSP | 0.3.0 | The Branding page's Tweaks panel, with no blocked styles |

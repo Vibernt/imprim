@@ -86,7 +86,13 @@ Example client body:
 
 New clients are confidential. The server generates a random secret and stores only its SHA-256 digest; neither the
 secret nor the digest appears in later reads or audit. Other settings are listed in
-[Configuration](CONFIGURATION.md#app-client-settings-clients). Lists and objects are JSON in the HTML textareas. A
+[Configuration](CONFIGURATION.md#app-client-settings-clients). The client editor (`admin/client-editor.mjs`) gives each setting the control that fits it: lists of URLs and
+domains as tokens, names with values as rows, choices as segmented buttons or checkboxes, yes or no as a switch, and
+a number with its unit. Only the branding override is raw JSON, in a code field. The form posts plain fields, which
+`admin/client-form.mjs` turns into the object the API takes: a list arrives one value per line, and an unchecked
+switch arrives as nothing. `/imprim/forms.js` loads Fire's forms module for these controls; without it each is still
+a usable text area. A form the server refuses comes back as a console page that says why, with the browser's Back
+keeping what was entered; the API and scripts still get the JSON error. A
 back-channel HTTPS URI is required. Signup defaults to invited and agents default off. Settings are read-only:
 Turnstile and binding limits are deployment changes, and D1 budgets are code constants.
 

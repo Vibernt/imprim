@@ -3,7 +3,7 @@
 import { ICONS } from '../../public/fire/js/icons.js';
 export const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const e = escapeHtml;
-const attrs = (pairs = {}) => Object.entries(pairs).filter(([, v]) => v !== undefined && v !== null && v !== false)
+export const attrs = (pairs = {}) => Object.entries(pairs).filter(([, v]) => v !== undefined && v !== null && v !== false)
     .map(([k, v]) => v === true ? ` ${k}` : ` ${k}="${e(v)}"`).join('');
 // Lucide icons from Fire's set, inline (Fire's own <i data-icon> needs its JavaScript).
 export const icon = (name, size) => ICONS[name] ? `<svg class="fd-icon" viewBox="0 0 24 24"${size ? ` data-size="${size}"` : ''} aria-hidden="true">${ICONS[name]}</svg>` : '';
@@ -29,14 +29,13 @@ export function field({ id, label, hint, error, size, ...input }) {
     return `<div class="fd-field"><label class="fd-field-label" for="${e(id)}">${e(label)}</label>${control}${hint ? `<p class="fd-field-hint" id="${e(id)}-hint">${e(hint)}</p>` : ''}${error ? `<p class="fd-field-error" id="${e(id)}-error">${icon('circle-alert', 14)}<span>${e(error)}</span></p>` : ''}</div>`;
 }
 // A 6-digit code in Fire's one-time-code boxes. It is one ordinary input, so the form works without script;
-// /imprim/otp.js (load it with the page) turns it into the boxes, and the form posts the same `name` either way.
+// /imprim/forms.js (FORMS_MODULE in forms.mjs; load it with the page) turns it into the boxes, and the form posts the same `name` either way.
 export function otp({ id, label, name, hint, error, autofocus, length = 6 }) {
     const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
     return `<div class="fd-field"><label class="fd-field-label" for="${e(id)}">${e(label)}</label><div class="fd-otp" data-fd-otp data-length="${length}" role="group" aria-label="${e(label)}"><input${attrs({ id, name,
         inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: length, pattern: `[0-9]{${length}}`, required: true, autofocus, 'aria-invalid': error ? 'true' : undefined, 'aria-describedby': describedBy })}></div>${
         hint ? `<p class="fd-field-hint" id="${e(id)}-hint">${e(hint)}</p>` : ''}${error ? `<p class="fd-field-error" id="${e(id)}-error">${icon('circle-alert', 14)}<span>${e(error)}</span></p>` : ''}</div>`;
 }
-export const OTP_MODULE = '/imprim/otp.js';
 export const checkbox = (name, label, { value = '1', checked, required } = {}) =>
     `<label class="fd-checkbox"><input type="checkbox"${attrs({ name, value, checked, required })}><span class="fd-checkbox-box"></span><span class="fd-checkbox-text"><span class="fd-checkbox-label">${e(label)}</span></span></label>`;
 export const hidden = (name, value) => `<input type="hidden" name="${e(name)}" value="${e(value ?? '')}">`;

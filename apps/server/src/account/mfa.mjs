@@ -10,7 +10,8 @@ import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { safeNext } from '../auth/mfa-challenge.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { accountPage } from '../pages/shell.mjs';
-import { heading, section, button, linkButton, field, otp, OTP_MODULE, hidden, callout, list, empty, setting, badge, small } from '../pages/ui.mjs';
+import { heading, section, button, linkButton, field, otp, hidden, callout, list, empty, setting, badge, small } from '../pages/ui.mjs';
+import { FORMS_MODULE } from '../pages/forms.mjs';
 import { credentials } from '../webauthn/ceremonies.mjs';
 import { notify } from '../services/notify.mjs';
 const FRESH_AUTH_MS = 600000;
@@ -81,7 +82,7 @@ export async function mfaAccount(request, env, ctx) {
             otp({ id: 'code', label: 'Code', name: 'code' }),
             `<div class="fd-form-actions">${linkButton('Cancel', overviewHref(values), { variant: 'ghost' })}${button('Add authenticator app', { variant: 'primary' })}</div>`, ' class="fd-form"');
         return show(values, 'Add an authenticator app', 'Scan the code, then enter the 6-digit code your app shows.',
-            `<div class="fd-stack" data-gap="4"><figure class="fd-qr">${qrSvg(uri, { label: 'Authenticator setup code' })}</figure>${key}</div>` + confirm, { modules: [OTP_MODULE] });
+            `<div class="fd-stack" data-gap="4"><figure class="fd-qr">${qrSvg(uri, { label: 'Authenticator setup code' })}</figure>${key}</div>` + confirm, { modules: [FORMS_MODULE] });
     }
     if (values.action === 'confirm') {
         const factor = await env.DB.prepare('SELECT * FROM mfa_factors WHERE id=? AND user_id=? AND confirmed=0 AND created>?').bind(values.factor_id || '', session.user_id, now - 3600000).first();

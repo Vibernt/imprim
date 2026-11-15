@@ -3,8 +3,10 @@
 // Copy follows docs/fire/WRITING.md.
 import { escapeHtml as e, SIDE_BRAND } from '../pages/layout.mjs';
 import { shellPage } from '../pages/shell.mjs';
-import { button, linkButton, field, hidden, callout, kv, list, empty, status, badge, code, table, actions, checkbox, section } from '../pages/ui.mjs';
+import { button, linkButton, field, hidden, callout, kv, list, empty, status, badge, code, table, actions, checkbox } from '../pages/ui.mjs';
 import { COPY_KEYS } from '../branding/tokens.mjs';
+import { clientForm, METHODS } from './client-editor.mjs';
+import { FORMS_MODULE, json as jsonField } from '../pages/forms.mjs';
 // The hero texture of each section.
 const ART = { clients: 'grid', services: 'waves', users: 'orbit', branding: 'halftone', audit: 'rain', settings: 'terrain', keys: 'spark', realms: 'terrain' };
 const link = (url, label) => `<a class="fd-link" href="${e(url)}">${e(label)}</a>`;
@@ -19,9 +21,9 @@ function adminPage(title, body, { description = '', active = '', modules = [], b
     return response;
 }
 const form = (path, csrf, body, attrs = '') => `<form class="fd-stack" data-gap="4" method="post" action="${e(path)}"${attrs}>${hidden('csrf', csrf)}${body}</form>`;
-const card = (body, title = '', description = '') => `<article class="fd-card"><div class="fd-stack" data-gap="4">${title ? `<div class="fd-stack" data-gap="1"><h2 class="fd-h3">${e(title)}</h2>${description ? `<p class="fd-small fd-muted">${e(description)}</p>` : ''}</div>` : ''}${body}</div></article>`;
+// A card: its title is one step below a page section (fd-title), and setting rows inside it step down again.
+const card = (body, title = '', description = '') => `<article class="fd-card">${title ? `<div class="fd-card-head"><div class="fd-card-heading"><h2 class="fd-title">${e(title)}</h2>${description ? `<p class="fd-card-desc">${e(description)}</p>` : ''}</div></div>` : ''}${body}</article>`;
 const cards = (...items) => `<div class="fd-grid" data-min="lg" data-cols="2" data-gap="6">${items.filter(Boolean).join('')}</div>`;
-const METHODS = { email: 'Email link', password: 'Password', passkey: 'Passkey', github: 'GitHub', google: 'Google' };
 export function clientList(rows) {
     const register = linkButton('Register client', '/admin/clients/new', { variant: 'primary', icon: 'plus' });
     const body = rows.length ? table('Clients', ['App', 'Client ID', 'Sign-in methods', 'Sign-up', 'Agents'], rows.map(c => [
@@ -31,53 +33,16 @@ export function clientList(rows) {
         : empty('No clients yet', 'Register an app to let people sign in to it here.', register);
     return adminPage('Clients', body, { description: 'Apps that sign people in through this realm.', active: 'clients', actions: rows.length ? register : '' });
 }
-const CLIENT_HINTS = {
-    id: 'Letters, digits, hyphens and underscores. It can’t change later.', redirect_uris: 'Exact HTTPS callback URLs, as a JSON list.', post_logout_uris: 'Exact URLs to return to after sign-out.',
-    backchannel_uri: 'Receives signed logout and revocation events. Required.', dev: '1 allows http://localhost callbacks. Use 0 in production.',
-    sign_in_methods: 'In display order: email, password, passkey, github, google or a provider id.', signup_policy: 'invited or open.', allowed_domains: 'Email domains admitted without an invitation.',
-    google_hosted_domains: 'Google Workspace domains allowed to sign in with Google.', mfa: 'off, optional or required.', mfa_trusted_device_days: 'Days a remembered browser skips the second factor. 0 turns it off.',
-    branding: 'Overrides the realm: name, look, copy, links and logos. See Branding.', agent_access: 'on or off. Turning it off revokes every agent grant for this app.',
-    agent_registration_methods: 'metadata_document, and dynamic if you allow unverified agents.', agent_allowlist: 'Agent client-ID URLs or hosts. Empty allows any.',
-    agent_scope_catalogue: 'Scope names with the description people see at consent.', agent_resource_prefixes: 'HTTPS URL prefixes agents may ask for.', agent_max_grant_days: 'The longest an agent grant lasts.',
-    agent_consent_mfa: 'off or required: ask for a second factor at agent consent.', agent_dpop: 'optional or required: bind agent tokens to a key.',
-    token_exchange_from: 'Apps whose tokens can be exchanged for this app’s, with the scopes allowed.', user_events: 'on sends this app signed events when a person changes or is deleted.'
-};
-const CLIENT_LABELS = { id: 'Client ID', redirect_uris: 'Redirect URIs', post_logout_uris: 'Post-logout URIs', backchannel_uri: 'Back-channel URI', dev: 'Development mode',
-    mfa: 'Two-factor', mfa_trusted_device_days: 'Remember browsers for (days)', agent_consent_mfa: 'Two-factor at agent consent', agent_dpop: 'Agent DPoP', agent_max_grant_days: 'Longest agent grant (days)' };
-// The editor shows a client's settings in these groups; a setting not listed lands in the last one.
-const CLIENT_GROUPS = [
-    ['Callbacks', 'Where this app receives people and events.', ['id', 'redirect_uris', 'post_logout_uris', 'backchannel_uri', 'dev']],
-    ['Sign-in', 'How people get in, and who may.', ['sign_in_methods', 'signup_policy', 'allowed_domains', 'google_hosted_domains', 'mfa', 'mfa_trusted_device_days']],
-    ['Branding', 'What this app’s sign-in pages look like.', ['branding']],
-    ['Agents', 'AI agents acting for a person in this app.', ['agent_access', 'agent_registration_methods', 'agent_allowlist', 'agent_scope_catalogue', 'agent_resource_prefixes', 'agent_max_grant_days', 'agent_consent_mfa', 'agent_dpop']],
-    ['Machines and events', 'Service tokens and signed user events.', ['token_exchange_from', 'user_events']]
-];
-export function clientEditor(client, csrf, isNew = false, delivery = null) {
-    const value = client || { id: '', redirect_uris: [], post_logout_uris: [], backchannel_uri: '', signup_policy: 'invited',
-        sign_in_methods: ['email'], google_hosted_domains: [], allowed_domains: [], branding: { name: '' }, dev: 0,
-        mfa: 'off', mfa_trusted_device_days: 0, agent_consent_mfa: 'off', agent_dpop: 'optional', token_exchange_from: {}, user_events: 'off', agent_access: 'off', agent_registration_methods: ['metadata_document'], agent_allowlist: [], agent_scope_catalogue: {}, agent_resource_prefixes: [], agent_max_grant_days: 90 };
-    const keys = Object.keys(value).filter(key => !['confidential', 'version'].includes(key) && (key !== 'id' || isNew));
-    const input = key => {
-        const v = value[key], label = CLIENT_LABELS[key] || key[0].toUpperCase() + key.slice(1).replaceAll('_', ' ');
-        return typeof v === 'object'
-            ? field({ id: `f-${key}`, label, name: key, multiline: true, mono: true, rows: 3, required: true, value: JSON.stringify(v, null, 2), hint: CLIENT_HINTS[key] })
-            : field({ id: `f-${key}`, label, name: key, value: v, required: true, hint: CLIENT_HINTS[key], spellcheck: 'false' });
-    };
-    const grouped = new Set(CLIENT_GROUPS.flatMap(group => group[2]));
-    const groups = [...CLIENT_GROUPS, ['Other', '', keys.filter(key => !grouped.has(key))]].map(([title, description, names]) => {
-        const fields = names.filter(key => keys.includes(key)).map(input).join('');
-        return fields ? section(title, description, `<div class="fd-grid" data-min="lg" data-cols="2" data-gap="5">${fields}</div>`) : '';
-    }).join('');
-    const path = isNew ? '/admin/clients' : '/admin/clients/' + encodeURIComponent(value.id);
-    const rotate = isNew ? '' : card(form(path + '/rotate-secret', csrf, (value.confidential ? '' : checkbox('make_confidential', 'Make this public client confidential (it then authenticates at the token endpoint)', { value: 'true', required: true })) +
+// Register or edit a client. The form is admin/client-editor.mjs; an existing client also shows its secret and deliveries.
+export function clientEditor(client, csrf, { delivery = null, providers = {} } = {}) {
+    const isNew = !client, path = isNew ? '' : '/admin/clients/' + encodeURIComponent(client.id);
+    const rotate = isNew ? '' : card(form(path + '/rotate-secret', csrf, (client.confidential ? '' : checkbox('make_confidential', 'Make this public client confidential (it then authenticates at the token endpoint)', { value: 'true', required: true })) +
         `<div class="fd-row">${button('Rotate secret', { variant: 'outline', icon: 'refresh-cw' })}</div>`), 'Client secret', 'Rotating shows a new secret once and stops the old one. Needs a sign-in in the last 10 minutes.');
     const deliveryCard = delivery ? card(kv([['Undelivered', e(delivery.counts.undelivered)], ['Expired', e(delivery.counts.expired)]]) +
         (delivery.events.length ? table('Back-channel events', ['Kind', 'Event', 'State', 'Last error'], delivery.events.map(event => [e(event.kind), code(event.id), status(cap(event.delivery_state), event.delivery_state === 'expired' ? 'danger' : 'warning'), e(event.last_error || 'None')])) : ''),
         'Back-channel delivery', 'Signed events waiting for this app, retried for 24 hours.') : '';
-    const editor = `<form class="fd-stack" data-gap="8" method="post" action="${e(path)}">${hidden('csrf', csrf)}${value.version === undefined ? '' : hidden('version', value.version)}${groups}${
-        actions(linkButton('Cancel', '/admin/clients', { variant: 'ghost' }), button(isNew ? 'Register client' : 'Save client', { variant: 'primary' }))}</form>`;
-    return adminPage(isNew ? 'Register client' : value.branding?.name || value.id, [editor, isNew ? '' : cards(rotate, deliveryCard)],
-        { description: isNew ? 'An app that signs people in through this realm. Lists and branding are JSON.' : `Client ${value.id}. Lists and branding are JSON.`, active: 'clients', back: ['Clients', '/admin/clients'] });
+    return adminPage(isNew ? 'Register client' : client.branding?.name || client.id, [clientForm(client, csrf, { providers }), isNew ? '' : cards(rotate, deliveryCard)],
+        { description: isNew ? 'An app that signs people in through this realm.' : 'How this app signs people in, and what agents may do in it.', active: 'clients', back: ['Clients', '/admin/clients'], modules: [FORMS_MODULE] });
 }
 export function userList(rows, search) {
     const more = rows.length > 50 ? `<div class="fd-row" data-justify="end">${linkButton('Next page', '/admin/users?' + new URLSearchParams({ q: search, before: rows[49].id }), { variant: 'ghost' })}</div>` : '';
@@ -138,7 +103,7 @@ export function brandingPage({ branding, version }, csrf) {
 <div class="fd-callout" role="alert" data-tone="danger" id="branding-error" hidden><div class="fd-callout-content"><p class="fd-callout-title">Not saved</p><p class="fd-callout-body" id="branding-error-text"></p></div></div>
 <div class="fd-grid" data-min="lg" data-cols="2" data-gap="6"><div class="fd-stack" data-gap="6">
 ${card(`<p class="fd-small fd-muted">Palette, tone, type, density, corners, contrast and motion. This page changes as you go; nothing is live until you save.</p><div class="fd-row" data-gap="3" data-wrap>${button('Open tweaks', { type: 'button', variant: 'outline', icon: 'sliders-horizontal', 'data-fd-tweaks-open': true, 'aria-expanded': 'false' })}<code class="fd-code" id="look-summary">${e(JSON.stringify(branding.look || {}))}</code></div>`, 'Look', 'Fire keeps text and buttons readable in every palette and tone.')}
-${card(logoSlot('logo_light', 'Logo', 'Shown at the top of sign-in pages, in place of the mark and name. SVG, PNG, JPEG or WebP, up to 256 KiB.', branding.logo_light) + logoSlot('logo_dark', 'Dark-mode logo', 'Used when the page is dark. Optional.', branding.logo_dark) + logoSlot('mark', 'Mark', 'A square icon: the browser tab, the sidebar here, and beside the name when there is no logo.', branding.mark), 'Logo', 'With no mark, pages show your name’s first letter in dots.')}
+${card(logoSlot('logo_light', 'Full logo', 'Shown at the top of sign-in pages, in place of the mark and name. SVG, PNG, JPEG or WebP, up to 256 KiB.', branding.logo_light) + logoSlot('logo_dark', 'Dark-mode logo', 'Used when the page is dark. Optional.', branding.logo_dark) + logoSlot('mark', 'Mark', 'A square icon: the browser tab, the sidebar here, and beside the name when there is no logo.', branding.mark), 'Logos', 'With no mark, pages show your name’s first letter in dots.')}
 ${card(brandFields, 'Name and links')}
 ${card(copyFields, 'Words', 'Leave a field empty to use the default. Plain text, up to 300 characters.')}
 </div><div class="fd-stack" data-gap="3"><p class="fd-eyebrow">Preview</p>${specimen}<p class="fd-small fd-muted">${link('/admin/branding/preview', 'Open the sign-in page')} to see it with your apps’ methods.</p></div></div>
@@ -150,9 +115,9 @@ export const servicesPage = rows => adminPage('Service clients', rows.length ? t
 export function realmsPage(realms, csrf) {
     const rows = table('Realms', ['Realm', 'Issuer', 'Status', 'Admins'], realms.map(r => [`${e(r.display_name)} ${code(r.id)}`, code(r.issuer || 'Not set'), status(cap(r.status), STATUS_TONE[r.status]), e(r.admins.map(a => `${a.email} (${a.role})`).join(', ') || 'None')]));
     const create = card(form('/admin/realms', csrf, `<div class="fd-grid" data-min="md" data-cols="3" data-gap="4">${field({ id: 'r-id', label: 'Realm ID', name: 'id', required: true, placeholder: 'acme' })}${field({ id: 'r-issuer', label: 'Issuer', name: 'issuer', required: true, placeholder: 'https://id.acme.com' })}${field({ id: 'r-name', label: 'Display name', name: 'display_name', required: true, placeholder: 'Acme' })}</div>` +
-        field({ id: 'r-config', label: 'Config', name: 'config', multiline: true, mono: true, rows: 8, required: true, value: '{}', hint: 'Secrets are never stored here: name a Worker secret as {"env":"NAME"}.' }) + `<div class="fd-row">${button('Create realm', { variant: 'primary' })}</div>`),
+        jsonField({ id: 'r-config', label: 'Config', name: 'config', value: {}, hint: 'Secrets are never stored here: name a Worker secret as {"env":"NAME"}.' }) + `<div class="fd-row">${button('Create realm', { variant: 'primary' })}</div>`),
         'New realm', 'Its host must also be added as a custom domain on this Worker.');
-    return adminPage('Realms', [rows, cards(create, card(json(realms), 'Config'))], { description: 'Brands on this deployment. Platform administrators only.', active: 'realms' });
+    return adminPage('Realms', [rows, cards(create, card(json(realms), 'Config'))], { description: 'Brands on this deployment. Platform administrators only.', active: 'realms', modules: [FORMS_MODULE] });
 }
 export function settingsPage(settings) {
     const pending = [['Logout events', settings.delivery?.human], ['Agent revocations', settings.delivery?.agent], ['User events', settings.delivery?.user_events]]
@@ -165,6 +130,13 @@ export function settingsPage(settings) {
 export function resultPage(result) {
     return adminPage('Done', (result.client_secret ? callout('Copy the new client secret now', 'It is shown once. Store it in your app’s secrets before you leave this page.', { tone: 'warning' }) : '') + card(json(result)) +
         `<div class="fd-row">${linkButton('Back to the console', '/admin', { variant: 'outline' })}</div>`, { description: 'The change is saved.' });
+}
+// A form the server refused. `back` is the page it was posted from; the browser's own Back keeps what was typed.
+export function failedPage(message, status, back, section) {
+    const response = adminPage('Not saved', callout('Nothing was changed', message, { tone: 'danger' }) +
+        `<p class="fd-muted">Go back in your browser to keep what you entered, fix it, and save again.</p><div class="fd-row">${linkButton('Back to the form', back, { variant: 'outline', icon: 'arrow-left' })}</div>`,
+    { description: 'The server refused this change.', active: section });
+    return new Response(response.body, { status, headers: response.headers });
 }
 export function mergeConfirmation(source, survivor, csrf) {
     return adminPage(`Merge ${source.email}?`, kv([['Deleted', `${e(source.email)} ${code(source.id)}`], ['Kept', `${e(survivor.email)} ${code(survivor.id)}`]]) +
