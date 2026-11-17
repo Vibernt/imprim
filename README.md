@@ -46,8 +46,9 @@ Foundation uses for certification, with **no failures** in all four OpenID provi
 
 Run on 2026-11-17 against the reference staging deployment, the same release production runs. How to run it,
 what each warning and skip means, and what the suite found are in [OpenID certification](docs/CERTIFICATION.md).
-The protocol behaviour it checks is covered by [`tests/oidc-certification.test.mjs`](tests/oidc-certification.test.mjs)
-and [`tests/rs256.test.mjs`](tests/rs256.test.mjs), which run on every push.
+The suite itself is run by hand. Imprim's own tests of the behaviour it checks,
+[`tests/oidc-certification.test.mjs`](tests/oidc-certification.test.mjs) and [`tests/rs256.test.mjs`](tests/rs256.test.mjs),
+run in [CI](.github/workflows/ci.yml) on every push to `main` and every pull request, on Node 22 and 24.
 
 ## In one view
 
