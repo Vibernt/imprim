@@ -18,7 +18,7 @@ test('the editor form becomes the same object the API takes', () => {
         agent_scope_catalogue: { 'notes:read': 'Read your notes', 'a=b': 'Odd name' }, agent_resource_prefixes: ['https://notes.example/w/'], agent_allowlist: [], agent_max_grant_days: 30,
         agent_dpop: 'required', token_exchange_from: { reports: ['notes:read'] }, branding: { name: 'Notes' },
         // Switches left off post nothing; a whole editor form says so.
-        dev: 0, user_events: 'off', agent_consent_mfa: 'off' });
+        dev: 0, user_events: 'off', agent_consent_mfa: 'off', classic_oidc: 'off' });
 });
 test('without script the same form posts lines, and the server reads them the same way', () => {
     const plain = clientFromForm({ editor: '1', agent_scope_catalogue: 'notes:read = Read your notes\r\nnotes:write=Change your notes', token_exchange_from: 'reports = notes:read notes:write\n', redirect_uris: ' https://a.example/cb \r\n\r\nhttps://b.example/cb' });

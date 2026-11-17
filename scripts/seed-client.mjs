@@ -6,7 +6,7 @@ import { validateSignInSettings } from '../apps/server/src/oidc/sign-in-methods.
 import { validateAgentSettings, settingNames } from '../apps/server/src/agents/settings.mjs';
 import { registeredUri } from '../apps/server/src/oidc/clients.mjs';
 import { validatePolicySettings } from '../apps/server/src/admin/clients.mjs';
-const POLICY = ['mfa', 'mfa_trusted_device_days', 'agent_consent_mfa', 'agent_dpop', 'token_exchange_from', 'user_events'];
+const POLICY = ['mfa', 'mfa_trusted_device_days', 'agent_consent_mfa', 'agent_dpop', 'token_exchange_from', 'user_events', 'classic_oidc'];
 const sql = value => value === null ? 'NULL' : typeof value === 'number' ? String(value) : `'${value.replaceAll("'", "''")}'`;
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 export function clientSeedSql(config) {
@@ -25,6 +25,7 @@ export function clientSeedSql(config) {
     for (const [key, value] of Object.entries(agent)) client[key] = typeof value === 'object' ? JSON.stringify(value) : value;
     // The same policy rules as the console; a missing value keeps the column default.
     try { validatePolicySettings(config, agent); } catch (error) { assert(false, `Invalid policy: ${error.message}`); }
+    assert(config.classic_oidc !== 'on' || config.secret_hash !== null, 'Classic OpenID Connect needs a confidential client');
     for (const key of POLICY) if (config[key] !== undefined) client[key] = typeof config[key] === 'object' ? JSON.stringify(config[key]) : config[key];
     assert(['invited','open'].includes(client.signup_policy), 'Invalid signup_policy');
     assert([0,1].includes(client.dev), 'dev must be 0 or 1');

@@ -25,5 +25,6 @@ Identity for people and the agents that act for them: OpenID Connect and OAuth 2
 | [Operations](OPERATIONS.md) | Keys, retention, delivery, monitoring, backups, provider apps, release gates and incidents |
 | [Architecture](ARCHITECTURE.md) | Components, schema and request flows |
 | [Security](SECURITY.md) | Threat model, controls, and what is not yet verified live |
+| [OpenID certification](CERTIFICATION.md) | Profiles, setting up the conformance suite, and running it |
 | [Security pass 2026-11-15](SECURITY_PASS.md) | The latest review and its fixes |
 | [Roadmap](ROADMAP.md) | What is planned next |

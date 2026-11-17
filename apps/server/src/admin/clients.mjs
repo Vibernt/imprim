@@ -26,6 +26,7 @@ export function validatePolicySettings(config, agent) {
         'invalid_request', 'mfa is off, optional or required; agent_consent_mfa is off or required; mfa_trusted_device_days is 0 to 90.');
     invariant(['optional', 'required'].includes(config.agent_dpop ?? 'optional'), 'invalid_request', 'agent_dpop is optional or required.');
     invariant(['off', 'on'].includes(config.user_events ?? 'off'), 'invalid_request', 'user_events is off or on.');
+    invariant(['off', 'on'].includes(config.classic_oidc ?? 'off'), 'invalid_request', 'classic_oidc is off or on.');
     const exchange = config.token_exchange_from ?? {};
     invariant(exchange && typeof exchange === 'object' && !Array.isArray(exchange) && Object.keys(exchange).length <= 20 &&
         Object.entries(exchange).every(([id, scopes]) => /^[A-Za-z0-9_-]{1,200}$/.test(id) && id !== config.id && Array.isArray(scopes) && scopes.length > 0 &&
@@ -36,6 +37,8 @@ function validate(config) {
     const { methods, domains } = validateSignInSettings(config.sign_in_methods, config.google_hosted_domains);
     const agent = validateAgentSettings(config);
     invariant(['invited','open'].includes(config.signup_policy) && [0,1].includes(config.dev), 'invalid_request', 'Invalid signup policy or dev flag.');
+    // Leaving out PKCE is safe only with a client secret: a public app always uses PKCE.
+    invariant(config.classic_oidc !== 'on' || config.confidential !== false, 'invalid_request', 'Classic OpenID Connect needs a confidential app.');
     validatePolicySettings(config, agent);
     for (const name of ['redirect_uris','post_logout_uris']) {
         invariant(Array.isArray(config[name]) && config[name].length <= 100 && (name !== 'redirect_uris' || config[name].length), 'invalid_request', 'Invalid URI list.');
@@ -53,7 +56,7 @@ function validate(config) {
 export async function saveClient(env, actor, id, input) {
     const old = id ? await getAdminClient(env, id) : null;
     const allowed = ['id','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev',
-        'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa','agent_dpop','token_exchange_from','user_events',...settingNames, ...(old ? ['version'] : [])];
+        'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa','agent_dpop','token_exchange_from','user_events','classic_oidc',...settingNames, ...(old ? ['version'] : [])];
     invariant(Object.keys(input).every(k => allowed.includes(k)), 'invalid_request', 'Unknown client field; secrets cannot be supplied.');
     invariant(!id || input.id === undefined || input.id === id, 'invalid_request', 'Client id cannot change.');
     if (old) {

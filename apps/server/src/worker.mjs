@@ -60,7 +60,7 @@ async function route(request, env, ctx, url) {
         case 'GET /device': return devicePage(request, env);
         case 'GET /agent/consent': case 'POST /agent/consent': return consent(request, env);
         case 'GET /account': case 'GET /account/security': case 'GET /account/sessions': case 'GET /account/agents': case 'POST /account/revoke': return account(request, env, ctx);
-        case 'GET /authorize': return authorize(request, env);
+        case 'GET /authorize': case 'POST /authorize': return authorize(request, env);
         case 'POST /token': return token(request, env, ctx);
         case 'GET /userinfo': case 'POST /userinfo': return userinfo(request, env);
         case 'GET /logout': case 'POST /logout': return logout(request, env, ctx);
@@ -127,7 +127,8 @@ export async function handleRequest(request, base, ctx) {
         if (!known) console.error(JSON.stringify({ type: 'request_failed', path: url.pathname, code: 'internal_error' }));
         const code = known ? error.code : 'server_error', status = known ? error.status : 500;
         const message = known ? error.message : 'The request could not be completed.';
-        const html = request.method === 'GET' && request.headers.get('accept')?.includes('text/html');
+        // A person's browser may POST an authorization request (OIDC Core 3.1.2.1); refusals before the redirect is trusted are pages.
+        const html = (request.method === 'GET' || url.pathname === '/authorize') && request.headers.get('accept')?.includes('text/html');
         // A person who opens their account page while signed out gets a page that says how to sign in, whatever
         // the request's Accept header; API clients of the same paths use POST and still get JSON.
         const signedOut = code === 'login_required' && request.method === 'GET' && /^\/(account(\/|$)|mfa$)/.test(url.pathname);

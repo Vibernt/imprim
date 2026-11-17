@@ -8,7 +8,7 @@ const LISTS = ['redirect_uris', 'post_logout_uris', 'allowed_domains', 'google_h
 const GROUPS = ['sign_in_methods', 'agent_registration_methods'];
 const NUMBERS = ['dev', 'agent_max_grant_days', 'version', 'mfa_trusted_device_days'];
 // A switch posts its "on" value when checked and nothing otherwise: [on, off].
-export const SWITCHES = { dev: ['1', 0], agent_access: ['on', 'off'], user_events: ['on', 'off'], agent_consent_mfa: ['required', 'off'], agent_dpop: ['required', 'optional'] };
+export const SWITCHES = { dev: ['1', 0], agent_access: ['on', 'off'], user_events: ['on', 'off'], agent_consent_mfa: ['required', 'off'], agent_dpop: ['required', 'optional'], classic_oidc: ['on', 'off'] };
 const lines = text => text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
 const jsonOr = (text, open, otherwise) => text.trimStart().startsWith(open) ? JSON.parse(text) : otherwise(text);
 function pairs(text) {

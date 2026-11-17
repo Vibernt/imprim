@@ -9,11 +9,11 @@ identity; apps keep workspace admission, memberships, roles, local sessions and 
 
 | Endpoint | Behavior |
 |---|---|
-| `GET /.well-known/openid-configuration` | Supported endpoints, code flow, ES256, S256, basic/public-client authentication. |
+| `GET /.well-known/openid-configuration` | Supported endpoints, code flow, ES256, S256, basic/post/public-client authentication. |
 | `GET /.well-known/jwks.json` | Public EC P-256 signing keys only, `alg=ES256`, `use=sig`; five-minute HTTP cache. |
-| `GET /authorize` | Exact registered client/redirect validation, then SSO or sign-in. |
-| `POST /token` | Form-encoded authorization-code exchange; confidential clients use HTTP Basic. |
-| `GET /userinfo` or `POST /userinfo` | Bearer opaque access token; `sub`, and email claims if `email` was authorized. |
+| `GET /authorize` or `POST /authorize` | Exact registered client/redirect validation, then SSO or sign-in. POST takes a form body. |
+| `POST /token` | Form-encoded authorization-code exchange; confidential clients use HTTP Basic or `client_secret_post`. |
+| `GET /userinfo` or `POST /userinfo` | Bearer opaque access token in the header, or as `access_token` in a POST form body (RFC 6750 §2.2), never both and never in the query; `sub`, and email claims if `email` was authorized. |
 | `GET /logout` | Validate client/return URI, show confirmation; no cookie-authenticated destructive GET. With no `client_id` it is a person signing out from Imprim's own pages: no return URI or state is accepted, and it ends at `/signed-out`. |
 | `POST /logout` | Form-encoded same-origin CSRF confirmation; deletes identity session and associated tokens/codes. |
 | `POST /v1/invitations` | JSON `{email}`, confidential client Basic authentication; upserts a 30-day invitation. |
@@ -47,12 +47,28 @@ stricter policy ([Control plane](CONTROL_PLANE.md#authentication-and-routes)).
 
 ## Authorization
 
-Required query parameters: `client_id`, `redirect_uri`, `response_type=code`, `scope` including `openid`, nonempty
+`GET /authorize` with query parameters, or `POST /authorize` with the same parameters as a form body (OIDC Core
+3.1.2.1). Agents use GET only.
+
+Required parameters: `client_id`, `redirect_uri`, `response_type=code`, `scope` including `openid`, nonempty
 `state`, nonempty `nonce`, `code_challenge` (43-character base64url SHA-256 digest), `code_challenge_method=S256`.
 Supported scopes: `openid email profile` (`profile` adds `name`). Only the `query` response mode is accepted.
 `prompt=login` forces a new sign-in; `prompt=none` returns `login_required` to the trusted client if no valid session.
-`max_age` (whole seconds) and `acr_values` are accepted (see Two-factor authentication). Request objects,
-`request_uri`, `claims` and an authorization `id_token_hint` are rejected.
+`max_age` (whole seconds) and `acr_values` are accepted (see Two-factor authentication). Request objects are refused
+with `request_not_supported` and `request_uri` with `request_uri_not_supported`; `claims` is refused with
+`invalid_request` unless the app uses classic OpenID Connect (below).
+
+`id_token_hint` is an ID token this issuer gave this app, verified against the local ring; it may have expired. It
+names the person the app expects: a session belonging to anyone else counts as no session (`prompt=none` returns
+`login_required`), and the request records the hinted person, so nobody else can finish it. A hint that is forged,
+malformed or issued to another app is refused with `invalid_request`.
+
+**Classic OpenID Connect** (client setting `classic_oidc`, `off` by default, confidential apps only) accepts requests
+from libraries written before OAuth 2.1: `code_challenge`/`code_challenge_method` and `nonce` may be left out, and a
+`claims` request is ignored, as OIDC Core 5.5 allows. A request that sends one PKCE parameter must send both, and its
+code then needs the verifier. A code issued without a challenge refuses a verifier, so PKCE cannot be half used. An
+ID token for a request without a nonce carries none. Public clients always need PKCE, whatever the setting.
+
 Duplicate query/form parameters are rejected. State/nonce limit: 512 characters. Bodies: 16 KiB.
 
 Redirects match the stored string exactly; no wildcard, username/password, fragment, whitespace, or backslash.
@@ -68,12 +84,15 @@ atomically with code insertion. A link opened in a different browser cannot comp
 
 `POST /token`, `Content-Type: application/x-www-form-urlencoded`:
 `grant_type=authorization_code&code=…&redirect_uri=…&code_verifier=…`.
-HTTP Basic credentials use URL-form-encoded client id and secret, joined by `:`, then standard base64.
-Public clients have a NULL secret hash and send `client_id` without Authorization. Body secrets are refused.
-Public clients cannot register invitations. Every client requires PKCE S256; verifier length is 43–128 characters.
+HTTP Basic credentials use URL-form-encoded client id and secret, joined by `:`, then standard base64. At `/token`
+only, `client_secret_post` (`client_id` and `client_secret` in the body) is accepted too; a request that uses both is
+refused. Other endpoints refuse body secrets.
+Public clients have a NULL secret hash and send `client_id` without Authorization.
+Public clients cannot register invitations. Every client sends a PKCE S256 verifier of 43–128 characters, except a
+classic OpenID Connect app whose request had no challenge, which must send none.
 
 Codes are random 256-bit opaque values stored only by SHA-256. Lifetime: 60 seconds. The atomic claim uses
-`DELETE … RETURNING` bound to client, exact redirect, PKCE digest and expiry. A consumed-code tombstone is written
+`DELETE … RETURNING` bound to client, exact redirect, PKCE digest (empty for a classic request without one) and expiry. A consumed-code tombstone is written
 in the same D1 batch; a known replay is refused and audited. Wrong credentials or verifier do not consume a code.
 Only a currently active user with an unexpired identity session, admitted to this client, can exchange a code.
 A replayed code is refused, and the access token that code issued is deleted (RFC 9700 §4.2.4). The ID token it
@@ -85,7 +104,7 @@ Success: `access_token`, `token_type=Bearer`, `expires_in=600`, `id_token`, `sco
 The access token is independent random material, hash-stored in D1 for UserInfo only. It is not an app API token.
 The signed ID token lasts 600 seconds and has `iss`, `aud` (client id), `azp` (same client id), `sub`, `iat`, `exp`,
 `amr` (the method: `email`, `pwd`, `github`, `google` or a provider id; a passkey gives `hwk` or `swk` with `user`;
-a second factor adds `otp` and `mfa`), `acr`, `auth_time` (Unix seconds), `sid`, and `nonce`. `name` appears with the
+a second factor adds `otp` and `mfa`), `acr`, `auth_time` (Unix seconds), `sid`, and `nonce` when the request had one. `name` appears with the
 `profile` scope when the person has set one. `email` and boolean
 `email_verified` appear only when the request asked for the `email` scope (OIDC Core 5.4).
 Only ES256 is emitted/advertised; private key material is never in JWKS. Human app grants have no refresh tokens; neither flow supports implicit grants. Agent refresh grants are described below.

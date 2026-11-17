@@ -10,7 +10,7 @@ export function discovery(env) {
         response_types_supported: ['code'], response_modes_supported: ['query'], grant_types_supported: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:device_code', 'client_credentials', 'urn:ietf:params:oauth:grant-type:token-exchange'],
         backchannel_logout_supported: true, backchannel_logout_session_supported: true,
         subject_types_supported: ['public'], id_token_signing_alg_values_supported: ['ES256'],
-        token_endpoint_auth_methods_supported: ['client_secret_basic', 'private_key_jwt', 'none'], token_endpoint_auth_signing_alg_values_supported: ['ES256', 'RS256'], dpop_signing_alg_values_supported: ['ES256', 'RS256', 'EdDSA'], code_challenge_methods_supported: ['S256'],
+        token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'private_key_jwt', 'none'], token_endpoint_auth_signing_alg_values_supported: ['ES256', 'RS256'], dpop_signing_alg_values_supported: ['ES256', 'RS256', 'EdDSA'], code_challenge_methods_supported: ['S256'],
         scopes_supported: ['openid', 'email', 'profile'],
         claims_supported: ['iss','aud','azp','sub','iat','exp','email','email_verified','amr','acr','auth_time','sid','nonce','name'],
         acr_values_supported: ['urn:imprim:acr:sf', 'urn:imprim:acr:mfa'],

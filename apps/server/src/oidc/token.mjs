@@ -12,9 +12,9 @@ import { audit } from '../services/audit.mjs';
 import { admissionGuard } from '../services/admission.mjs';
 import { limitAddress, limitClient } from '../auth/rate-limit.mjs';
 // Failed client authentication spends the caller's address budget; an authenticated app spends its own (S2).
-export async function authenticatedClient(request, env, body, confidentialOnly = false) {
+export async function authenticatedClient(request, env, body, confidentialOnly = false, options = {}) {
     let client;
-    try { client = await authenticateClient(request, env, body, confidentialOnly); }
+    try { client = await authenticateClient(request, env, body, confidentialOnly, options); }
     catch (error) { await limitAddress(env, request); throw error; }
     // Only a real credential may spend the app's shared budget. A public client is named by a bare client_id, so
     // anyone could drain it; its requests stay on the caller's address budget.
@@ -25,17 +25,20 @@ export async function authenticatedClient(request, env, body, confidentialOnly =
 export async function token(request, env, ctx) {
     const body = await readBody(request, 'form');
     if (body.grant_type === 'client_credentials') { await limitAddress(env, request); return serviceToken(request, env, body); }
-    if (body.grant_type === TOKEN_EXCHANGE) return exchangeToken(env, await authenticatedClient(request, env, body, true), body);
+    if (body.grant_type === TOKEN_EXCHANGE) return exchangeToken(env, await authenticatedClient(request, env, body, true, { post: true }), body);
     if (body.resource !== undefined || body.client_id?.startsWith('https://') || body.client_id?.startsWith('agent_') || ['refresh_token','urn:ietf:params:oauth:grant-type:device_code'].includes(body.grant_type)) {
         // Agents run on people's own machines, not shared Worker egress, so their budget stays per address.
         await limitAddress(env, request);
         return agentToken(request, env, body, ctx);
     }
-    const client = await authenticatedClient(request, env, body);
+    const client = await authenticatedClient(request, env, body, false, { post: true });
     invariant(body.grant_type === 'authorization_code', 'unsupported_grant_type', 'Only authorization_code is supported.');
-    invariant(tokenShape(body.code) && typeof body.code_verifier === 'string' && /^[A-Za-z0-9._~-]{43,128}$/.test(body.code_verifier), 'invalid_grant', 'Invalid code or verifier.');
+    invariant(tokenShape(body.code) && (body.code_verifier === undefined || (typeof body.code_verifier === 'string' && /^[A-Za-z0-9._~-]{43,128}$/.test(body.code_verifier))),
+        'invalid_grant', 'Invalid code or verifier.');
     try { registeredUri(client, body.redirect_uri); } catch { invariant(false, 'invalid_grant', 'Invalid redirect URI.'); }
-    const hash = await sha256(body.code), challenge = await challengeOf(body.code_verifier), now = Date.now();
+    // No verifier matches only a code whose request had no challenge, which only a classic app may make; a verifier
+    // never matches such a code, so neither side of PKCE can be dropped once the request started it (RFC 9700 2.1.1).
+    const hash = await sha256(body.code), challenge = body.code_verifier === undefined ? '' : await challengeOf(body.code_verifier), now = Date.now();
     const where = 'hash=? AND client_id=? AND redirect_uri=? AND challenge=? AND expires_at>?';
     const args = [hash, client.id, body.redirect_uri, challenge, now];
     const results = await env.DB.batch([
@@ -76,9 +79,14 @@ export async function token(request, env, ctx) {
     return json({ access_token: accessToken, token_type: 'Bearer', expires_in: 600, id_token: idToken, scope: code.scope });
 }
 export async function userinfo(request, env) {
-    const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(request.headers.get('authorization') || '');
-    invariant(match, 'invalid_token', 'A bearer access token is required.', 401);
-    const row = await env.DB.prepare('SELECT * FROM access_tokens WHERE hash=? AND expires_at>?').bind(await sha256(match[1]), Date.now()).first();
+    const header = request.headers.get('authorization');
+    // The header, or a form body on POST (RFC 6750 section 2.2); never both, and never the query string.
+    const form = request.method === 'POST' && request.headers.get('content-type')?.split(';')[0].trim() === 'application/x-www-form-urlencoded';
+    const inBody = form ? (await readBody(request, 'form')).access_token : undefined;
+    invariant(!(header && inBody !== undefined), 'invalid_request', 'Send the access token one way only.');
+    const presented = inBody ?? /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(header || '')?.[1];
+    invariant(tokenShape(presented), 'invalid_token', 'A bearer access token is required.', 401);
+    const row = await env.DB.prepare('SELECT * FROM access_tokens WHERE hash=? AND expires_at>?').bind(await sha256(presented), Date.now()).first();
     const session = row && await sessionByHash(env, row.session_hash);
     if (!session) await limitAddress(env, request);
     invariant(session, 'invalid_token', 'Access token expired or revoked.', 401);

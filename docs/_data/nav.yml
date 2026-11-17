@@ -21,6 +21,7 @@
   items:
     - { title: Operations, path: OPERATIONS.md, url: OPERATIONS.html, desc: "Keys, retention, monitoring, backups and releases." }
     - { title: Security, path: SECURITY.md, url: SECURITY.html, desc: "Threat model, controls, and what is not yet verified live." }
+    - { title: OpenID certification, path: CERTIFICATION.md, url: CERTIFICATION.html, desc: "Profiles, setting up the conformance suite, and running it." }
     - { title: Security review, path: SECURITY_PASS.md, url: SECURITY_PASS.html, desc: "The review of 2026-11-15 and its fixes." }
     - { title: Roadmap, path: ROADMAP.md, url: ROADMAP.html, desc: "What is done and what comes next." }
 - label: Design system

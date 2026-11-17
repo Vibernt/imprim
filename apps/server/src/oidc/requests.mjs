@@ -32,6 +32,8 @@ export async function completeAuthorization(env, request, id, session, responseC
     const created = row.expires_at - 1800000, authMs = session.auth_time * 1000;
     invariant(row.prompt !== 'login' || authMs >= created - 1000, 'login_required', 'This app asked for a fresh sign-in. Sign in again.', 401);
     invariant(row.max_age == null || authMs >= Date.now() - row.max_age * 1000, 'login_required', 'This app asked for a recent sign-in. Sign in again.', 401);
+    // An id_token_hint named the person this app expects; nobody else may finish the request.
+    invariant(row.hint_sub == null || row.hint_sub === session.user_id, 'login_required', 'This app asked for a different account. Sign in as that person.', 401);
     await admitSession(env, client, session);
     // The second factor sits in front of every code and every agent consent.
     const gate = await mfaGate(env, request, { client, session, row, agent: Boolean(row.agent_client_id) });

@@ -9,7 +9,8 @@ export async function signIdToken(env, session, code) {
         ...(code.scope.split(' ').includes('email') ? { email: session.email, email_verified: session.email_verified === 1 } : {}),
         ...(code.scope.split(' ').includes('profile') && session.display_name ? { name: session.display_name } : {}),
         amr: JSON.parse(session.amr || '[]').length ? JSON.parse(session.amr) : [session.method], auth_time: session.auth_time, acr: session.mfa_at ? 'urn:imprim:acr:mfa' : 'urn:imprim:acr:sf', sid: session.sid,
-        nonce: code.nonce, iat: now, exp: now + 600
+        // A classic app may send no nonce; then the ID token carries none (OIDC Core 3.1.3.6).
+        ...(code.nonce ? { nonce: code.nonce } : {}), iat: now, exp: now + 600
     };
     const encode = value => b64url(new TextEncoder().encode(JSON.stringify(value)));
     const input = `${encode({ alg: 'ES256', typ: 'JWT', kid })}.${encode(claims)}`;

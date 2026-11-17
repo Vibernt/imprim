@@ -59,11 +59,11 @@ and never writes D1. JSON columns are shown decoded.
 | `agent_dpop` | `optional` | `required` refuses agent tokens that are not DPoP-bound. |
 | `token_exchange_from` | `{}` | Other client ids that may exchange tokens into this app, each with the scopes it may obtain. |
 | `user_events` | `off` | `on` sends signed user lifecycle events to `backchannel_uri`. |
+| `classic_oidc` | `off` | `on` lets a confidential app leave out PKCE and the nonce and ignores its `claims` requests, for OpenID Connect libraries written before OAuth 2.1 ([Protocol](PROTOCOL.md#authorization)). Refused for public clients. |
 | `version` | `0` | Incremented on every edit; an edit must send the current version. |
 
-The seed script accepts the original sign-in, branding and agent settings. Set `mfa`, `mfa_trusted_device_days`,
-`agent_consent_mfa`, `agent_dpop`, `token_exchange_from` and `user_events` in the console or the admin API. The seed
-script never overwrites an existing client. Rotating a secret (console or `rotate-secret`) invalidates the old one
+The seed script accepts every setting in this table except `version`, with the console's rules. It never overwrites
+an existing client. Rotating a secret (console or `rotate-secret`) invalidates the old one
 at once; there is no overlap, so switch the app's secret in the same window.
 
 ## Runtime limits
