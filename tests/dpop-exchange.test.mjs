@@ -9,7 +9,7 @@ async function dpopKey() {
     const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
     const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', pair.publicKey);
     const jwk = { kty, crv, x, y };
-    const proof = async ({ htm = 'POST', htu = 'https://id.vibernt.ai/token', iat = Math.floor(Date.now() / 1000), jti = crypto.randomUUID(), accessToken, header = {} } = {}) => {
+    const proof = async ({ htm = 'POST', htu = 'https://id.example.com/token', iat = Math.floor(Date.now() / 1000), jti = crypto.randomUUID(), accessToken, header = {} } = {}) => {
         const ath = accessToken ? Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(accessToken))).toString('base64url') : undefined;
         const input = `${b64({ typ: 'dpop+jwt', alg: 'ES256', jwk, ...header })}.${b64({ htm, htu, iat, jti, ...(ath ? { ath } : {}) })}`;
         const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, new TextEncoder().encode(input));
@@ -45,7 +45,7 @@ test('DPoP proofs are refused for another URL or method, when stale, when replay
     };
     const reused = await key.proof();
     assert.equal((await exchange(reused)).status, 200);
-    for (const dpop of [reused, await key.proof({ htu: 'https://id.vibernt.ai/other' }), await key.proof({ htm: 'GET' }), await key.proof({ iat: Math.floor(Date.now() / 1000) - 3600 }),
+    for (const dpop of [reused, await key.proof({ htu: 'https://id.example.com/other' }), await key.proof({ htm: 'GET' }), await key.proof({ iat: Math.floor(Date.now() / 1000) - 3600 }),
         await key.proof({ header: { jwk: { ...key.jwk, d: 'secret' } } }), await key.proof({ header: { alg: 'RS256' } }), 'not-a-proof'])
         await error(await exchange(dpop), 'invalid_dpop_proof');
 });
@@ -136,7 +136,7 @@ test('review 2: an exchanged or DPoP-bound token cannot be used to revoke the ag
     const grantId = JSON.parse(Buffer.from(bound.access_token.split('.')[1], 'base64url')).grant_id;
     assert.equal((await w.form('/revoke', { token: bound.access_token, client_id: metadataId })).status, 200);
     assert.equal(w.env.DB.db.prepare('SELECT revoked_at FROM agent_grants WHERE id=?').get(grantId).revoked_at, null, 'no proof, no revocation');
-    assert.equal((await w.form('/revoke', { token: bound.access_token, client_id: metadataId }, '', { dpop: await key.proof({ htu: 'https://id.vibernt.ai/revoke' }) })).status, 200);
+    assert.equal((await w.form('/revoke', { token: bound.access_token, client_id: metadataId }, '', { dpop: await key.proof({ htu: 'https://id.example.com/revoke' }) })).status, 200);
     assert.ok(w.env.DB.db.prepare('SELECT revoked_at FROM agent_grants WHERE id=?').get(grantId).revoked_at);
 });
 test('review 4: a failed issuance does not bind the grant to a DPoP key', async t => {

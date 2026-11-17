@@ -14,7 +14,7 @@ function rawToDer(raw) {
     const body = [...part(raw.slice(0, 32)), ...part(raw.slice(32))];
     return new Uint8Array([0x30, body.length, ...body]);
 }
-export async function authenticator({ rpId = 'id.vibernt.ai', origin = 'https://id.vibernt.ai', backupEligible = true } = {}) {
+export async function authenticator({ rpId = 'id.example.com', origin = 'https://id.example.com', backupEligible = true } = {}) {
     const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
     const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
     const id = crypto.getRandomValues(new Uint8Array(32));

@@ -21,8 +21,8 @@ refresh tokens (people's app sign-ins have none).
 
 ## Results
 
-The reference staging deployment (`https://id-staging.vibernt.ai`) ran all four plans on 2026-11-17, on the release
-production now runs. There were no failures.
+A staging deployment ran all four plans on 2026-11-17, on the release its production now runs. There were no
+failures.
 
 | Profile | Tests | Passed | Review | Warning | Skipped |
 |---|---|---|---|---|---|
@@ -87,7 +87,7 @@ The SQL also creates the test person, with a random password. The script runs ag
 Review the SQL, then apply it to the deployment's database:
 
 ```bash
-npx wrangler d1 execute imprim-staging --remote --config apps/server/wrangler.jsonc --env staging --file conformance.sql
+npx wrangler d1 execute imprim-staging --remote --config apps/server/wrangler.local.jsonc --env staging --file conformance.sql
 ```
 
 `~/.imprim-conformance/plan.json` is the suite configuration for every plan, secrets included.

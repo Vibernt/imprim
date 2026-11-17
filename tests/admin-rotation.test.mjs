@@ -63,7 +63,7 @@ test('logout verifier refuses invalid event bodies, missing subject/sid, nonce, 
     const w = await world(t), now = Math.floor(Date.now()/1000), client = createClient({ issuer: w.env.ISSUER, clientId: 'app', redirectUri: 'https://app.example/callback', fetch: url => w.call(new URL(url).pathname) });
     const claims = { iss: w.env.ISSUER, aud: 'app', sub: 'person', sid: 'sid', jti: 'event', iat: now, exp: now+300, events: { 'http://schemas.openid.net/event/backchannel-logout': {} } };
     for (const patch of [{ sid: 123 }, { sid: '', sub: undefined }, { sub: undefined, sid: undefined }, { nonce: 'forbidden' }, { events: { 'http://schemas.openid.net/event/backchannel-logout': [] } },
-        { events: { 'http://schemas.openid.net/event/backchannel-logout': { extra: true } } }, { events: { 'https://id.vibernt.ai/events/agent-revoked': {} } }, { aud: 'other' }, { iss: 'https://evil.example' }]) {
+        { events: { 'http://schemas.openid.net/event/backchannel-logout': { extra: true } } }, { events: { 'https://id.example.com/events/agent-revoked': {} } }, { aud: 'other' }, { iss: 'https://evil.example' }]) {
         const token = await signAgentJwt(w.env, { ...claims, ...patch }, 'logout+jwt');
         await assert.rejects(client.handleBackchannelLogout(new Request('https://app.example/logout', { method: 'POST', body: new URLSearchParams({ logout_token: token }) })), error => error.code === 'invalid_token');
     }
@@ -71,11 +71,11 @@ test('logout verifier refuses invalid event bodies, missing subject/sid, nonce, 
 
 test('agent revocation verifier enforces audience, event, time, type and resource boundaries', async t => {
     const w = await world(t), now = Math.floor(Date.now()/1000), client = createClient({ issuer: w.env.ISSUER, clientId: 'app', redirectUri: 'https://app.example/callback', fetch: url => w.call(new URL(url).pathname) });
-    const claims = { iss: w.env.ISSUER, aud: 'app', sub: 'person', grant_id: 'grant', resource: 'https://app.example/w/team/mcp', jti: 'event', iat: now, exp: now+300, events: { 'https://id.vibernt.ai/events/agent-revoked': {} } };
+    const claims = { iss: w.env.ISSUER, aud: 'app', sub: 'person', grant_id: 'grant', resource: 'https://app.example/w/team/mcp', jti: 'event', iat: now, exp: now+300, events: { 'https://id.example.com/events/agent-revoked': {} } };
     const request = async (patch = {}, typ = 'secevent+jwt') => new Request('https://app.example/logout', { method: 'POST', body: new URLSearchParams({ revocation_token: await signAgentJwt(w.env, { ...claims, ...patch }, typ) }) });
     assert.deepEqual(await client.handleAgentRevocation(await request()), { sub: 'person', grant_id: 'grant', resource: claims.resource, jti: 'event' });
     for (const patch of [{ aud: 'wrong' }, { iss: 'https://evil.example' }, { grant_id: '' }, { sub: '' }, { jti: '' }, { resource: 'http://app.example/mcp' }, { exp: now }, { exp: now+901 }, { nonce: 'bad' },
-        { events: { 'http://schemas.openid.net/event/backchannel-logout': {} } }, { events: { 'https://id.vibernt.ai/events/agent-revoked': [] } }])
+        { events: { 'http://schemas.openid.net/event/backchannel-logout': {} } }, { events: { 'https://id.example.com/events/agent-revoked': [] } }])
         await assert.rejects(client.handleAgentRevocation(await request(patch)));
     await assert.rejects(client.handleAgentRevocation(await request({}, 'at+jwt')));
     await assert.rejects(client.handleAgentRevocation(await request({}, 'JWT')), 'an ID-token type is not a security event (RFC 8417)');

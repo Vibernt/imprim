@@ -56,6 +56,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         assert(process.argv.length === 3 || process.argv.length === 4, 'Usage: node scripts/import-users.mjs export.json [realm] > import.sql');
         const output = importSql(JSON.parse(readFileSync(process.argv[2], 'utf8')), process.argv[3]);
         process.stdout.write(output);
-        process.stderr.write('Generated SQL only; no network calls made. Review/backup first, then an operator may run:\nwrangler d1 execute vibernt-identity --remote --config apps/server/wrangler.jsonc --file import.sql\n');
+        process.stderr.write('Generated SQL only; no network calls made. Review/backup first, then an operator may run:\nwrangler d1 execute <database> --remote --config apps/server/wrangler.local.jsonc --file import.sql\n');
     } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -17,7 +17,7 @@ async function fakeProvider(t, { type = 'oidc', issuer = 'https://sso.acme.test'
     t.mock.method(globalThis, 'fetch', async (url, init = {}) => {
         url = String(url);
         assert.equal(init.redirect, 'manual');
-        if (url.includes('challenges.cloudflare.com')) return Response.json({ success: true, action: 'sign_in', hostname: 'id.vibernt.ai' });
+        if (url.includes('challenges.cloudflare.com')) return Response.json({ success: true, action: 'sign_in', hostname: 'id.example.com' });
         if (url === `${base}/.well-known/openid-configuration`) return Response.json({ issuer: discoveryIssuer ?? (type === 'microsoft' ? 'https://login.microsoftonline.com/{tenantid}/v2.0' : issuer),
             authorization_endpoint: endpoints.authorize, token_endpoint: endpoints.token, jwks_uri: endpoints.jwks });
         if (url === endpoints.jwks) return Response.json({ keys: [jwk] });

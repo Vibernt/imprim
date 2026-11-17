@@ -2,11 +2,11 @@ import { d1Database } from './sqlite.mjs';
 import { realmEnv } from '../../apps/server/src/realms/realm.mjs';
 import worker from '../../apps/server/src/worker.mjs';
 import { sha256, challengeOf } from '../../apps/server/src/lib/crypto.mjs';
-// The test deployment is realm 'default' at https://id.vibernt.ai, configured as an operator would (scripts/realm.mjs).
+// The test deployment is realm 'default' at https://id.example.com, configured as an operator would (scripts/realm.mjs).
 export async function world(t, policy = 'open') {
     const mails = [], pending = [];
     const base = {
-        SEALING_KEY: 'ab'.repeat(32), EMAIL_FROM: 'signin@vibernt.ai',
+        SEALING_KEY: 'ab'.repeat(32), EMAIL_FROM: 'signin@example.com',
         TURNSTILE_SECRET: 'test-secret', TURNSTILE_SITE_KEY: 'test-site-key',
         GOOGLE_CLIENT_ID: 'google-client', GOOGLE_CLIENT_SECRET: 'google-secret',
         GITHUB_CLIENT_ID: 'github-client', GITHUB_CLIENT_SECRET: 'github-secret',
@@ -15,7 +15,7 @@ export async function world(t, policy = 'open') {
         API_LIMITER: { async limit() { return { success: true }; } },
         AGENT_LIMITER: { async limit() { return { success: true }; } }
     };
-    base.DB.db.prepare("UPDATE realms SET issuer='https://id.vibernt.ai', display_name='Vibernt' WHERE id='default'").run();
+    base.DB.db.prepare("UPDATE realms SET issuer='https://id.example.com', display_name='Vibernt' WHERE id='default'").run();
     base.DB.db.prepare("INSERT INTO admins(realm_id,email,role,created) VALUES('default','admin@example.com','platform',0)").run();
     const env = realmEnv(base, base.DB.db.prepare("SELECT * FROM realms WHERE id='default'").get());
     t.after(() => env.DB.db.close());
@@ -50,7 +50,7 @@ export async function begin(w, cookie = '', changes = {}) {
 export function turnstile(t, overrides = {}) {
     t.mock.method(globalThis, 'fetch', async (url) => {
         if (!String(url).includes('challenges.cloudflare.com')) throw new Error('Unexpected network request');
-        return Response.json({ success: true, action: 'sign_in', hostname: 'id.vibernt.ai', ...overrides });
+        return Response.json({ success: true, action: 'sign_in', hostname: 'id.example.com', ...overrides });
     });
 }
 export async function login(w, t, email = 'person@example.com') {

@@ -39,8 +39,8 @@ Report a suspected vulnerability privately through GitHub's private vulnerabilit
 ## Not yet verified live
 
 This repository does not record which commit a deployment runs or which clients are registered there; check the
-Worker's deployments in Cloudflare before relying on a behaviour described here. The reference deployment's state
-(see the README's Status) is:
+Worker's deployments in Cloudflare before relying on a behaviour described here. Vibernt's deployment, the
+reference for these notes, was checked as follows:
 
 - **Production** runs every migration, `0001`–`0023`. On 2026-11-17 a person connected Claude Code to a Vibernt app's
   MCP server through production: Claude Code registered with its client ID metadata document, the person signed in

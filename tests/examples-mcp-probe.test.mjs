@@ -128,8 +128,8 @@ test('the probe refuses to start without its configuration', async t => {
 });
 
 test('the probe app client is valid seed SQL', () => {
-    const sql = clientSeedSql(probeClient('https://imprim-probe.vibernt.ai', 'a'.repeat(64)));
+    const sql = clientSeedSql(probeClient('https://probe.example.com', 'a'.repeat(64)));
     assert.match(sql, /^-- Review before applying/);
-    assert.match(sql, /"https:\/\/imprim-probe\.vibernt\.ai\/w\/"/);
+    assert.match(sql, /"https:\/\/probe\.example\.com\/w\/"/);
     assert.match(sql, /'on'/);
 });

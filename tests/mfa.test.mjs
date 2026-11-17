@@ -11,7 +11,7 @@ import { agentWorld } from './support/agents.mjs';
 test('QR matrices equal qrencode 4.x output for the same text (level M, versions 1-10)', () => {
     // Fingerprints of `qrencode -8 -l M -m 0 -t ASCII`, with the mask qrencode chose.
     const vectors = [['A', 4, '61abe46a715ded835c51446cd58ca00a085e94c5f73b384a31e5ec37e38dd88d'], ['hello', 7, 'fa33978414ee2a6ced862c61c54766a2bdb32efa554ad0e0dbe43fb3244c27db'],
-        ['https://id.vibernt.ai', 2, '0f4ebb213bbb3b8f7be12e60579367fe932f12b2e60a759cee957bca462aa8d2'],
+        ['https://id.example.com', 0, '069d3e95eeebb2ec4ae33705dbced66943f1fa300cd1fa3015f33fc1475224c8'],
         ['otpauth://totp/Vibernt:person%40example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=Vibernt&algorithm=SHA1&digits=6&period=30', 7, '9ef954e04b7d33658193d376b13f496b1c539afe2588d66949f805d837cd84ed'],
         ['x'.repeat(200), 0, '8d3d66f6b58535e7b7dd4dac8174c6b130af6d7d209ba7d13a8fdcb5e59551f2']];
     for (const [text, mask, hash] of vectors) {
@@ -170,7 +170,7 @@ test('administrators must enrol and verify a second factor before the console op
     const jar = jarOf(browser, cookieJar(await w.post('/v1/auth/magic/verify', { token }, browser)));
     const html = await w.call('/admin/clients', { headers: { cookie: jar } });
     assert.equal(html.status, 303);
-    assert.equal(html.headers.get('location'), 'https://id.vibernt.ai/account/mfa?next=%2Fadmin%2Fclients');
+    assert.equal(html.headers.get('location'), 'https://id.example.com/account/mfa?next=%2Fadmin%2Fclients');
     const api = await w.call('/admin/api/clients', { headers: { cookie: jar } });
     assert.equal((await api.json()).error, 'mfa_enrolment_required');
     await enrolMfa(w, jar, csrfOf(jar));
@@ -190,8 +190,8 @@ test('an app can require a recent second factor before a person approves an agen
 });
 test('imprim-client passes acr_values and max_age for step-up', async () => {
     const { createClient } = await import('../packages/imprim-client/index.mjs');
-    const client = createClient({ issuer: 'https://id.vibernt.ai', clientId: 'app', redirectUri: 'https://app.example/callback', fetch: async () => Response.json({ issuer: 'https://id.vibernt.ai', id_token_signing_alg_values_supported: ['ES256'], code_challenge_methods_supported: ['S256'],
-        authorization_endpoint: 'https://id.vibernt.ai/authorize', token_endpoint: 'https://id.vibernt.ai/token', jwks_uri: 'https://id.vibernt.ai/.well-known/jwks.json', end_session_endpoint: 'https://id.vibernt.ai/logout' }) });
+    const client = createClient({ issuer: 'https://id.example.com', clientId: 'app', redirectUri: 'https://app.example/callback', fetch: async () => Response.json({ issuer: 'https://id.example.com', id_token_signing_alg_values_supported: ['ES256'], code_challenge_methods_supported: ['S256'],
+        authorization_endpoint: 'https://id.example.com/authorize', token_endpoint: 'https://id.example.com/token', jwks_uri: 'https://id.example.com/.well-known/jwks.json', end_session_endpoint: 'https://id.example.com/logout' }) });
     const url = new URL((await client.startLogin({ acrValues: 'urn:imprim:acr:mfa', maxAge: 300 })).url);
     assert.equal(url.searchParams.get('acr_values'), 'urn:imprim:acr:mfa');
     assert.equal(url.searchParams.get('max_age'), '300');

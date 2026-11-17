@@ -102,7 +102,7 @@ is re-checked inside each write's transaction.
 2. Store each secret:
 
    ```bash
-   wrangler secret put ACME_GOOGLE_CLIENT_SECRET --env production
+   wrangler secret put ACME_GOOGLE_CLIENT_SECRET --config wrangler.local.jsonc --env production
    ```
 
 3. Write `realm.json`:
@@ -122,13 +122,13 @@ is re-checked inside each write's transaction.
 4. Apply it:
 
    ```bash
-   wrangler d1 execute <database> --remote --env production --file realm.sql
+   wrangler d1 execute <database> --remote --config wrangler.local.jsonc --env production --file realm.sql
    ```
 
 5. Add the host to the environment's `routes` as a custom domain, then deploy:
 
    ```bash
-   wrangler deploy --env production
+   wrangler deploy --config wrangler.local.jsonc --env production
    ```
 
 6. Check `https://id.example.com/.well-known/openid-configuration`. Its `issuer` must be the new host.

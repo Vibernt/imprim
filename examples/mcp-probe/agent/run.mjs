@@ -19,7 +19,7 @@ const { values, positionals } = parseArgs({ allowPositionals: true, options: {
     resource: { type: 'string' }, 'app-secret-file': { type: 'string' }, 'app-id': { type: 'string', default: 'probe' } } });
 const [command = 'check', argument] = positionals;
 const resource = values.resource;
-if (!resource || !/^https:\/\/[^/]+\/w\/[a-z0-9-]+\/mcp$/.test(resource)) usage('--resource must be a workspace MCP URL such as https://imprim-probe.vibernt.ai/w/team-one/mcp');
+if (!resource || !/^https:\/\/[^/]+\/w\/[a-z0-9-]+\/mcp$/.test(resource)) usage('--resource must be a workspace MCP URL such as https://probe.example.com/w/team-one/mcp');
 const origin = new URL(resource).origin, agentId = `${origin}/agent/client.json`;
 const secret = values['app-secret-file'] ? readFileSync(values['app-secret-file'], 'utf8').trim() : null;
 const appAuth = secret && `Basic ${btoa(`${encodeURIComponent(values['app-id'])}:${encodeURIComponent(secret)}`)}`;

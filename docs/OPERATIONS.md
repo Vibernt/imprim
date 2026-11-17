@@ -130,12 +130,12 @@ SELECT event, COUNT(*) FROM audit WHERE created > (unixepoch() - 86400) * 1000 G
 Back up before every migration and every import:
 
 ```bash
-wrangler d1 export <database> --remote --env production --output backup.sql
+wrangler d1 export <database> --remote --config wrangler.local.jsonc --env production --output backup.sql
 ```
 
 Keep `SEALING_KEY` backed up separately: a database backup without it cannot sign anything or read TOTP secrets.
 
-`wrangler rollback --env production` returns the Worker to its previous version. Migrations are not rolled back.
+`wrangler rollback --config wrangler.local.jsonc --env production` returns the Worker to its previous version. Migrations are not rolled back.
 Restore a backup only if a migration itself is wrong, and treat that as an incident: a restore loses every session,
 grant and audit row written since the backup.
 
@@ -189,7 +189,7 @@ When an app moves to Imprim, import its users so each keeps their id as `sub`:
 3. Back up D1, review the SQL, then apply it:
 
    ```bash
-   wrangler d1 execute <database> --remote --env production --file import.sql
+   wrangler d1 execute <database> --remote --config wrangler.local.jsonc --env production --file import.sql
    ```
 
    D1 does not apply a large file as one transaction. On a conflict, stop, resolve it deliberately and rerun. A

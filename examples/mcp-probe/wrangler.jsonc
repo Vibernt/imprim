@@ -7,12 +7,12 @@
   "compatibility_date": "2026-11-04",
   "workers_dev": false,
   "preview_urls": false,
-  "routes": [{ "pattern": "imprim-probe.vibernt.ai", "custom_domain": true }],
+  "routes": [{ "pattern": "probe.example.com", "custom_domain": true }],
   // No credentials ever appear in this Worker's URLs, but invocation records stay off to match the identity Worker.
   "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
   "vars": {
-    "ORIGIN": "https://imprim-probe.vibernt.ai",
-    "ISSUER": "https://id-staging.vibernt.ai",
+    "ORIGIN": "https://probe.example.com",
+    "ISSUER": "https://id-staging.example.com",
     "CLIENT_ID": "probe",
     "WORKSPACES": "team-one,team-two",
     "SCOPE": "probe.read"

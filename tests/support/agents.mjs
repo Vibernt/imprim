@@ -19,7 +19,7 @@ export async function agentWorld(t) {
         const url = String(input); network.calls.push({ url, init });
         assert.equal(init.redirect, 'manual');
         if (url.startsWith('https://cloudflare-dns.com/')) return Response.json({ Status: 0, Answer: network.addresses.map(data => ({ type: data.includes(':') ? 28 : 1, data })) });
-        if (url.startsWith('https://challenges.cloudflare.com/')) return Response.json({ success: true, action: 'sign_in', hostname: 'id.vibernt.ai' });
+        if (url.startsWith('https://challenges.cloudflare.com/')) return Response.json({ success: true, action: 'sign_in', hostname: 'id.example.com' });
         if (url === metadataId) return Response.json(network.document, { status: network.status, headers: { 'cache-control': network.cache } });
         throw Error('Unexpected network request: ' + url);
     });

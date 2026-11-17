@@ -4,7 +4,7 @@ import { world } from './support/world.mjs';
 import { composeEmail } from '../apps/server/src/services/email/send.mjs';
 import { EMAILS } from '../apps/server/src/services/email/messages.mjs';
 import { catalogues, LANGUAGES } from '../apps/server/src/i18n/index.mjs';
-const ISSUER = 'https://id.vibernt.ai';
+const ISSUER = 'https://id.example.com';
 const TIME = Date.UTC(2026, 10, 17, 9, 30);
 const footer = '\n\n--\nAcme accounts run on Imprim.\nHelp: help@acme.example\n© Acme Ltd';
 const branding = { name: 'Acme', legal_name: 'Acme Ltd', support_email: 'help@acme.example', copy: { footer: 'Acme accounts run on Imprim.' } };
@@ -47,7 +47,7 @@ test('every kind of email has an exact English text part, unchanged, and an HTML
         const mail = await composeEmail(w.env, { kind, to: 'p@example.com', locale: 'en', ...options });
         assert.equal(mail.subject, subject, kind);
         assert.equal(mail.text, text, kind);
-        assert.equal(mail.from, 'signin@vibernt.ai');
+        assert.equal(mail.from, 'signin@example.com');
         assert.match(mail.html, /^<!doctype html><html lang="en" dir="ltr">/, kind);
         assert.ok(mail.html.includes('<meta name="color-scheme" content="light dark">'), kind);
         assert.ok(mail.html.includes('@media (prefers-color-scheme: dark)'), kind);
@@ -131,7 +131,7 @@ test('sent mail carries both parts, and a failed send never logs the link', asyn
     assert.ok(mail.html.includes(mail.text.match(/https:\/\/\S+#token=[\w-]+/)[0]));
     const logged = [];
     t.mock.method(console, 'error', (...args) => logged.push(args.join(' ')));
-    w.env.EMAIL.send = async () => { throw Object.assign(new Error('provider failed https://id.vibernt.ai/login#token=secret'), { code: 'E_X' }); };
+    w.env.EMAIL.send = async () => { throw Object.assign(new Error('provider failed https://id.example.com/login#token=secret'), { code: 'E_X' }); };
     const { notify } = await import('../apps/server/src/services/notify.mjs');
     const pending = []; notify(w.env, { waitUntil: p => pending.push(p) }, 'p@example.com', 'account_deleted');
     await Promise.all(pending);

@@ -12,7 +12,7 @@ async function keyPair(kid = 'm1') {
 }
 async function assertion(pair, clientId, claims = {}) {
     const now = Math.floor(Date.now() / 1000);
-    const input = `${b64({ alg: 'ES256', kid: pair.jwk.kid })}.${b64({ iss: clientId, sub: clientId, aud: 'https://id.vibernt.ai/token', exp: now + 120, jti: crypto.randomUUID(), ...claims })}`;
+    const input = `${b64({ alg: 'ES256', kid: pair.jwk.kid })}.${b64({ iss: clientId, sub: clientId, aud: 'https://id.example.com/token', exp: now + 120, jti: crypto.randomUUID(), ...claims })}`;
     const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, new TextEncoder().encode(input));
     return `${input}.${Buffer.from(sig).toString('base64url')}`;
 }
@@ -111,8 +111,8 @@ test('admins create service clients with public keys, catalogue scopes and prefi
 test('discovery lists introspection, revocation and client_credentials', async t => {
     const w = await world(t);
     const d = await (await w.call('/.well-known/openid-configuration')).json();
-    assert.equal(d.introspection_endpoint, 'https://id.vibernt.ai/introspect');
-    assert.equal(d.revocation_endpoint, 'https://id.vibernt.ai/revoke');
+    assert.equal(d.introspection_endpoint, 'https://id.example.com/introspect');
+    assert.equal(d.revocation_endpoint, 'https://id.example.com/revoke');
     assert.ok(d.grant_types_supported.includes('client_credentials'));
     assert.ok(d.token_endpoint_auth_methods_supported.includes('private_key_jwt'));
 });

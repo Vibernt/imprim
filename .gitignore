@@ -15,3 +15,6 @@ docs/.jekyll-cache/
 probe-client.sql
 conformance.sql
 email-preview/
+
+# Your deployment's real Wrangler config (hosts, database ids, queues). See docs/DEPLOY.md.
+wrangler.local.jsonc

@@ -26,8 +26,8 @@ test('workspace and Worker configuration: neutral template, staging and producti
         assert.deepEqual(target.triggers.crons, ['* * * * *']);
         for (const key of ['ISSUER','ADMIN_EMAILS','SEALING_KEY','GITHUB_CLIENT_ID','GITHUB_CLIENT_SECRET','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET','TURNSTILE_SECRET']) assert.equal(target.vars[key], undefined, key);
     }
-    assert.equal(config.env.production.name, 'vibernt-identity', 'production keeps its deployed Worker');
-    assert.deepEqual(config.env.production.routes, [{ pattern: 'id.vibernt.ai', custom_domain: true }]);
+    assert.equal(config.env.production.name, 'imprim', 'production uses the neutral Worker name');
+    assert.deepEqual(config.env.production.routes, [{ pattern: 'id.example.com', custom_domain: true }]);
     assert.notEqual(config.env.staging.ratelimits[0].namespace_id, config.env.production.ratelimits[0].namespace_id);
-    assert.ok(!/@[a-z0-9-]+\.[a-z]+"/i.test(read('apps/server/wrangler.jsonc').replace(/signin@vibernt\.ai/g, '')), 'no personal address is committed');
+    assert.ok(!/@[a-z0-9-]+\.[a-z]+"/i.test(read('apps/server/wrangler.jsonc').replace(/signin@example\.com/g, '')), 'no personal address is committed');
 });

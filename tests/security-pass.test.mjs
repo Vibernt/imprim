@@ -17,7 +17,7 @@ async function keyPair() {
 }
 async function assertion(pair, claims = {}, header = {}) {
     const now = Math.floor(Date.now() / 1000);
-    const input = `${b64({ alg: 'ES256', kid: 'k1', typ: 'JWT', ...header })}.${b64({ iss: metadataId, sub: metadataId, aud: 'https://id.vibernt.ai/token', exp: now + 120, jti: crypto.randomUUID(), ...claims })}`;
+    const input = `${b64({ alg: 'ES256', kid: 'k1', typ: 'JWT', ...header })}.${b64({ iss: metadataId, sub: metadataId, aud: 'https://id.example.com/token', exp: now + 120, jti: crypto.randomUUID(), ...claims })}`;
     const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, new TextEncoder().encode(input));
     return `${input}.${Buffer.from(signature).toString('base64url')}`;
 }
@@ -52,7 +52,7 @@ test('S1: a key-bound agent must sign every token request; a claimed client_id a
     // Device flow: an impostor without the key cannot even obtain a user code.
     await error(await w.form('/device_authorization', { client_id: metadataId, resource, scope: 'read' }), 'invalid_client', 401);
     const device = await w.form('/device_authorization', { client_id: metadataId, resource, scope: 'read', client_assertion_type: ASSERTION,
-        client_assertion: await assertion(pair, { aud: 'https://id.vibernt.ai/device_authorization' }) });
+        client_assertion: await assertion(pair, { aud: 'https://id.example.com/device_authorization' }) });
     assert.equal(device.status, 200, await device.clone().text());
     // Code flow: consent says the host is verified by key, and the code is useless without an assertion.
     const flow = await w.start();
@@ -152,7 +152,7 @@ test('S5: /account pages connected agents and a person cannot hold more than the
 
 // S7, S8: user codes use all 20 letters; budgets key on the IPv6 /64 and on the recipient.
 test('S7: IPv6 budgets key on the /64; IPv4 stays exact', () => {
-    const request = ip => new Request('https://id.vibernt.ai/', { headers: { 'cf-connecting-ip': ip } });
+    const request = ip => new Request('https://id.example.com/', { headers: { 'cf-connecting-ip': ip } });
     assert.equal(clientAddress(request('2001:db8:1:2:3:4:5:6')), clientAddress(request('2001:db8:1:2:ffff::1')));
     assert.notEqual(clientAddress(request('2001:db8:1:2::1')), clientAddress(request('2001:db8:1:3::1')));
     assert.equal(clientAddress(request('2001:0db8:0001:0002::')), '2001:db8:1:2::/64');
@@ -238,14 +238,14 @@ test('S18: the relying-party client refuses a callback without iss', async t => 
 });
 test('hygiene: a failed discovery is not cached', async () => {
     let calls = 0;
-    const client = createClient({ issuer: 'https://id.vibernt.ai', clientId: 'app', redirectUri: 'https://app.example/callback', fetch: async () => {
+    const client = createClient({ issuer: 'https://id.example.com', clientId: 'app', redirectUri: 'https://app.example/callback', fetch: async () => {
         calls++;
         if (calls === 1) throw new Error('offline');
-        return Response.json({ issuer: 'https://id.vibernt.ai', id_token_signing_alg_values_supported: ['ES256'], code_challenge_methods_supported: ['S256'],
-            authorization_endpoint: 'https://id.vibernt.ai/authorize', token_endpoint: 'https://id.vibernt.ai/token', jwks_uri: 'https://id.vibernt.ai/.well-known/jwks.json', end_session_endpoint: 'https://id.vibernt.ai/logout' });
+        return Response.json({ issuer: 'https://id.example.com', id_token_signing_alg_values_supported: ['ES256'], code_challenge_methods_supported: ['S256'],
+            authorization_endpoint: 'https://id.example.com/authorize', token_endpoint: 'https://id.example.com/token', jwks_uri: 'https://id.example.com/.well-known/jwks.json', end_session_endpoint: 'https://id.example.com/logout' });
     } });
     await assert.rejects(client.startLogin(), error => error.code === 'network');
-    assert.ok((await client.startLogin()).url.startsWith('https://id.vibernt.ai/authorize?'));
+    assert.ok((await client.startLogin()).url.startsWith('https://id.example.com/authorize?'));
 });
 test('S19: duplicate cookies for other names are ignored; duplicates of identity cookies are refused', async t => {
     const w = await world(t), { cookie } = await login(w, t);
@@ -306,7 +306,7 @@ test('review 3: a provider cannot create an account on a stale email that the ma
             if (url.endsWith('/access_token')) return Response.json({ access_token: 'provider-token' });
             if (url.endsWith('/user')) return Response.json({ id: 99, login: 'attacker' });
             if (url.includes('/user/emails')) return Response.json([{ email: 'person@example.com', primary: true, verified: true }]);
-            if (url.includes('challenges.cloudflare.com')) return Response.json({ success: true, action: 'sign_in', hostname: 'id.vibernt.ai' });
+            if (url.includes('challenges.cloudflare.com')) return Response.json({ success: true, action: 'sign_in', hostname: 'id.example.com' });
             throw new Error('unexpected network');
         });
         const flow = await begin(w);

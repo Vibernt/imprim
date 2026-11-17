@@ -5,7 +5,7 @@ import * as sdk from '../packages/imprim-client/index.mjs';
 import { world } from './support/world.mjs';
 import { signAgentJwt } from '../apps/server/src/agents/grants.mjs';
 const logoutEvent = 'http://schemas.openid.net/event/backchannel-logout';
-const revokeEvent = 'https://id.vibernt.ai/events/agent-revoked'; // issuer-relative: ${iss}/events/agent-revoked
+const revokeEvent = 'https://id.example.com/events/agent-revoked'; // issuer-relative: ${iss}/events/agent-revoked
 const resource = 'https://app.example/w/team/mcp';
 async function fixture(t) {
     const w = await world(t);

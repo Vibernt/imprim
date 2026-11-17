@@ -5,10 +5,9 @@ A small MCP server that accepts agents through Imprim. It does two jobs:
 - **A reference integration.** It shows everything an app's MCP server does with Imprim, in about 230 lines with
   no dependencies: the challenge, protected resource metadata, exact-audience verification, refusing revoked grants
   and replayed DPoP proofs, intersecting scopes with the person's role, and a verified back-channel.
-- **A live test target.** The reference deployment runs it at `https://imprim-probe.vibernt.ai`, against staging
-  (`https://id-staging.vibernt.ai`), to test real AI clients. It logs every request (method, path, status, user
-  agent, how the call authenticated, which agent and grant), never a token, so a test shows exactly what each
-  client tried.
+- **A live test target.** Deploy it beside your staging issuer, for example at `https://probe.example.com`, to test
+  real AI clients. It logs each request's method, path, status, user agent, authentication method, agent and
+  grant. Tokens stay out of the log.
 
 | Path | What it does |
 |---|---|
@@ -31,7 +30,7 @@ Workspaces are the `WORKSPACES` var (`team-one,team-two`). `whoami` returns the 
 | `migrations/0001_probe.sql` | Accepted events and seen DPoP proof ids |
 | `setup.mjs` | Makes the app client: a secret file and reviewed SQL |
 | `agent/run.mjs` | The scripted reference agent |
-| `wrangler.jsonc` | The reference deployment's settings |
+| `wrangler.jsonc` | Example deployment settings |
 
 Tests: `tests/examples-mcp-probe.test.mjs` runs the probe against the real Imprim Worker.
 
@@ -39,10 +38,12 @@ Tests: `tests/examples-mcp-probe.test.mjs` runs the probe against the real Impri
 
 Each step changes something outside this repository, so run them one at a time and read the output.
 
-1. **Make the app client.** This writes a new secret to a file only you can read, and prints SQL to review:
+1. **Make the app client.** First set your probe host and staging issuer in `wrangler.jsonc` (`routes`, `ORIGIN`
+   and `ISSUER`). Pass the same probe origin to the setup script. It writes a secret file only you can read and
+   prints SQL to review.
 
    ```bash
-   node examples/mcp-probe/setup.mjs --secret-out ~/.imprim-probe-secret > probe-client.sql
+   node examples/mcp-probe/setup.mjs --origin https://probe.example.com --secret-out ~/.imprim-probe-secret > probe-client.sql
    ```
 
 2. **Register it on staging** after reviewing `probe-client.sql`:
@@ -70,7 +71,7 @@ Each step changes something outside this repository, so run them one at a time a
 5. **Invite the tester** to the probe app (staging signs in by email link):
 
    ```bash
-   node examples/mcp-probe/agent/run.mjs invite you@example.com --resource https://imprim-probe.vibernt.ai/w/team-one/mcp --app-secret-file ~/.imprim-probe-secret
+   node examples/mcp-probe/agent/run.mjs invite you@example.com --resource https://probe.example.com/w/team-one/mcp --app-secret-file ~/.imprim-probe-secret
    ```
 
 Watch requests while testing:
@@ -87,7 +88,7 @@ after a lost refresh response, reuse detection revoking the grant, and that the 
 before the last token expires. It takes about a minute and a half.
 
 ```bash
-node examples/mcp-probe/agent/run.mjs check --resource https://imprim-probe.vibernt.ai/w/team-one/mcp --app-secret-file ~/.imprim-probe-secret
+node examples/mcp-probe/agent/run.mjs check --resource https://probe.example.com/w/team-one/mcp --app-secret-file ~/.imprim-probe-secret
 ```
 
 `grants` lists the live grants on the resource, and `revoke <grant_id>` revokes one, as a workspace admin screen
@@ -95,7 +96,7 @@ would.
 
 ## Testing an AI client
 
-Add `https://imprim-probe.vibernt.ai/w/team-one/mcp` as a remote MCP server in the client, connect, sign in and
+Add `https://probe.example.com/w/team-one/mcp` as a remote MCP server in the client, connect, sign in and
 approve, then ask it to call `whoami`. For each client, record:
 
 | Question | Where to look |

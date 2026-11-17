@@ -29,7 +29,7 @@ async function setup(t) {
         const original = globalThis.fetch;
         globalThis.fetch = async url => {
             assert.match(String(url), /challenges.cloudflare.com/);
-            return Response.json({ success: true, action: 'sign_in', hostname: 'id.vibernt.ai' });
+            return Response.json({ success: true, action: 'sign_in', hostname: 'id.example.com' });
         };
         try {
             await w.post('/v1/auth/magic/request', { request_id: flow.request_id, email: 'person@example.com', turnstile: crypto.randomUUID() }, flow.cookie);
@@ -99,7 +99,7 @@ test('client SSO, disabled method and logout URL', async t => {
     x.w.env.DB.db.exec(`UPDATE clients SET sign_in_methods='["google"]' WHERE id='app'`);
     const refused = await x.start('', { method: 'email' });
     const original = globalThis.fetch;
-    globalThis.fetch = async () => Response.json({ success: true, action: 'sign_in', hostname: 'id.vibernt.ai' });
+    globalThis.fetch = async () => Response.json({ success: true, action: 'sign_in', hostname: 'id.example.com' });
     try { assert.equal((await x.w.post('/v1/auth/magic/request', { request_id: refused.request_id, email: 'person@example.com', turnstile: crypto.randomUUID() }, refused.cookie)).status, 403); }
     finally { globalThis.fetch = original; }
     const logout = new URL(await x.client.logoutUrl({ postLogoutRedirectUri: 'https://app.example/bye', state: 'bye' }));
@@ -153,7 +153,7 @@ test('client accepts a newly published signing key after unknown-kid refresh', a
 });
 
 test('client reports failed discovery through a typed error', async () => {
-    const client = createClient({ issuer: 'https://id.vibernt.ai', clientId: 'app', redirectUri: 'https://app.example/callback', fetch: async () => { throw Error('offline'); } });
+    const client = createClient({ issuer: 'https://id.example.com', clientId: 'app', redirectUri: 'https://app.example/callback', fetch: async () => { throw Error('offline'); } });
     await rejects(client.startLogin(), 'network');
 });
 

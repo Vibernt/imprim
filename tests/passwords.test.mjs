@@ -9,7 +9,7 @@ const sha1 = value => createHash('sha1').update(value).digest('hex').toUpperCase
 function network(t, state = { hibp: 'ok', calls: [] }) {
     t.mock.method(globalThis, 'fetch', async url => {
         url = String(url); state.calls.push(url);
-        if (url.includes('challenges.cloudflare.com')) return Response.json({ success: true, action: 'sign_in', hostname: 'id.vibernt.ai' });
+        if (url.includes('challenges.cloudflare.com')) return Response.json({ success: true, action: 'sign_in', hostname: 'id.example.com' });
         if (url.startsWith('https://api.pwnedpasswords.com/range/')) {
             if (state.hibp === 'down') throw new TypeError('network');
             if (state.hibp === '503') return new Response('', { status: 503 });

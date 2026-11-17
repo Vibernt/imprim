@@ -44,7 +44,7 @@ Foundation uses for certification, with **no failures** in all four OpenID provi
 | RP-Initiated Logout OP | 11 | 3 passed, 8 for review (screenshots) |
 | Back-Channel Logout OP | 2 | Passed |
 
-Run on 2026-11-17 against the reference staging deployment, the same release production runs. How to run it,
+Run on 2026-11-17 against a staging deployment of the release now in production. How to run it,
 what each warning and skip means, and what the suite found are in [OpenID certification](docs/CERTIFICATION.md).
 The suite itself is run by hand. Imprim's own tests of the behaviour it checks,
 [`tests/oidc-certification.test.mjs`](tests/oidc-certification.test.mjs) and [`tests/rs256.test.mjs`](tests/rs256.test.mjs),
@@ -128,17 +128,11 @@ fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (IS
 
 ## Status
 
-Vibernt runs Imprim in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`.
-Both run the same release, deployed on 2026-11-17 (migrations `0001`–`0023`; see [Deploying](docs/DEPLOY.md)). It adds
-agents at scale (token budgets that suit hosted agents, grants API paging, `agent_assurance`, client 0.7.0's grant calls),
-pages and emails in five languages with branded HTML email, the changes the OpenID conformance suite needed
-(classic OpenID Connect per app, `id_token_hint`, `POST /authorize`, `client_secret_post`, RS256 ID tokens) and the
-fixes it found, to the 2026-11-15 release: the security pass, realms, passwords, two-factor, the account pages,
-passkeys, the provider registry, machines, DPoP, user events, branding and the Fire interface.
-On 2026-11-17 Claude Code connected to a Vibernt app's MCP server through production: a person approved a read-only
-grant, the token refreshed after its 60 seconds, and revoking it from the account page reached the app in 7 seconds.
-What has not been verified against live Cloudflare is listed in [Security](docs/SECURITY.md#not-yet-verified-live).
-What comes next is in the [Roadmap](docs/ROADMAP.md).
+Imprim runs in production for Vibernt's apps and passes the OpenID conformance suite (above). In live use, Claude
+Code connects to an app's MCP server with a person's approval, refreshes its 60-second token, and a revocation from the
+account page reaches the app within seconds. What each release changed is in the [Changelog](CHANGELOG.md); what has
+not yet been verified live is in [Security](docs/SECURITY.md#not-yet-verified-live); what comes next is in the
+[Roadmap](docs/ROADMAP.md).
 
 ## Contributing
 

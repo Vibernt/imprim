@@ -17,7 +17,7 @@ cd imprim && npm run test:quiet
 ```
 
 Follow [Deploying](DEPLOY.md): create the D1 database and queues, set `SEALING_KEY`, apply the migrations, create
-your realm and first admin with `scripts/realm.mjs`, and deploy with `wrangler deploy --env staging`. Check
+your realm and first admin with `scripts/realm.mjs`, and deploy with `wrangler deploy --config wrangler.local.jsonc --env staging`. Check
 `https://id.example.com/.well-known/openid-configuration`, then sign in to `/admin` and register your first app.
 
 **Or ask your coding agent** (Claude Code, Cursor, Codex) from the repository root:

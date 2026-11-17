@@ -2,7 +2,7 @@
 // Sets up an Imprim deployment for the OpenID Foundation conformance suite (docs/CERTIFICATION.md). Offline: nothing
 // is registered and nothing leaves this machine.
 //
-//   node scripts/conformance-setup.mjs --issuer https://id-staging.vibernt.ai --alias imprim-staging \
+//   node scripts/conformance-setup.mjs --issuer https://id-staging.example.com --alias imprim-staging \
 //       --email conformance@example.com --out ~/.imprim-conformance > conformance.sql
 //
 // --out is a new directory, mode 0700, that receives the suite's configuration (plan.json, with the test clients'

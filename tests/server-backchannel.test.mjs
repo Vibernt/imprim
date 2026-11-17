@@ -45,7 +45,7 @@ for (const kind of ['logout', 'revocation']) test(`server ${kind} token passes s
         assert.equal(claims.iss, w.env.ISSUER); assert.equal(claims.aud, 'app'); assert.equal(claims.sub, w.user.id);
         assert.equal(claims.jti, row.id); assert.equal(claims.exp - claims.iat, kind === 'logout' ? 120 : 300);
         assert.ok(Number.isInteger(claims.iat)); assert.ok(claims.exp - claims.iat <= 900); assert.equal(Object.hasOwn(claims, 'nonce'), false);
-        assert.deepEqual(claims.events, { [kind === 'logout' ? 'http://schemas.openid.net/event/backchannel-logout' : 'https://id.vibernt.ai/events/agent-revoked']: {} });
+        assert.deepEqual(claims.events, { [kind === 'logout' ? 'http://schemas.openid.net/event/backchannel-logout' : 'https://id.example.com/events/agent-revoked']: {} });
         for (const client of clients) {
             const event = await client.verifyBackchannel(form);
             assert.equal(event.kind, kind); assert.equal(event.claims.sub, w.user.id);
@@ -79,7 +79,7 @@ for (const kind of ['logout','revocation']) test(`${kind} redirect, non-2xx and 
     }
     assert.equal(retries, 4); assert.equal(acknowledgements, 0);
     const config = await readFile(new URL('../apps/server/wrangler.jsonc', import.meta.url), 'utf8');
-    assert.match(config, /"max_retries": 5, "dead_letter_queue": "vibernt-identity-logout-dlq"/);
+    assert.match(config, /"max_retries": 5, "dead_letter_queue": "imprim-production-logout-dlq"/);
 });
 
 test('receiver denies exactly the revoked grant immediately and offline verification expires within 60 seconds', async t => {

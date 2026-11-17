@@ -27,7 +27,7 @@ test('an unknown host is refused before any route runs', async t => {
 test('each realm has its own issuer, discovery and signing keys', async t => {
     const { w, acme } = await twoRealms(t);
     const [ours, theirs] = await Promise.all([w.call('/.well-known/openid-configuration'), acme('/.well-known/openid-configuration')].map(async r => (await r).json()));
-    assert.equal(ours.issuer, 'https://id.vibernt.ai'); assert.equal(theirs.issuer, ACME);
+    assert.equal(ours.issuer, 'https://id.example.com'); assert.equal(theirs.issuer, ACME);
     assert.equal(theirs.token_endpoint, ACME + '/token');
     const a = (await (await w.call('/.well-known/jwks.json')).json()).keys.map(k => k.kid);
     const b = (await (await acme('/.well-known/jwks.json')).json()).keys.map(k => k.kid);
