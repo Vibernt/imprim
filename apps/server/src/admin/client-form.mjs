@@ -9,6 +9,7 @@ const GROUPS = ['sign_in_methods', 'agent_registration_methods'];
 const NUMBERS = ['dev', 'agent_max_grant_days', 'version', 'mfa_trusted_device_days', 'agent_token_rate'];
 // A switch posts its "on" value when checked and nothing otherwise: [on, off].
 export const SWITCHES = { dev: ['1', 0], agent_access: ['on', 'off'], user_events: ['on', 'off'], agent_consent_mfa: ['required', 'off'], agent_dpop: ['required', 'optional'], classic_oidc: ['on', 'off'] };
+export const WORKSPACE_SWITCHES = { personal_workspaces: ['on', 'off'], workspace_admin: ['on', 'off'] };
 const lines = text => text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
 const jsonOr = (text, open, otherwise) => text.trimStart().startsWith(open) ? JSON.parse(text) : otherwise(text);
 function pairs(text) {
@@ -37,6 +38,7 @@ export function clientFromForm(body) {
                 .map(([id, scopes]) => [id, typeof scopes === 'string' ? scopes.split(/[\s,]+/).filter(Boolean) : scopes]));
             else if (key === 'branding') out[key] = JSON.parse(value);
             else if (NUMBERS.includes(key)) out[key] = Number(value);
+            else if (key === 'product' || key === 'initiate_login_uri') out[key] = value === '' ? null : value;
             else out[key] = value;
         } catch (error) {
             if (error.code) throw error;
@@ -46,6 +48,9 @@ export function clientFromForm(body) {
     if (body.editor === '1') {
         for (const name of GROUPS) out[name] ??= [];
         for (const [name, [, off]] of Object.entries(SWITCHES)) out[name] ??= off;
+        // An older editor form does not include the workspace controls.
+        if (Object.hasOwn(body, 'workspaces'))
+            for (const [name, [, off]] of Object.entries(WORKSPACE_SWITCHES)) out[name] ??= off;
     }
     return out;
 }

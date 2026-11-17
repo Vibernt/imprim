@@ -4,7 +4,7 @@
 import { escapeHtml as e } from '../pages/layout.mjs';
 import { hidden, button, linkButton, actions } from '../pages/ui.mjs';
 import { text, shown, list, pairs, json, choice, checks, toggle, amount, cols, formSection, advanced } from '../pages/forms.mjs';
-import { SWITCHES } from './client-form.mjs';
+import { SWITCHES, WORKSPACE_SWITCHES } from './client-form.mjs';
 const NEW = { id: '', redirect_uris: [], post_logout_uris: [], backchannel_uri: '', signup_policy: 'invited', sign_in_methods: ['email'], google_hosted_domains: [],
     allowed_domains: [], branding: { name: '' }, dev: 0, mfa: 'off', mfa_trusted_device_days: 0, agent_consent_mfa: 'off', agent_dpop: 'optional', classic_oidc: 'off', id_token_signed_response_alg: 'ES256', agent_token_rate: 3000, token_exchange_from: {},
     user_events: 'off', agent_access: 'off', agent_registration_methods: ['metadata_document'], agent_allowlist: [], agent_scope_catalogue: {}, agent_resource_prefixes: [], agent_max_grant_days: 90 };
@@ -13,14 +13,30 @@ const HOST = '^[a-z0-9-]+(\\.[a-z0-9-]+)+$';
 // The saved choices first, in their saved order, then the rest: the order of the boxes is the order that is saved.
 const ordered = (saved, known) => [...saved.map(value => [value, known[value] || value]), ...Object.entries(known).filter(([value]) => !saved.includes(value))];
 const on = (value, name) => String(value[name]) === SWITCHES[name][0];
+function workspaceFields(value) {
+    const workspaceToggle = (name, label, desc) => {
+        const [enabled] = WORKSPACE_SWITCHES[name];
+        return toggle({ id: `f-${name}`, name, label, desc, on: enabled, checked: value[name] === enabled });
+    };
+    return `<div class="fd-stack" data-gap="3" role="group" aria-labelledby="workspaces-title"><h3 class="fd-title" id="workspaces-title">Workspaces</h3>${[
+        choice({ id: 'f-workspaces', label: 'Where workspaces are managed', name: 'workspaces', value: value.workspaces ?? 'app',
+            options: [['app', 'In this app'], ['shared', 'Shared through Imprim']] }),
+        text({ id: 'f-product', label: 'Product', name: 'product', value: value.product ?? '', mono: true, maxlength: 40,
+            pattern: '[a-z][a-z0-9\\-]{1,39}', placeholder: 'notes', hint: 'Required for shared workspaces. Apps for the same product use the same name.' }),
+        workspaceToggle('personal_workspaces', 'Personal workspaces', 'Let people create a personal workspace in this app. Requires shared workspaces.'),
+        workspaceToggle('workspace_admin', 'Workspace administration', 'Let this app create team workspaces and manage their products. Requires shared workspaces.'),
+        text({ id: 'f-initiate_login_uri', label: 'Invitation sign-in URL', name: 'initiate_login_uri', value: value.initiate_login_uri ?? '',
+            mono: true, type: 'url', placeholder: 'https://notes.example/sign-in', hint: 'Use HTTPS on the same origin as a redirect URL.' }),
+    ].join('')}</div>`;
+}
 // client: the saved client, or null for a new one. providers: this realm's upstream providers, id to name.
 // Returns the form's markup; the page around it is admin/pages.mjs.
 export function clientForm(client, csrf, { providers = {} } = {}) {
     const value = client || NEW, isNew = !client;
     const path = isNew ? '/admin/clients' : `/admin/clients/${encodeURIComponent(value.id)}`;
-    const app = formSection('app', 'App', 'How this app is known here.', isNew
+    const app = formSection('app', 'App', 'How this app is known here.', (isNew
         ? text({ id: 'f-id', label: 'Client ID', name: 'id', value: value.id, required: true, mono: true, pattern: '[A-Za-z0-9_-]{1,200}', placeholder: 'notes', hint: 'Letters, numbers, dashes and underscores. It can’t change later.' })
-        : shown({ label: 'Client ID', value: value.id, mono: true }));
+        : shown({ label: 'Client ID', value: value.id, mono: true })) + workspaceFields(value));
     const callbacks = formSection('callbacks', 'Callbacks', 'Where this app receives people and events.',
         list({ id: 'f-redirect_uris', label: 'Redirect URLs', name: 'redirect_uris', values: value.redirect_uris, required: true, rows: 3, pattern: '^https?://', placeholder: 'https://notes.example/callback', hint: 'Exact URLs. People return here after signing in.' }) +
         list({ id: 'f-post_logout_uris', label: 'Sign-out URLs', name: 'post_logout_uris', values: value.post_logout_uris, pattern: '^https?://', placeholder: 'https://notes.example/signed-out', hint: 'Where people may land after signing out.' }) +

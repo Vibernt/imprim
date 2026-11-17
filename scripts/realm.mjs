@@ -17,11 +17,12 @@ let issuer;
 try { issuer = new URL(input.issuer); } catch { fail('issuer must be an https origin.'); }
 if (issuer.protocol !== 'https:' || issuer.origin !== input.issuer) fail('issuer must be a canonical https origin, without a path or trailing slash.');
 if (typeof input.display_name !== 'string' || !input.display_name.trim() || input.display_name.length > 100) fail('display_name: 1-100 characters.');
-try { validateRealmConfig(input.config ?? {}); } catch (error) { fail(error.message); }
+const settings = input.config === undefined ? {} : input.config;
+try { validateRealmConfig(settings); } catch (error) { fail(error.message); }
 const admins = input.admins ?? [];
 if (!Array.isArray(admins) || admins.some(admin => typeof admin?.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(admin.email) || !['platform', 'realm'].includes(admin.role)))
     fail('admins: a list of { email, role: "platform" | "realm" }.');
-const now = Date.now(), config = JSON.stringify(input.config ?? {});
+const now = Date.now(), config = JSON.stringify(settings);
 const lines = [`-- Realm ${input.id} (${input.issuer}). Review before applying: wrangler d1 execute <db> --remote --file realm.sql`];
 lines.push(input.update
     ? `UPDATE realms SET issuer=${quote(input.issuer)}, display_name=${quote(input.display_name)}, config=${quote(config)}, version=version+1 WHERE id=${quote(input.id)};`

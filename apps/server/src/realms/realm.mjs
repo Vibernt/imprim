@@ -16,12 +16,17 @@ const PROVIDER_FIELDS = {
     apple: { scalar: ['client_id', 'name', 'team_id', 'key_id'], secret: ['private_key'] }
 };
 const providerType = (id, config) => ['github', 'google'].includes(id) ? id : config?.type;
+function workspaceMode(value = 'off') {
+    invariant(['on', 'off'].includes(value), 'realm_config', 'Realm workspaces must be on or off.');
+    return value;
+}
 export function validateRealmConfig(config) {
     const fail = message => invariant(false, 'realm_config', message, 400);
     if (!config || typeof config !== 'object' || Array.isArray(config)) fail('Realm config must be an object.');
     const known = { email: ['from', 'from_name', 'reply_to'], turnstile: ['site_key', 'secret'] };
     const scalar = value => value === undefined || (typeof value === 'string' && value.length > 0 && value.length <= 500) || isRef(value);
     for (const [section, value] of Object.entries(config)) {
+        if (section === 'workspaces') { workspaceMode(value); continue; }
         if (section === 'branding') { validateBranding(value); continue; }
         if (!known[section] && section !== 'providers') fail(`Unknown realm config section ${section}.`);
         if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`${section} must be an object.`);
@@ -68,7 +73,8 @@ export async function realmFor(env, origin, now = Date.now()) {
 // The scoped env every module reads. Code never mixes realms: one request, one realm.
 export function realmEnv(env, realm) {
     const config = JSON.parse(realm.config), value = path => resolve(env, at(config, path));
-    return { ...env, REALM: { id: realm.id, issuer: realm.issuer, display_name: realm.display_name, branding: config.branding || {} }, ISSUER: realm.issuer,
+    return { ...env, REALM: { id: realm.id, issuer: realm.issuer, display_name: realm.display_name, branding: config.branding || {},
+        workspaces: workspaceMode(config.workspaces) }, ISSUER: realm.issuer,
         EMAIL_FROM: value(['email','from']), EMAIL_FROM_NAME: value(['email','from_name']) || realm.display_name, EMAIL_REPLY_TO: value(['email','reply_to']),
         TURNSTILE_SITE_KEY: value(['turnstile','site_key']), TURNSTILE_SECRET: value(['turnstile','secret']),
         GITHUB_CLIENT_ID: value(['providers','github','client_id']), GITHUB_CLIENT_SECRET: value(['providers','github','client_secret']),

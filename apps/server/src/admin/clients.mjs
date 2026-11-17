@@ -19,8 +19,28 @@ export async function getAdminClient(env, id) {
     invariant(row, 'not_found', 'Client not found.', 404);
     return publicClient(row);
 }
-// Second-factor, DPoP, user-event and token-exchange policy. Shared with scripts/seed-client.mjs.
+export const workspaceSettingNames = ['product', 'workspaces', 'personal_workspaces', 'workspace_admin', 'initiate_login_uri'];
+export const validProduct = value => typeof value === 'string' && /^[a-z][a-z0-9-]{1,39}$/.test(value);
+function validateWorkspaceSettings({ product = null, workspaces = 'app', personal_workspaces = 'off', workspace_admin = 'off',
+    initiate_login_uri = null, redirect_uris }) {
+    invariant(product === null || validProduct(product), 'invalid_request', 'Product must be 2 to 40 lowercase letters, digits or dashes, starting with a letter.');
+    invariant(['app', 'shared'].includes(workspaces), 'invalid_request', 'Workspaces must be app or shared.');
+    invariant(workspaces !== 'shared' || product !== null, 'invalid_request', 'Shared workspaces require a product.');
+    invariant(['off', 'on'].includes(personal_workspaces), 'invalid_request', 'Personal workspaces must be off or on.');
+    invariant(['off', 'on'].includes(workspace_admin), 'invalid_request', 'Workspace administration must be off or on.');
+    invariant(workspaces === 'shared' || (personal_workspaces === 'off' && workspace_admin === 'off'),
+        'invalid_request', 'Personal workspaces and workspace administration require shared workspaces.');
+    if (initiate_login_uri === null) return;
+    const message = 'The initiate login URL must be HTTPS, without credentials, and use a registered redirect URL’s origin.';
+    invariant(typeof initiate_login_uri === 'string' && /^https:\/\/[^/]/i.test(initiate_login_uri) && !/[\s\\\x00-\x1f\x7f]/.test(initiate_login_uri),
+        'invalid_request', message);
+    let url;
+    try { url = new URL(initiate_login_uri); } catch { invariant(false, 'invalid_request', message); }
+    invariant(!url.username && !url.password && redirect_uris.some(uri => new URL(uri).origin === url.origin), 'invalid_request', message);
+}
+// Shared with scripts/seed-client.mjs. The redirect URLs have already been validated.
 export function validatePolicySettings(config, agent) {
+    validateWorkspaceSettings(config);
     invariant(['off','optional','required'].includes(config.mfa ?? 'off') && ['off','required'].includes(config.agent_consent_mfa ?? 'off') &&
         Number.isInteger(config.mfa_trusted_device_days ?? 0) && (config.mfa_trusted_device_days ?? 0) >= 0 && (config.mfa_trusted_device_days ?? 0) <= 90,
         'invalid_request', 'mfa is off, optional or required; agent_consent_mfa is off or required; mfa_trusted_device_days is 0 to 90.');
@@ -42,11 +62,11 @@ function validate(config) {
     invariant(['invited','open'].includes(config.signup_policy) && [0,1].includes(config.dev), 'invalid_request', 'Invalid signup policy or dev flag.');
     // Leaving out PKCE is safe only with a client secret: a public app always uses PKCE.
     invariant(config.classic_oidc !== 'on' || config.confidential !== false, 'invalid_request', 'Classic OpenID Connect needs a confidential app.');
-    validatePolicySettings(config, agent);
     for (const name of ['redirect_uris','post_logout_uris']) {
         invariant(Array.isArray(config[name]) && config[name].length <= 100 && (name !== 'redirect_uris' || config[name].length), 'invalid_request', 'Invalid URI list.');
         for (const uri of config[name]) registeredUri({ dev: config.dev, [name]: JSON.stringify(config[name]) }, uri, name);
     }
+    validatePolicySettings(config, agent);
     invariant(typeof config.backchannel_uri === 'string' && config.backchannel_uri.length > 0, 'invalid_request', 'A back-channel URI is required for session termination.');
     registeredUri({ redirect_uris: JSON.stringify([config.backchannel_uri]), dev: 0 }, config.backchannel_uri);
     validateSignInSettings(methods, config.allowed_domains);
@@ -59,7 +79,8 @@ function validate(config) {
 export async function saveClient(env, actor, id, input) {
     const old = id ? await getAdminClient(env, id) : null;
     const allowed = ['id','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev',
-        'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa','agent_dpop','token_exchange_from','user_events','classic_oidc','id_token_signed_response_alg','agent_token_rate',...settingNames, ...(old ? ['version'] : [])];
+        'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa','agent_dpop','token_exchange_from','user_events','classic_oidc','id_token_signed_response_alg','agent_token_rate',
+        ...settingNames, ...workspaceSettingNames, ...(old ? ['version'] : [])];
     invariant(Object.keys(input).every(k => allowed.includes(k)), 'invalid_request', 'Unknown client field; secrets cannot be supplied.');
     invariant(!id || input.id === undefined || input.id === id, 'invalid_request', 'Client id cannot change.');
     if (old) {
