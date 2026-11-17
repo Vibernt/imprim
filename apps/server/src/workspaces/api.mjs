@@ -104,7 +104,10 @@ async function actorWrite(env, ctx, client, id, route, target, body) {
     const actor = await verifyActor(env, client, body.actor_token);
     switch (route) {
         case 'PATCH ': return json(await renameWorkspace(env, client, actor, id, body.name));
-        case 'POST products': return json(await setWorkspaceProducts(env, client, actor, id, body));
+        case 'POST products': {
+            const { add, remove } = body;
+            return json(await setWorkspaceProducts(env, client, actor, id, { add, remove }));
+        }
         case 'POST invitations': {
             const { invitation, expires } = await inviteToWorkspace(env, client, actor, id, body);
             await sendInvitation(env, ctx, invitation);

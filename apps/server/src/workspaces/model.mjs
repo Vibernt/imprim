@@ -9,6 +9,7 @@ import { workspaceEventStatements } from './events.mjs';
 import { accessEndStatements } from './teardown.mjs';
 
 const PRODUCT = /^[a-z][a-z0-9-]{1,39}$/;
+const ownProductRequired = 'An app may only use its own product.';
 export const workspaceRoles = ['owner', 'admin', 'member', 'viewer'];
 const invitationLifetime = 30 * 86400000;
 export const workspaceId = () => 'ws_' + crypto.randomUUID().replaceAll('-', '');
@@ -69,9 +70,10 @@ function boundedText(value, max, field) {
     return value.trim();
 }
 
-function validProducts(products) {
-    invariant(Array.isArray(products) && products.every(p => typeof p === 'string' && PRODUCT.test(p)),
-        'invalid_request', 'Invalid products.');
+function validProducts(products, client) {
+    invariant(Array.isArray(products), 'invalid_request', 'Invalid products.');
+    invariant(products.every(p => client ? p === client.product : typeof p === 'string' && PRODUCT.test(p)),
+        'invalid_request', client ? ownProductRequired : 'Invalid products.');
     return [...new Set(products)];
 }
 
@@ -85,7 +87,7 @@ const denied = (sql, args, message = 'Workspace permissions are required.') => c
 const missing = (sql, args, message = 'Workspace not found.') => check(sql, args, 'not_found', message, 404);
 const conflict = (sql, args, code, message) => check(sql, args, code, message, 409);
 
-function writeChecks(env, client, actor, id, now, creating) {
+function writeChecks(env, client, actor, id, now, creating, joinGuard) {
     const realm = realmId(env);
     const checks = [missing(`EXISTS(${realmOn})`, [realm])];
     if (client) {
@@ -100,10 +102,11 @@ function writeChecks(env, client, actor, id, now, creating) {
             [...args, admin.user_id, admin.email], 'conflict', 'Authorization or account changed; reload and reauthenticate.'));
     }
     if (!creating) {
-        const productGuard = client ? ` AND ${usingProduct}` : '';
+        const productVisibility = joinGuard ? `(${usingProduct} OR (w.status='active' AND ${joinGuard.sql}))` : usingProduct;
+        const productGuard = client ? ` AND ${productVisibility}` : '';
         checks.push(
             missing(`EXISTS(SELECT 1 FROM workspaces w WHERE w.id=? AND w.realm_id=?${productGuard})`,
-                [id, realm, ...(client ? [client.product] : [])]),
+                [id, realm, ...(client ? [client.product] : []), ...(joinGuard?.args ?? [])]),
             conflict("EXISTS(SELECT 1 FROM workspaces WHERE id=? AND status='active')", [id], 'workspace_closed', 'Workspace is closed.'));
     }
     if (client && actor) checks.push(check(`EXISTS(SELECT 1 ${liveActorSession})`, [actor.session.sid, actor.user.id, now, realm],
@@ -113,8 +116,9 @@ function writeChecks(env, client, actor, id, now, creating) {
 
 // The conditional write claims the next version. The assertion aborts the transaction if the claim affected no
 // row, so even an unguarded dependent statement (including access teardown) cannot run on a refused request.
-async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, create, effects = [], afterEvent = [], event, eventOptions, audit, detail = {} }) {
-    const guards = [...writeChecks(env, client, actor, id, now, Boolean(create)), ...checks];
+async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, create, joinGuard,
+    effects = [], afterEvent = [], event, eventOptions, audit, detail = {} }) {
+    const guards = [...writeChecks(env, client, actor, id, now, Boolean(create), joinGuard), ...checks];
     const where = guards.map(guard => `(${guard.sql})`).join(' AND '), args = guards.flatMap(guard => guard.args);
     const write = create
         ? env.DB.prepare(`INSERT INTO workspaces(id,realm_id,kind,name,personal_owner,created) SELECT ?,?,?,?,?,? WHERE ${where}`)
@@ -155,6 +159,15 @@ function addProducts(env, id, products, now) {
         SELECT ?,j.value,? FROM json_each(?) j WHERE true ON CONFLICT(workspace_id,product) DO NOTHING`).bind(id, now, JSON.stringify(products));
 }
 
+function creationProducts(client, personal, products) {
+    if (!client) return validProducts(products);
+    if (!personal && products !== undefined) {
+        invariant(Array.isArray(products) && products.length === 1 && products[0] === client.product,
+            'invalid_request', ownProductRequired);
+    }
+    return [client.product];
+}
+
 function newInvitation(env, client, actor, id, email, role, now) {
     const invitationId = crypto.randomUUID(), expires = now + invitationLifetime;
     const statement = env.DB.prepare(`INSERT INTO workspace_invitations(id,workspace_id,email,role,invited_by,via_client,created,expires_at)
@@ -166,8 +179,7 @@ export async function createWorkspace(env, client, actor, body) {
     const kind = body.kind === undefined ? 'team' : body.kind, name = boundedText(body.name, 120, 'name');
     invariant(kind === 'team' || kind === 'personal', 'invalid_request', 'Invalid workspace kind.');
     const personal = kind === 'personal', now = Date.now(), id = workspaceId();
-    const products = validProducts(personal ? [client.product] : body.products);
-    if (client) invariant(products.includes(client.product), 'invalid_request', 'Products must include the calling app product.');
+    const products = creationProducts(client, personal, body.products);
     const email = personal ? actor.user.email : normalizeEmail(body.first_owner_email);
     const owner = email === actor.user.email ? actor.user.id : null;
     const invitation = owner ? null : newInvitation(env, client, actor, id, email, 'owner', now);
@@ -195,14 +207,19 @@ export function renameWorkspace(env, client, actor, id, value) {
 }
 
 export function setWorkspaceProducts(env, client, actor, id, body) {
-    const add = validProducts(body.add), remove = validProducts(body.remove);
+    const add = validProducts(body.add, client), remove = validProducts(body.remove, client);
     invariant(!add.some(product => remove.includes(product)), 'invalid_request', 'A product cannot be added and removed together.');
     const realmAdmin = `EXISTS(SELECT 1 FROM users u JOIN admins a ON a.realm_id=u.realm_id AND a.email=u.email
         WHERE u.id=? AND u.email_verified=1)`;
     const checks = actor.admin ? [] : [flag(client, 'workspace_admin'), denied(`(${ownerMember} OR ${realmAdmin})`, [id, actor.user.id, actor.user.id])];
+    // Only adding the calling product can make an otherwise hidden workspace eligible for this write.
+    const joinGuard = client && add.length ? {
+        sql: checks.map(guard => guard.sql).join(' AND '),
+        args: checks.flatMap(guard => guard.args)
+    } : null;
     const now = Date.now();
     // Capture recipients after adding and before deleting. The event payload projects the final product list.
-    return guardedWrite(env, { client, actor, id, now, checks,
+    return guardedWrite(env, { client, actor, id, now, checks, joinGuard,
         effects: [addProducts(env, id, add, now)],
         afterEvent: [env.DB.prepare('DELETE FROM workspace_products WHERE workspace_id=? AND product IN (SELECT value FROM json_each(?))')
             .bind(id, JSON.stringify(remove))],

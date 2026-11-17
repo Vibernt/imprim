@@ -28,7 +28,7 @@ async function fixture(t) {
          agent_scope_catalogue,agent_resource_prefixes)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (const [id, product, mode, personal, admin] of [
-        ['alpha', 'alpha', 'shared', 'on', 'off'],
+        ['alpha', 'alpha', 'shared', 'on', 'on'],
         ['beta', 'beta', 'shared', 'off', 'off'],
         ['beta-console', 'beta', 'shared', 'off', 'on'],
         ['app-local', 'alpha', 'app', 'off', 'off']
@@ -170,11 +170,13 @@ async function appGuest(w, app, email) {
 }
 
 async function team(w) {
-    const console = w.apps['beta-console'];
+    const { alpha, 'beta-console': console } = w.apps;
     const owner = await appGuest(w, console, ownerEmail);
+    const ownerAlpha = await appGuest(w, alpha, ownerEmail);
     const workspace = await console.createWorkspace({
-        name: teamName, products: ['alpha', 'beta'], firstOwnerEmail: ownerEmail, ...actor(owner)
+        name: teamName, firstOwnerEmail: ownerEmail, ...actor(owner)
     });
+    await alpha.setWorkspaceProducts(workspace.workspace_id, { add: ['alpha'], remove: [], ...actor(ownerAlpha) });
     return { owner, workspace, id: workspace.workspace_id };
 }
 
@@ -264,17 +266,23 @@ const rejectWorkspace = (request, code, status) => assert.rejects(request, {
 test('a workspace invitation from alpha admits a beta member and delivers versioned events to all shared apps', async t => {
     const w = await fixture(t);
     const { alpha, beta, 'beta-console': console } = w.apps;
-    const alphaAdmin = await appGuest(w, alpha, 'admin@example.com');
-    const fields = { name: teamName, products: ['alpha', 'beta'], firstOwnerEmail: ownerEmail };
-    await rejectWorkspace(alpha.createWorkspace({ ...fields, ...actor(alphaAdmin) }), 'access_denied', 403);
-    assert.deepEqual(await alpha.memberships(alphaAdmin.claims.sub), { memberships: [] });
+    const betaAdmin = await appGuest(w, beta, 'admin@example.com');
+    const fields = { name: teamName, products: ['beta'], firstOwnerEmail: ownerEmail };
+    await rejectWorkspace(beta.createWorkspace({ ...fields, ...actor(betaAdmin) }), 'access_denied', 403);
+    assert.deepEqual(await beta.memberships(betaAdmin.claims.sub), { memberships: [] });
     assert.equal((await w.deliveries()).length, 0);
 
     const group = await team(w);
     assert.match(group.id, /^ws_[0-9a-f]{32}$/);
     const ownerAlpha = await sso(w, alpha, group.owner);
-    const created = eventsOf(await w.deliveries(), 'workspace', 'workspace-member-added');
-    assert.deepEqual(recipients(created), sharedApps);
+    const initialEvents = await w.deliveries();
+    const created = eventsOf(initialEvents, 'workspace', 'workspace-member-added');
+    const productsChanged = eventsOf(initialEvents, 'workspace', 'workspace-products-changed');
+    assert.deepEqual(recipients(created), ['beta', 'beta-console']);
+    assert.deepEqual(recipients(productsChanged), sharedApps);
+    for (const { claims } of productsChanged) {
+        assert.deepEqual(claims.payload, { workspace_id: group.id, version: group.workspace.version + 1, products: ['alpha', 'beta'] });
+    }
     await rejectWorkspace(alpha.inviteToWorkspace(group.id, { email: memberEmail, role: 'member', ...actor(group.owner) }),
         'invalid_request', 400);
     await error(await w.call('/v1/memberships?' + new URLSearchParams({ sub: ownerAlpha.claims.sub }), {
@@ -309,13 +317,15 @@ test('a workspace invitation from alpha admits a beta member and delivers versio
 
     const joined = eventsOf(await w.deliveries(), 'workspace', 'workspace-member-added');
     assert.deepEqual(recipients(joined), sharedApps);
-    assert.equal(new Set([...created, ...joined].map(event => event.claims.jti)).size, 6);
-    for (const { app, claims } of joined) {
-        const first = created.find(row => row.app === app).claims;
+    const workspaceEvents = [...created, ...productsChanged, ...joined];
+    assert.equal(new Set(workspaceEvents.map(event => event.claims.jti)).size, workspaceEvents.length);
+    for (const { claims: first } of created) {
         assert.equal(first.sub, ownerAlpha.claims.sub);
         assert.deepEqual(first.payload, { workspace_id: group.id, version: group.workspace.version, role: 'owner' });
+    }
+    for (const { app, claims } of joined) {
         assert.equal(claims.sub, sub);
-        assert.ok(claims.version > first.version);
+        assert.ok(claims.version > productsChanged.find(row => row.app === app).claims.version);
         assert.equal(claims.version, version);
         assert.deepEqual(claims.payload, { workspace_id: group.id, version, role: 'member' });
     }
@@ -372,8 +382,9 @@ test('leaving the first workspace preserves alpha admission and the grant for a 
     const w = await fixture(t), group = await joinedTeam(w);
     const { alpha, beta, 'beta-console': console } = w.apps;
     const admin = await workspaceAdmin(w, group);
-    const second = await console.createWorkspace({ name: 'Alpha team', products: ['alpha', 'beta'], firstOwnerEmail: ownerEmail, ...actor(group.owner) });
+    const second = await console.createWorkspace({ name: 'Alpha team', firstOwnerEmail: ownerEmail, ...actor(group.owner) });
     const id = second.workspace_id;
+    await alpha.setWorkspaceProducts(id, { add: ['alpha'], remove: [], ...actor(group.ownerAlpha) });
     await console.setWorkspaceProducts(id, { add: [], remove: ['beta'], ...actor(group.owner) });
     await rejectWorkspace(beta.workspace(id), 'not_found', 404);
     const invitation = await inviteMember(w, id, group.ownerAlpha);
@@ -469,7 +480,7 @@ test('beta can block workspace closure with a hold, and releasing it lets the ow
         await refuseSignIn(w, app, memberEmail, group.member);
     }
     assert.deepEqual(w.admissions(group.sub), []);
-    assert.deepEqual(w.admissions(group.owner.claims.sub), [['beta-console', 'app']]);
+    assert.deepEqual(w.admissions(group.owner.claims.sub), [['alpha', 'app'], ['beta-console', 'app']]);
 });
 
 test('an app-only guest starts with no membership and keeps the app admission after leaving a workspace', async t => {

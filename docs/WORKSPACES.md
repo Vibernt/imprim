@@ -13,6 +13,7 @@ for all the products the workspace uses. Products keep everything product-specif
   below applies.
 - **Product.** A short name (`^[a-z][a-z0-9-]{1,39}$`) set on each participating app (`clients.product`). A product
   can have several apps, for example a web app and an operator console. A workspace uses products, not apps.
+  Through the app API an app manages only its own product; other products join through their own apps or the console.
 - **Participation.** `clients.workspaces` is `app` (the default, today's behaviour) or `shared`. Only `shared` apps
   with a `product` use anything on this page.
 - **Workspace.** `id` is `ws_` plus 32 lowercase hex characters, permanent and never reused. An import may keep an
@@ -91,7 +92,8 @@ resources, reads) use the app's credentials alone.
 
 All calls authenticate the app with its client credentials (Basic or `client_secret_post`), are limited by
 `API_LIMITER` like `/v1/grants`, and need the app to be `shared` with a `product` in a realm with workspaces on. An
-app sees only workspaces that use its product (`404` otherwise). Bodies are JSON. Errors use the existing
+app sees only workspaces that use its product (`404` otherwise). The products endpoint also lets an eligible app
+join an active workspace in its realm by adding its own product. Bodies are JSON. Errors use the existing
 `{ error, error_description }` shape.
 
 | Call | Who | Does |
@@ -99,9 +101,9 @@ app sees only workspaces that use its product (`404` otherwise). Bodies are JSON
 | `GET /v1/memberships?sub=` | app | `{ memberships: [{ workspace_id, name, kind, role, products, version }] }` for active workspaces using the app's product |
 | `GET /v1/workspaces/{id}` | app | `{ workspace_id, name, kind, status, products, version }` |
 | `GET /v1/workspaces/{id}/members?limit=&cursor=` | app | `{ members: [{ sub, email, role }], next_cursor, version }`, oldest first; cursor as in `/v1/grants` |
-| `POST /v1/workspaces` | app with `workspace_admin` on, or any shared app for `kind: "personal"` with `personal_workspaces` on | team: `{ name, products, first_owner_email, actor_token }` (the actor must be a realm admin or the app must have `workspace_admin`; the first owner is invited as `owner`, or added at once when it is the actor). personal: `{ kind: "personal", name, actor_token }`, actor becomes owner, one per person (`409` if one exists) |
+| `POST /v1/workspaces` | app with `workspace_admin` on, or any shared app for `kind: "personal"` with `personal_workspaces` on | Team body `{ name, products, first_owner_email, actor_token }`. Omit `products` to use the app's product, or pass exactly that product in a one-item array. The first owner is invited as `owner`, or added at once when it is the actor. Personal body `{ kind: "personal", name, actor_token }`. The actor becomes owner, one per person (`409` if one exists). |
 | `PATCH /v1/workspaces/{id}` | actor admin+ | `{ name, actor_token }` |
-| `POST /v1/workspaces/{id}/products` | app with `workspace_admin` | `{ add: [], remove: [], actor_token }`; the actor must be owner or a realm admin |
+| `POST /v1/workspaces/{id}/products` | app with `workspace_admin` on, acting for an owner or realm admin | `{ add: [], remove: [], actor_token }`. Every entry must be the app's own product. Adding it can join an active workspace in the app's realm even when the app could not read it before. |
 | `POST /v1/workspaces/{id}/invitations` | actor admin+ (owner for role `owner`); team only | `{ email, role, actor_token }` → `201 { invitation_id, expires_at }`; 30 days; one open invitation per email (re-inviting replaces it); sends one email |
 | `GET /v1/workspaces/{id}/invitations` | app | open invitations `{ invitations: [{ invitation_id, email, role, expires_at }] }` |
 | `DELETE /v1/workspaces/{id}/invitations/{invitation_id}` | actor admin+ | `{ actor_token }` |

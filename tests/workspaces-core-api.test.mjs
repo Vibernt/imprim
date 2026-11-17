@@ -5,6 +5,7 @@ import { ensureUser } from '../apps/server/src/services/admission.mjs';
 import { issueSession } from '../apps/server/src/auth/session.mjs';
 import { signIdToken, signJwt } from '../apps/server/src/oidc/jwt.mjs';
 import { b64url, from64, sha256 } from '../apps/server/src/lib/crypto.mjs';
+import { forgetRealms, realmEnvForClient } from '../apps/server/src/realms/realm.mjs';
 import { world, basic } from './support/world.mjs';
 import { error } from './support/agents.mjs';
 
@@ -32,10 +33,15 @@ async function setup(t, { enabled = true } = {}) {
         return response(await api('POST', root, { name: 'Team', products: ['notes'], first_owner_email: owner.email,
             actor_token: owner.actor_token, ...body }, auth), 201);
     }
+    async function addTasks(owner, workspaceId) {
+        db.prepare("UPDATE clients SET workspace_admin='on' WHERE id='other'").run();
+        const { actor_token } = await actor(owner.email, 'other');
+        return response(await api('POST', root + '/' + workspaceId + '/products', { add: ['tasks'], remove: [], actor_token }, basic('other')));
+    }
     const addMember = (id, actor, role, created = Date.now()) => db.prepare(
         'INSERT INTO workspace_members(workspace_id,user_id,role,created,updated) VALUES(?,?,?,?,?)'
     ).run(id, actor.id, role, created, created);
-    return { ...w, db, api, actor, team, addMember };
+    return { ...w, db, api, actor, team, addTasks, addMember };
 }
 async function response(resp, status = 200) {
     const result = await resp.json();
@@ -158,15 +164,18 @@ test('team bootstrap either adds the actor as owner or records one pending owner
     const call = body => w.api('POST', root, { name: 'Team', products: ['notes'], first_owner_email: 'OWNER@example.com',
         actor_token: creator.actor_token, ...body });
     await error(await call({ name: ' '.repeat(10) }), 'invalid_request', 400);
-    await error(await call({ products: ['wrong'] }), 'invalid_request', 400);
-    await error(await call({ products: ['notes', 'INVALID'] }), 'invalid_request', 400);
+    for (const products of [['tasks'], ['notes', 'tasks'], ['notes', 'notes'], [], null, 'notes']) {
+        assert.deepEqual(await response(await call({ products }), 400), {
+            error: 'invalid_request', error_description: 'An app may only use its own product.'
+        });
+    }
     await error(await call({ kind: 'other' }), 'invalid_request', 400);
     w.db.prepare("UPDATE clients SET workspace_admin='off' WHERE id='app'").run();
     await error(await call({}), 'access_denied', 403);
     w.db.prepare("UPDATE clients SET workspace_admin='on' WHERE id='app'").run();
     const pending = [];
     const req = new Request(w.env.ISSUER + root, { method: 'POST', headers: { authorization: basic(), 'content-type': 'application/json' },
-        body: JSON.stringify({ name: ' Team ', products: ['notes', 'notes'], first_owner_email: 'OWNER@example.com', actor_token: creator.actor_token }) });
+        body: JSON.stringify({ name: ' Team ', first_owner_email: 'OWNER@example.com', actor_token: creator.actor_token }) });
     const start = Date.now();
     const created = await response(await worker.fetch(req, w.env, { waitUntil(promise) { pending.push(promise); } }), 201);
     assert.equal(pending.length, 1);
@@ -297,7 +306,7 @@ test('concurrent demotions cannot leave a team without an owner', async t => {
 test('a personal workspace has one owner, takes no invitations, and stays unique after close', async t => {
     const w = await setup(t);
     const owner = await w.actor('owner@example.com');
-    const body = { name: 'Personal', kind: 'personal', actor_token: owner.actor_token };
+    const body = { name: 'Personal', kind: 'personal', products: ['tasks'], actor_token: owner.actor_token };
     w.db.prepare("UPDATE clients SET workspace_admin='off',personal_workspaces='off' WHERE id='app'").run();
     await error(await w.api('POST', root, body), 'access_denied', 403);
     w.db.prepare("UPDATE clients SET personal_workspaces='on' WHERE id='app'").run();
@@ -337,58 +346,108 @@ test('products require the app flag and an owner or a verified realm admin, and 
     const initial = w.db.prepare('SELECT client_id FROM workspace_event_outbox WHERE workspace_id=? AND version=1').all(workspace_id);
     assert.deepEqual(initial.map(x => x.client_id), ['app']);
     const update = (who, add, remove, auth) => w.api('POST', path + '/products', { actor_token: who.actor_token, add, remove }, auth);
-    await error(await update(workspaceAdmin, ['tasks'], []), 'access_denied', 403);
-    await error(await update(creator, ['tasks'], ['tasks']), 'invalid_request', 400);
-    await error(await update(creator, ['UPPER'], []), 'invalid_request', 400);
-    await error(await update(creator, ['tasks'], [], basic('other')), 'invalid_request', 400);
-    w.db.prepare("UPDATE clients SET workspace_admin='off' WHERE id='app'").run();
-    await error(await update(creator, ['tasks'], []), 'access_denied', 403);
-    await error(await update(admin, ['tasks'], []), 'access_denied', 403);
-    w.db.prepare("UPDATE clients SET workspace_admin='on' WHERE id='app'").run();
-    w.db.prepare('UPDATE users SET email_verified=0 WHERE id=?').run(admin.id);
-    await error(await update(admin, ['tasks'], []), 'access_denied', 403);
-    w.db.prepare('UPDATE users SET email_verified=1 WHERE id=?').run(admin.id);
-    const changed = await response(await update(admin, ['tasks', 'tasks'], ['notes', 'docs']));
-    assert.deepEqual(changed.products, ['tasks']);
+    const other = basic('other');
+    const otherOwner = await w.actor(creator.email, 'other');
+    const otherAdmin = await w.actor(admin.email, 'other');
+    const otherMember = await w.actor(workspaceAdmin.email, 'other');
+    for (const [add, remove] of [[['tasks'], []], [[], ['tasks']], [['notes', 'tasks'], []], [['UPPER'], []]]) {
+        assert.deepEqual(await response(await update(creator, add, remove), 400), {
+            error: 'invalid_request', error_description: 'An app may only use its own product.'
+        });
+    }
+    await error(await update(creator, ['notes'], ['notes']), 'invalid_request', 400);
+    await error(await update(workspaceAdmin, ['notes'], []), 'access_denied', 403);
+    await error(await update(creator, ['tasks'], [], other), 'invalid_request', 400);
+    await error(await update(otherOwner, ['tasks'], [], other), 'not_found', 404);
+    w.db.prepare("UPDATE clients SET workspace_admin='on' WHERE id='other'").run();
+    await error(await update(otherMember, ['tasks'], [], other), 'not_found', 404);
+    await error(await update(otherOwner, [], ['tasks'], other), 'not_found', 404);
+    await error(await update(otherOwner, [], [], other), 'not_found', 404);
+    await error(await w.api('GET', path, undefined, other), 'not_found', 404);
+
+    const changed = await response(await update(otherOwner, ['tasks'], [], other));
+    assert.deepEqual(changed.products, ['notes', 'tasks']);
     assert.equal(changed.version, 2);
-    await error(await w.api('GET', path), 'not_found', 404);
-    assert.deepEqual(await response(await w.api('GET', path, undefined, basic('other'))), changed);
+    assert.deepEqual(await response(await w.api('GET', path, undefined, other)), changed);
     const rows = w.db.prepare('SELECT client_id,event,payload,user_id FROM workspace_event_outbox WHERE workspace_id=? AND version=2 ORDER BY client_id').all(workspace_id);
     assert.deepEqual(rows.map(r => r.client_id), ['app', 'notes-console', 'other', 'tasks-local']);
     for (const row of rows) {
         assert.equal(row.event, 'workspace-products-changed');
         assert.equal(row.user_id, null);
-        assert.deepEqual(JSON.parse(row.payload), { workspace_id, version: 2, products: ['tasks'] });
+        assert.deepEqual(JSON.parse(row.payload), { workspace_id, version: 2, products: ['notes', 'tasks'] });
     }
-    // Use the same product through a realm where the calling client really authenticates.
+    assert.deepEqual((await response(await update(otherOwner, [], ['tasks'], other))).products, ['notes']);
+    const removed = w.db.prepare('SELECT client_id,payload FROM workspace_event_outbox WHERE workspace_id=? AND version=3 ORDER BY client_id').all(workspace_id);
+    assert.deepEqual(removed.map(r => [r.client_id, JSON.parse(r.payload).products]),
+        ['app', 'notes-console', 'other', 'tasks-local'].map(client => [client, ['notes']]));
+    await error(await w.api('GET', path, undefined, other), 'not_found', 404);
+    w.db.prepare('UPDATE users SET email_verified=0 WHERE id=?').run(admin.id);
+    await error(await update(otherAdmin, ['tasks'], [], other), 'not_found', 404);
+    // A verified realm admin with the app flag still cannot join a workspace in another realm.
     w.db.prepare("UPDATE clients SET workspace_admin='on' WHERE id='tasks-abroad'").run();
-    const foreign = new Request('https://second.example' + path, { headers: { authorization: basic('tasks-abroad') } });
+    w.db.prepare("INSERT INTO admins(realm_id,email,role,created) VALUES('second',?,'realm',0)").run(admin.email);
+    const foreignEnv = await realmEnvForClient(w.env, 'tasks-abroad');
+    const foreignAdmin = await ensureUser(foreignEnv, admin.email);
+    const { session } = await issueSession(foreignEnv, foreignAdmin, 'email');
+    const actor_token = await signIdToken(foreignEnv, session, { client_id: 'tasks-abroad', scope: 'openid' });
     // The host map was first loaded before the second realm existed.
-    const { forgetRealms } = await import('../apps/server/src/realms/realm.mjs');
     forgetRealms(w.env);
+    const foreign = new Request(foreignEnv.ISSUER + path + '/products', { method: 'POST',
+        headers: { authorization: basic('tasks-abroad'), 'content-type': 'application/json' },
+        body: JSON.stringify({ add: ['tasks'], remove: [], actor_token }) });
     await error(await worker.fetch(foreign, w.env), 'not_found', 404);
+    w.db.prepare('UPDATE users SET email_verified=1 WHERE id=?').run(admin.id);
+    assert.deepEqual((await response(await update(otherAdmin, ['tasks'], [], other))).products, ['notes', 'tasks']);
 
-    const roster = await w.actor(creator.email, 'other');
-    await error(await update(roster, [], ['tasks'], basic('other')), 'access_denied', 403);
+    const closed = await w.team(creator);
+    await response(await w.api('POST', root + '/' + closed.workspace_id + '/close', { actor_token: creator.actor_token }));
+    await error(await w.api('POST', root + '/' + closed.workspace_id + '/products', {
+        actor_token: otherOwner.actor_token, add: ['tasks'], remove: []
+    }, other), 'not_found', 404);
+});
+
+test('joining a workspace rechecks ownership and the app flag in the write batch', async t => {
+    const w = await setup(t);
+    const owner = await w.actor('owner@example.com');
+    const { workspace_id } = await w.team(owner);
+    w.addMember(workspace_id, await w.actor('co-owner@example.com'), 'owner');
+    const path = root + '/' + workspace_id;
+    const { actor_token } = await w.actor(owner.email, 'other');
+    const join = () => w.api('POST', path + '/products', { add: ['tasks'], remove: [], actor_token }, basic('other'));
     w.db.prepare("UPDATE clients SET workspace_admin='on' WHERE id='other'").run();
-    assert.deepEqual((await response(await update(roster, [], ['tasks'], basic('other')))).products, []);
-    await error(await w.api('GET', path, undefined, basic('other')), 'not_found', 404);
+    const batch = w.env.DB.batch.bind(w.env.DB);
+    const disable = () => w.db.prepare("UPDATE clients SET workspace_admin='off' WHERE id='other'").run();
+    const demote = () => w.db.prepare("UPDATE workspace_members SET role='admin' WHERE workspace_id=? AND user_id=?").run(workspace_id, owner.id);
+    for (const change of [disable, demote]) {
+        const intercepted = t.mock.method(w.env.DB, 'batch', statements => {
+            change();
+            return batch(statements);
+        });
+        await error(await join(), 'not_found', 404);
+        intercepted.mock.restore();
+        w.db.prepare("UPDATE clients SET workspace_admin='on' WHERE id='other'").run();
+    }
+    const workspace = await response(await w.api('GET', path));
+    assert.deepEqual(workspace.products, ['notes']);
+    assert.equal(workspace.version, 1);
+    assert.equal(w.db.prepare("SELECT count(*) AS n FROM workspace_event_outbox WHERE event='workspace-products-changed'").get().n, 0);
 });
 
 test('holds belong to each app, prevent close while present, and all writes reject a closed workspace', async t => {
     const w = await setup(t);
     const owner = await w.actor('owner@example.com'), admin = await w.actor('member-admin@example.com');
-    const { workspace_id } = await w.team(owner, { products: ['notes', 'tasks'] });
+    const { workspace_id } = await w.team(owner);
+    await w.addTasks(owner, workspace_id);
     w.addMember(workspace_id, admin, 'admin');
     const path = root + '/' + workspace_id, holds = path + '/holds';
     const close = who => w.api('POST', path + '/close', { actor_token: who.actor_token });
     const hold = (reason, auth) => w.api('PUT', holds, { reason }, auth);
     await error(await hold(' '), 'invalid_request', 400);
     await error(await hold('x'.repeat(201)), 'invalid_request', 400);
-    assert.equal((await response(await hold('Old reason'))).version, 2);
-    assert.equal((await response(await hold('Open balance'))).version, 3);
+    assert.equal((await response(await hold('Old reason'))).version, 3);
+    assert.equal((await response(await hold('Open balance'))).version, 4);
     await error(await w.api('DELETE', holds, undefined, basic('other')), 'not_found', 404);
-    assert.equal((await response(await hold('Incomplete export', basic('other')))).version, 4);
+    assert.equal((await response(await hold('Incomplete export', basic('other')))).version, 5);
     await error(await close(admin), 'access_denied', 403);
     const blocked = await close(owner);
     const held = await blocked.clone().json();
@@ -396,15 +455,15 @@ test('holds belong to each app, prevent close while present, and all writes reje
     assert.match(held.error_description, /Open balance/);
     assert.match(held.error_description, /Incomplete export/);
     assert.ok(!held.error_description.includes('Old reason'));
-    assert.equal((await response(await w.api('DELETE', holds))).version, 5);
+    assert.equal((await response(await w.api('DELETE', holds))).version, 6);
     await error(await close(owner), 'workspace_held', 409);
-    assert.equal((await response(await w.api('DELETE', holds, undefined, basic('other')))).version, 6);
+    assert.equal((await response(await w.api('DELETE', holds, undefined, basic('other')))).version, 7);
     const closed = await response(await close(owner));
-    assert.deepEqual(closed, { workspace_id, name: 'Team', kind: 'team', status: 'closed', products: ['notes', 'tasks'], version: 7 });
+    assert.deepEqual(closed, { workspace_id, name: 'Team', kind: 'team', status: 'closed', products: ['notes', 'tasks'], version: 8 });
     const actor_token = owner.actor_token;
     const closedWrites = [
         ['PATCH', path, { name: 'Changed', actor_token }],
-        ['POST', path + '/products', { add: ['docs'], remove: [], actor_token }],
+        ['POST', path + '/products', { add: ['notes'], remove: [], actor_token }],
         ['POST', path + '/invitations', { email: 'guest@example.com', role: 'member', actor_token }],
         ['DELETE', path + '/invitations/anything', { actor_token }],
         ['POST', path + '/members/' + admin.id, { role: 'viewer', actor_token }],
@@ -419,16 +478,17 @@ test('holds belong to each app, prevent close while present, and all writes reje
     assert.deepEqual(await response(await w.api('GET', path)), closed);
     assert.equal((await response(await w.api('GET', path + '/members'))).members.length, 2);
     const events = w.db.prepare('SELECT event,payload FROM workspace_event_outbox WHERE workspace_id=? AND client_id=? ORDER BY version').all(workspace_id, 'app');
-    assert.deepEqual(events.map(e => e.event), ['workspace-member-added', ...Array(5).fill('workspace-updated'), 'workspace-closed']);
-    assert.deepEqual(JSON.parse(events.at(-1).payload), { workspace_id, version: 7 });
-    assert.equal(w.db.prepare('SELECT count(*) AS n FROM audit WHERE target=?').get(workspace_id).n, 7);
+    assert.deepEqual(events.map(e => e.event), ['workspace-member-added', 'workspace-products-changed', ...Array(5).fill('workspace-updated'), 'workspace-closed']);
+    assert.deepEqual(JSON.parse(events.at(-1).payload), { workspace_id, version: 8 });
+    assert.equal(w.db.prepare('SELECT count(*) AS n FROM audit WHERE target=?').get(workspace_id).n, 8);
     assert.equal(w.db.prepare("SELECT actor FROM audit WHERE target=? AND event='workspace-hold-put' ORDER BY id DESC LIMIT 1").get(workspace_id).actor, 'other');
 });
 
 test('resources must meet the app prefix and are unique globally; only the registering app can delete its mapping', async t => {
     const w = await setup(t);
     const owner = await w.actor('owner@example.com');
-    const { workspace_id } = await w.team(owner, { products: ['notes', 'tasks'] });
+    const { workspace_id } = await w.team(owner);
+    await w.addTasks(owner, workspace_id);
     const second = await w.team(owner);
     const path = root + '/' + workspace_id + '/resources', resource = 'https://app.example/w/team';
     for (const foreign of ['https://another.example/w/team', 'https://app.example/work/team']) {
@@ -438,7 +498,7 @@ test('resources must meet the app prefix and are unique globally; only the regis
         await error(await w.api('PUT', path, { resource: unsafe }), 'invalid_target', 400);
     }
     const outcomes = await Promise.all([w.api('PUT', path, { resource }), w.api('PUT', path, { resource })]);
-    assert.equal((await response(outcomes.find(r => r.status === 200))).version, 2);
+    assert.equal((await response(outcomes.find(r => r.status === 200))).version, 3);
     await error(outcomes.find(r => r.status !== 200), 'resource_registered', 409);
     await error(await w.api('PUT', root + '/' + second.workspace_id + '/resources', { resource }), 'resource_registered', 409);
     await error(await w.api('DELETE', root + '/' + second.workspace_id + '/resources', { resource }), 'not_found', 404);
@@ -455,7 +515,7 @@ test('resources must meet the app prefix and are unique globally; only the regis
     intercepted.mock.restore();
     assert.deepEqual({ ...w.db.prepare('SELECT workspace_id,client_id FROM workspace_resources WHERE resource=?').get(resource) }, { workspace_id, client_id: 'app' });
     w.db.prepare("UPDATE clients SET agent_resource_prefixes='[\"https://app.example/w/\"]' WHERE id='app'").run();
-    assert.equal((await response(await w.api('DELETE', path, { resource }))).version, 3);
+    assert.equal((await response(await w.api('DELETE', path, { resource }))).version, 4);
     await error(await w.api('DELETE', path, { resource }), 'not_found', 404);
     assert.equal((await response(await w.api('PUT', root + '/' + second.workspace_id + '/resources', { resource }))).version, 2);
 });

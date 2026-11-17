@@ -126,9 +126,9 @@ for actions on a person's behalf.
 | `memberships` | `sub` |
 | `workspace` | `id` |
 | `workspaceMembers` | `id, { limit?, cursor? }` |
-| `createWorkspace` | `{ name, products, firstOwnerEmail, actorToken }` for a team or `{ kind: 'personal', name, actorToken }` |
+| `createWorkspace` | `{ name, products, firstOwnerEmail, actorToken }` for a team or `{ kind: 'personal', name, actorToken }`. For a team, pass the app's own product in a one-item array. The App API also defaults to that product when the field is omitted. |
 | `renameWorkspace` | `id, { name, actorToken }` |
-| `setWorkspaceProducts` | `id, { add, remove, actorToken }` |
+| `setWorkspaceProducts` | `id, { add, remove, actorToken }`. Both arrays may contain only the app's own product. |
 | `inviteToWorkspace` | `id, { email, role, actorToken }` |
 | `workspaceInvitations` | `id` |
 | `revokeWorkspaceInvitation` | `id, invitationId, { actorToken }` |

@@ -5,6 +5,7 @@ describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
 ## Unreleased
 
+- Apps can manage only their own workspace product and may add it to an active workspace when acting for an owner or realm admin.
 - Client `0.8.1` lets `handleCallback` return the verified ID token for use as `actor_token`.
 
 - Migration `0024_workspaces.sql` adds opt-in [shared and personal workspaces](docs/WORKSPACES.md), with base roles,
