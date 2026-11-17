@@ -14,21 +14,22 @@ import { audit } from '../services/audit.mjs';
 import { notify } from '../services/notify.mjs';
 import { logoutStatements, flushLogouts } from '../oidc/backchannel.mjs';
 import { forgetDevices } from '../auth/mfa.mjs';
+import { t } from '../i18n/index.mjs';
 export const FRESH_MS = 600000;
 const freshMailbox = session => session.method === 'email' && session.auth_time * 1000 > Date.now() - FRESH_MS;
-function form(request, session, values, hasPassword, saved = false) {
+function form(env, request, session, values, hasPassword, saved = false) {
     const current = hasPassword && !freshMailbox(session)
-        ? field({ id: 'current_password', label: 'Current password', type: 'password', name: 'current_password', autocomplete: 'current-password', required: true }) : '';
-    const title = hasPassword ? 'Change password' : 'Set a password';
-    const description = 'Use it to sign in to apps that offer passwords.';
-    const body = `${saved ? callout('Password saved', 'Your other sessions were signed out.', { tone: 'success', role: 'status' }) : ''}
+        ? field({ id: 'current_password', label: t(env, 'Current password'), type: 'password', name: 'current_password', autocomplete: 'current-password', required: true }) : '';
+    const title = hasPassword ? t(env, 'Change password') : t(env, 'Set a password');
+    const description = t(env, 'Use it to sign in to apps that offer passwords.');
+    const body = `${saved ? callout(t(env, 'Password saved'), t(env, 'Your other sessions were signed out.'), { tone: 'success', role: 'status' }) : ''}
 <form class="fd-form" method="post" action="/account/password">${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}${hidden('request_id', values.request_id || '')}
-${current}${field({ id: 'password', label: 'New password', type: 'password', name: 'password', autocomplete: 'new-password', minlength: 12, maxlength: 128, required: true, hint: '12 to 128 characters. A few unrelated words work well.' })}
-${small('We check new passwords against known data breaches. Saving signs out your other sessions and forgets remembered browsers.')}
-${values.request_id ? button('Save password', { variant: 'primary', size: 'lg', block: true }) : actions(linkButton('Cancel', '/account/security', { variant: 'ghost' }), button('Save password', { variant: 'primary' }))}</form>`;
+${current}${field({ id: 'password', label: t(env, 'New password'), type: 'password', name: 'password', autocomplete: 'new-password', minlength: 12, maxlength: 128, required: true, hint: t(env, '12 to 128 characters. A few unrelated words work well.') })}
+${small(t(env, 'We check new passwords against known data breaches. Saving signs out your other sessions and forgets remembered browsers.'))}
+${values.request_id ? button(t(env, 'Save password'), { variant: 'primary', size: 'lg', block: true }) : actions(linkButton(t(env, 'Cancel'), '/account/security', { variant: 'ghost' }), button(t(env, 'Save password'), { variant: 'primary' }))}</form>`;
     // Mid sign-in (an app is waiting) this is a centred screen; otherwise it sits in the account pages.
     return values.request_id ? page(title, heading(title, description) + body)
-        : accountPage(title, body, { active: 'security', description, back: ['Security', '/account/security'] });
+        : accountPage(title, body, { env, active: 'security', description, back: [t(env, 'Security'), '/account/security'] });
 }
 export async function passwordPage(request, env, ctx) {
     const session = await getSession(request, env);
@@ -37,7 +38,7 @@ export async function passwordPage(request, env, ctx) {
     const stored = await env.DB.prepare('SELECT * FROM user_passwords WHERE user_id=?').bind(session.user_id).first();
     if (request.method === 'GET') {
         const query = uniqueParams(new URL(request.url).searchParams);
-        return form(request, session, query, Boolean(stored), Boolean(query.done));
+        return form(env, request, session, query, Boolean(stored), Boolean(query.done));
     }
     const body = await readBody(request, 'form');
     await requireCsrf(request, env, session, body.csrf);
@@ -63,8 +64,7 @@ export async function passwordPage(request, env, ctx) {
         env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES(?,?,'{}',?,?)").bind(stored ? 'password_changed' : 'password_set', session.user_id, now, env.REALM.id)
     ]);
     ctx?.waitUntil(flushLogouts(env).catch(() => audit(env, 'logout_dispatch_failed', null, { pending: true })));
-    notify(env, ctx, session.email, stored ? 'your password was changed' : 'a password was set on your account',
-        `${stored ? 'Your password was changed' : 'A password was set for your account'} on ${new Date(now).toUTCString()}. Other signed-in sessions were signed out.`);
+    notify(env, ctx, session.email, stored ? 'password_changed' : 'password_set', { time: now });
     if (!pending) return redirect(`${env.ISSUER}/account/password?done=1`);
     // Continue to the app as a password sign-in: the person has just proved the mailbox and chosen the password.
     const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(session.user_id).first();

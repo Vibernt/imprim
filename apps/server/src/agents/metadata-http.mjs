@@ -61,7 +61,7 @@ export async function fetchJson(id, types) {
         const type = response.headers.get('content-type')?.split(';')[0].trim();
         if (!types.includes(type)) {
             if (response.body) await response.body.cancel();
-            invariant(false, 'invalid_client_metadata', `Metadata must be served as ${types.join(' or ')}.`);
+            invariant(false, 'invalid_client_metadata', 'Metadata must be served as {types}.', 400, { types: types.join(' or ') });
         }
         const document = await boundedJson(response);
         return { document, headers: response.headers };

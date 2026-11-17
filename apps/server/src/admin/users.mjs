@@ -1,4 +1,5 @@
 import { invariant } from '../lib/errors.mjs';
+import { recipientLocale } from '../i18n/index.mjs';
 import { endAccess } from '../services/access.mjs';
 import { auditStatement } from './auth.mjs';
 import { realmId } from '../realms/realm.mjs';
@@ -99,6 +100,7 @@ export async function resetMfa(env, actor, id, reason) {
         ...logoutStatements(env, id), env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id),
         ...userEventStatements(env, id, 'mfa-reset'),
         auditStatement(env, actor, 'admin_mfa_reset', id, { reason: reason.trim() })]);
-    notify(env, env.CTX, user.email, 'your two-factor authentication was reset', `An administrator reset two-factor authentication on your account (reason: ${reason.trim()}). You were signed out and will set it up again at your next sign-in.`);
+    // The person's language, not the administrator's: their saved choice, else the realm's.
+    notify(env, env.CTX, user.email, 'mfa_reset', { reason: reason.trim() }, { locale: recipientLocale(env, user.locale) });
     return { id, mfa_reset: true };
 }

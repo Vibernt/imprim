@@ -6,6 +6,7 @@ import { badge, status, table, empty, linkButton, code, hidden } from '../pages/
 import { accountHome, rowAction, when, day } from '../account/home.mjs';
 import { workspace } from './uris.mjs';
 import { revokeGrant, queueRevocation } from './revocation.mjs';
+import { t } from '../i18n/index.mjs';
 const PAGE = 50;
 export async function account(request, env, ctx) {
     const session = await getSession(request, env);
@@ -31,19 +32,19 @@ export async function agentsList(request, env, session) {
         WHERE g.user_id=? AND (g.created<? OR (g.created=? AND g.id<?)) ORDER BY g.created DESC,g.id DESC LIMIT ?`)
         .bind(session.user_id, Number(created), Number(created), id || '\uffff', PAGE + 1).all();
     const results = rows.slice(0, PAGE), last = results.at(-1);
-    const more = rows.length > PAGE ? `<div class="fd-row" data-justify="center">${linkButton('Older agents', `/account/agents?before=${last.created}:${last.id}`, { variant: 'ghost' })}</div>` : '';
+    const more = rows.length > PAGE ? `<div class="fd-row" data-justify="center">${linkButton(t(env, 'Older agents'), `/account/agents?before=${last.created}:${last.id}`, { variant: 'ghost' })}</div>` : '';
     const stack = (...lines) => `<div class="fd-stack" data-gap="1">${lines.join('')}</div>`;
     const rowsHtml = results.map(g => {
         const app = JSON.parse(g.branding).name || g.app_id;
         return [
-            stack(`<span class="fd-label">${e(g.client_name)}</span>`, g.registration_method === 'dynamic' ? `<span>${badge('Unverified', 'warning')}</span>` : `<span class="fd-mono-sm fd-muted">${e(new URL(g.client_id).host)}</span>`),
-            stack(`<span>${e(app)}</span>`, `<span class="fd-small fd-muted">${e(`Workspace: ${workspace(g.resource)}`)}</span>`, `<span class="fd-mono-sm fd-muted">${e(g.resource)}</span>`),
+            stack(`<span class="fd-label">${e(g.client_name)}</span>`, g.registration_method === 'dynamic' ? `<span>${badge(t(env, 'Unverified'), 'warning')}</span>` : `<span class="fd-mono-sm fd-muted">${e(new URL(g.client_id).host)}</span>`),
+            stack(`<span>${e(app)}</span>`, `<span class="fd-small fd-muted">${e(t(env, 'Workspace: {workspace}', { workspace: workspace(g.resource) }))}</span>`, `<span class="fd-mono-sm fd-muted">${e(g.resource)}</span>`),
             `<div class="fd-row" data-wrap data-gap="1">${String(g.scope).split(' ').filter(Boolean).map(code).join('')}</div>`,
-            stack(`<span>${e(when(g.last_used))}</span>`, `<span class="fd-small fd-muted">${e(`Connected ${day(g.created)}`)}</span>`),
-            g.revoked_at ? status('Revoked') : g.expires_at <= Date.now() ? status('Expired', 'warning')
-                : rowAction(request, '/account/revoke', hidden('grant_id', g.id), 'Revoke', { variant: 'danger-soft', 'aria-label': `Revoke ${g.client_name}` })
+            stack(`<span>${e(when(env, g.last_used))}</span>`, `<span class="fd-small fd-muted">${e(t(env, 'Connected {date}', { date: day(env, g.created) }))}</span>`),
+            g.revoked_at ? status(t(env, 'Revoked')) : g.expires_at <= Date.now() ? status(t(env, 'Expired'), 'warning')
+                : rowAction(request, '/account/revoke', hidden('grant_id', g.id), t(env, 'Revoke'), { variant: 'danger-soft', 'aria-label': t(env, 'Revoke {name}', { name: g.client_name }) })
         ];
     });
-    return results.length ? table('Connected agents', ['Agent', 'App', 'Scopes', 'Last used', 'Access'], rowsHtml) + more
-        : empty('No agents connected', 'Agents you approve to act in an app appear here.');
+    return results.length ? table(t(env, 'Connected agents'), [t(env, 'Agent'), t(env, 'App'), t(env, 'Scopes'), t(env, 'Last used'), t(env, 'Access')], rowsHtml) + more
+        : empty(t(env, 'No agents connected'), t(env, 'Agents you approve to act in an app appear here.'));
 }

@@ -12,7 +12,8 @@ import { normalizeEmail } from '../services/admission.mjs';
 import { audit } from '../services/audit.mjs';
 export const UPSTREAM_COOKIE = '__Host-vi_up';
 const STATE_MS = 600000;
-const unavailable = (id, message = 'Sign-in provider request failed.') => invariant(false, 'provider_unavailable', `${id}: ${message}`, 502);
+// The problem is technical and stays English; the person sees it after the provider's name.
+const unavailable = (id, problem = 'Sign-in provider request failed.') => invariant(false, 'provider_unavailable', '{provider}: {problem}', 502, { provider: id, problem });
 function providerConfig(env, id) {
     const provider = env.PROVIDERS?.[id];
     invariant(provider, 'provider_config', 'That sign-in provider is not configured for this realm.', 503);
@@ -53,7 +54,7 @@ async function signingKey(env, id, jwksUri, kid, alg) {
         let hit = cache.get(jwksUri);
         if (!hit || hit.until <= Date.now() || (attempt === 1)) {
             const { data } = await boundedJson(id, jwksUri, { headers: { accept: 'application/json' } });
-            invariant(Array.isArray(data?.keys) && data.keys.length <= 64, 'provider_unavailable', `${id}: Invalid key set.`, 502);
+            invariant(Array.isArray(data?.keys) && data.keys.length <= 64, 'provider_unavailable', '{provider}: {problem}', 502, { provider: id, problem: 'Invalid key set.' });
             hit = { keys: data.keys, until: Date.now() + 3600000 }; cache.set(jwksUri, hit);
         }
         const jwk = hit.keys.find(key => key.kid === kid && !key.d && (alg === 'RS256' ? key.kty === 'RSA' : key.kty === 'EC' && key.crv === 'P-256'));
@@ -66,7 +67,7 @@ async function signingKey(env, id, jwksUri, kid, alg) {
 }
 const decodePart = part => JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(from64(part)));
 async function verifyIdToken(env, id, provider, meta, token, nonce) {
-    const bad = message => invariant(false, 'invalid_grant', `${id}: ${message}`, 401);
+    const bad = problem => invariant(false, 'invalid_grant', '{provider}: {problem}', 401, { provider: id, problem });
     if (typeof token !== 'string' || token.length > 16384 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) bad('Invalid ID token.');
     const [h, c, s] = token.split('.');
     let header, claims;
@@ -139,7 +140,7 @@ export async function providerCallback(request, env, id) {
     else if (provider.type === 'microsoft' || provider.token_auth === 'client_secret_post') form.set('client_secret', provider.client_secret);
     else headers.authorization = 'Basic ' + btoa(`${encodeURIComponent(provider.client_id)}:${encodeURIComponent(provider.client_secret)}`);
     const { data } = await boundedJson(id, meta.token_endpoint, { method: 'POST', headers, body: form.toString() });
-    invariant(data && !data.error && typeof data.id_token === 'string', 'provider_unavailable', `${id}: Token exchange refused.`, 502);
+    invariant(data && !data.error && typeof data.id_token === 'string', 'provider_unavailable', '{provider}: {problem}', 502, { provider: id, problem: 'Token exchange refused.' });
     const claims = await verifyIdToken(env, id, provider, meta, data.id_token, row.oidc_nonce);
     invariant(typeof claims.email === 'string', 'access_denied', 'The provider did not share an email address.', 403);
     const email = normalizeEmail(claims.email);

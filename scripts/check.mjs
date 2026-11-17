@@ -28,3 +28,8 @@ for (const path of await files('.')) {
     count++;
 }
 console.log(`Checked ${count} ESM files; syntax and zero runtime dependencies.`);
+// Translations: every people-facing message id in every shipped language, with matching placeholders (scripts/i18n.mjs).
+const { checkAll } = await import('./i18n.mjs');
+const translations = await checkAll();
+if (translations.problems.length) throw new Error(`Translation catalogues:\n${translations.problems.slice(0, 20).join('\n')}${translations.problems.length > 20 ? `\n… and ${translations.problems.length - 20} more` : ''}`);
+console.log(`Checked ${translations.count} message ids in ${translations.locales.join(', ')}.`);

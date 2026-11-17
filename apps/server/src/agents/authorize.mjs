@@ -7,6 +7,7 @@ import { signInPage } from '../pages/sign-in.mjs';
 import { checkPolicy } from './policy.mjs';
 import { limitAgentAddress } from '../auth/rate-limit.mjs';
 import { matchRedirect } from './uris.mjs';
+import { parseUiLocales, useLocale } from '../i18n/index.mjs';
 export async function authorizeAgent(request, env, query) {
     // /authorize can fetch an agent's metadata document anonymously, so it spends the same budget as registration (S10).
     await limitAgentAddress(env, request, 'authorize', 60);
@@ -25,10 +26,11 @@ export async function authorizeAgent(request, env, query) {
 }
 export async function beginAgentSignIn(request, env, values, context, deviceHash = null) {
     const existing = cookies(request)[BROWSER_COOKIE], browser = tokenShape(existing) ? existing : randomToken();
-    const id = randomToken(), responseCookies = [cookie(BROWSER_COOKIE, browser, 1800)];
-    await env.DB.prepare(`INSERT INTO auth_requests(id,client_id,redirect_uri,state,nonce,challenge,scope,browser_hash,expires_at,agent_client_id,resource,device_hash,prompt)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, context.app.id, values.redirect_uri || `${env.ISSUER}/device`, values.state || '', '',
-        values.code_challenge || '', values.scope, await sha256(browser), Date.now() + 1800000, values.client_id, values.resource, deviceHash, values.prompt === 'login' ? 'login' : null).run();
+    const id = randomToken(), responseCookies = [cookie(BROWSER_COOKIE, browser, 1800)], uiLocales = parseUiLocales(values.ui_locales);
+    useLocale(env, { client: context.app, uiLocales });
+    await env.DB.prepare(`INSERT INTO auth_requests(id,client_id,redirect_uri,state,nonce,challenge,scope,browser_hash,expires_at,agent_client_id,resource,device_hash,prompt,ui_locales)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, context.app.id, values.redirect_uri || `${env.ISSUER}/device`, values.state || '', '',
+        values.code_challenge || '', values.scope, await sha256(browser), Date.now() + 1800000, values.client_id, values.resource, deviceHash, values.prompt === 'login' ? 'login' : null, uiLocales).run();
     const session = values.prompt === 'login' ? null : await getSession(request, env);
     if (session && allowsMethod(context.app, session.method, session.google_hd, true)) return redirect(`${env.ISSUER}/agent/consent?request_id=${id}`, responseCookies);
     return signInPage(env, id, responseCookies, context.app);

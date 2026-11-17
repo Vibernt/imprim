@@ -80,17 +80,25 @@ root.addEventListener('click', (event) => {
   preview(remove.dataset.remove, null);
 });
 
-// Fields: name, links and copy. An empty field removes the value, so the default shows.
+// Fields: name, links, languages and copy. An empty field removes the value, so the default shows.
 const collect = () => {
   const next = { ...branding };
-  delete next.copy;
-  const copy = {};
-  for (const input of root.querySelectorAll('input[name]:not([type=file]):not([type=hidden])')) {
+  delete next.copy; delete next.locale_copy;
+  const copy = {}, localeCopy = {};
+  for (const input of root.querySelectorAll('input[name]:not([type=file]):not([type=hidden]):not([type=checkbox]), select[name]')) {
     const value = input.value.trim();
     if (input.name.startsWith('copy.')) { if (value) copy[input.name.slice(5)] = value; }
+    else if (input.name.startsWith('locale_copy.')) {
+      const [, tag, key] = input.name.split('.');
+      if (value) (localeCopy[tag] ||= {})[key] = value;
+    }
     else if (value) next[input.name] = value; else delete next[input.name];
   }
   if (Object.keys(copy).length) next.copy = copy;
+  if (Object.keys(localeCopy).length) next.locale_copy = localeCopy;
+  // Every language ticked is the default (all offered), so nothing is saved for it.
+  const offered = [...root.querySelectorAll('input[type=checkbox][name=locales]')], ticked = offered.filter(box => box.checked).map(box => box.value);
+  if (offered.length && ticked.length < offered.length) next.locales = ticked; else delete next.locales;
   const look = differences(tweaks.get());
   if (Object.keys(look).length) next.look = look; else delete next.look;
   return next;

@@ -13,7 +13,7 @@ export function clientAddress(request) {
 }
 // Binding limiters: `key` names the bucket; callers pass an authenticated client id where one exists (S2).
 async function limitKey(env, binding, key) {
-    invariant(typeof env[binding]?.limit === 'function', 'rate_limit_config', `${binding} is not configured.`, 503);
+    invariant(typeof env[binding]?.limit === 'function', 'rate_limit_config', '{binding} is not configured.', 503, { binding });
     const result = await env[binding].limit({ key: await sha256(key) });
     invariant(result?.success === true, 'rate_limit', 'Too many requests.', 429);
 }

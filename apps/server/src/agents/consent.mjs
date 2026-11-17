@@ -13,6 +13,7 @@ import { admitSession, admissionGuard } from '../services/admission.mjs';
 import { mfaGate } from '../auth/mfa.mjs';
 import { notify } from '../services/notify.mjs';
 import { redirect } from '../lib/http.mjs';
+import { t, tHtml, tPlural, brandCopy } from '../i18n/index.mjs';
 // Live grants per person, across apps: each is a consent the person gave, so this only bounds runaway automation (S5).
 export const MAX_LIVE_GRANTS = 50;
 export { hidden };
@@ -27,26 +28,26 @@ function agentAssurance(row, agent, method) {
     return !row.device_hash && row.redirect_uri?.startsWith('https://') ? 'redirect' : 'claimed';
 }
 // Shown whenever the code or callback can reach someone other than the person at this screen.
-const phishing = callout('Only approve your own connection', 'Approve only if you started it just now, on this device or your own. If someone sent you this link or code, choose Deny: approving gives them access as you.', { tone: 'danger' });
+const phishing = env => callout(t(env, 'Only approve your own connection'), t(env, 'Approve only if you started it just now, on this device or your own. If someone sent you this link or code, choose Deny: approving gives them access as you.'), { tone: 'danger' });
 function consentPage(request, env, row, context) {
     const { agent, app, settings, method } = context;
     const assurance = agentAssurance(row, agent, method), name = agent.client_name;
     const host = method === 'metadata_document' ? code(new URL(agent.client_id).host) : '';
-    const title = { key: `Connect ${name}?`, redirect: `Connect ${name}?`, claimed: `Connect an agent calling itself “${name}”?`,
-        none: `Connect an unverified agent calling itself “${name}”?` }[assurance];
-    // Values are markup: the host is escaped by code(), the rest is fixed text.
-    const identity = { key: `${host}, verified by its signing key`, redirect: `${host}, verified by its HTTPS callback`,
-        claimed: `${host}, <strong>claimed, not verified</strong>. Any program can use this name.`,
-        none: 'None. This agent registered itself, so its name is not verified.' }[assurance];
-    const brand = brandingFor(env, app), intro = brand.copy?.consent_intro, days = settings.agent_max_grant_days;
+    const title = { key: t(env, 'Connect {name}?', { name }), redirect: t(env, 'Connect {name}?', { name }), claimed: t(env, 'Connect an agent calling itself “{name}”?', { name }),
+        none: t(env, 'Connect an unverified agent calling itself “{name}”?', { name }) }[assurance];
+    // Values are markup: the host is escaped by code(), the rest is escaped text.
+    const at = { host: { html: host } }, identity = { key: tHtml(env, '{host}, verified by its signing key', at), redirect: tHtml(env, '{host}, verified by its HTTPS callback', at),
+        claimed: tHtml(env, '{host}, <0>claimed, not verified</0>. Any program can use this name.', at, [inner => `<strong>${inner}</strong>`]),
+        none: tHtml(env, 'None. This agent registered itself, so its name is not verified.') }[assurance];
+    const brand = brandingFor(env, app), intro = brandCopy(env, brand, 'consent_intro'), days = settings.agent_max_grant_days;
     const scopes = `<ul class="fd-feature-list">${row.scope.split(' ').map(scope =>
         `<li>${icon('check')}<span>${code(scope)} ${e(settings.agent_scope_catalogue[scope])}</span></li>`).join('')}</ul>`;
-    return page('Connect agent', heading(title, intro || 'Approving lets it act as you, within the access below.') +
-        (assurance === 'key' || assurance === 'redirect' ? '' : phishing) +
-        kv([['Agent host', identity], ['App', e(brand.name || app.id)], ['Workspace', code(workspace(row.resource))], ['Resource', code(row.resource)]], 1) +
-        section('What it can do', `Access lasts at most ${days} day${days === 1 ? '' : 's'}. The app checks your permissions on every call.`, scopes) +
+    return page(t(env, 'Connect agent'), heading(title, intro || t(env, 'Approving lets it act as you, within the access below.')) +
+        (assurance === 'key' || assurance === 'redirect' ? '' : phishing(env)) +
+        kv([[t(env, 'Agent host'), identity], [t(env, 'App'), e(brand.name || app.id)], [t(env, 'Workspace'), code(workspace(row.resource))], [t(env, 'Resource'), code(row.resource)]], 1) +
+        section(t(env, 'What it can do'), tPlural(env, days, 'Access lasts at most {count} day. The app checks your permissions on every call.', 'Access lasts at most {count} days. The app checks your permissions on every call.'), scopes) +
         `<form method="post" action="/agent/consent">${hidden('request_id', row.id)}${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}
-${actions(button('Deny', { name: 'decision', value: 'deny', variant: 'outline' }), button('Approve', { name: 'decision', value: 'approve', variant: 'primary' }))}</form>`,
+${actions(button(t(env, 'Deny'), { name: 'decision', value: 'deny', variant: 'outline' }), button(t(env, 'Approve'), { name: 'decision', value: 'approve', variant: 'primary' }))}</form>`,
         { size: 'md', client: app, formTargets: row.device_hash || !row.redirect_uri ? [] : [row.redirect_uri] });
 }
 export async function consent(request, env) {
@@ -73,7 +74,7 @@ export async function consent(request, env) {
     const args = [row.id, row.browser_hash, now, session.hash, now, ...admission.args, now, ...guard.args];
     if (approve) {
         const live = await env.DB.prepare('SELECT count(*) AS n FROM agent_grants WHERE user_id=? AND revoked_at IS NULL AND expires_at>?').bind(session.user_id, now).first();
-        invariant(live.n < MAX_LIVE_GRANTS, 'access_denied', `You have ${MAX_LIVE_GRANTS} connected agents, the most allowed. Revoke one in your account, then try again.`, 403);
+        invariant(live.n < MAX_LIVE_GRANTS, 'access_denied', 'You have {count} connected agents, the most allowed. Revoke one in your account, then try again.', 403, { count: MAX_LIVE_GRANTS });
     }
     if (approve) {
         batch.push(env.DB.prepare(`INSERT INTO agent_grants(id,client_id,client_name,registration_method,app_id,user_id,resource,scope,method,google_hd,created,last_used,expires_at)
@@ -93,10 +94,11 @@ export async function consent(request, env) {
     invariant(written[deleteIndex].results.length === 1 && (!approve || written[0].meta.changes === 1), 'invalid_request', 'This request was already answered or has expired. Start again from the agent.');
     if (approve) {
         await env.DB.prepare('UPDATE agent_clients SET last_used=? WHERE id=?').bind(now, row.agent_client_id).run();
-        notify(env, env.CTX, session.email, 'an agent was connected', `"${context.agent.client_name}" can now act for you in ${JSON.parse(context.app.branding).name || context.app.id} (${workspace(row.resource)}) with: ${row.scope}. Review or revoke it at ${env.ISSUER}/account/agents.`);
+        notify(env, env.CTX, session.email, 'agent_connected', { agent: context.agent.client_name, app: JSON.parse(context.app.branding).name || context.app.id, workspace: workspace(row.resource), scopes: row.scope },
+            { links: { agents_url: `${env.ISSUER}/account/agents` } });
     }
     if (row.device_hash) return approve
-        ? page('Agent connected', result('circle-check', 'success', 'Agent connected', 'Go back to your device to continue.') + linkButton('See connected agents', '/account/agents', { variant: 'outline', size: 'lg', block: true }))
-        : page('Connection denied', result('ban', 'neutral', 'Connection denied', 'The agent gets no access. Go back to your device.'));
+        ? page(t(env, 'Agent connected'), result('circle-check', 'success', t(env, 'Agent connected'), t(env, 'Go back to your device to continue.')) + linkButton(t(env, 'See connected agents'), '/account/agents', { variant: 'outline', size: 'lg', block: true }))
+        : page(t(env, 'Connection denied'), result('ban', 'neutral', t(env, 'Connection denied'), t(env, 'The agent gets no access. Go back to your device.')));
     return authorizationResponse(env, row, approve ? { code } : { error: 'access_denied' });
 }

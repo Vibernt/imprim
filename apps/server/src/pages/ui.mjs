@@ -1,6 +1,7 @@
 // Fire components rendered on the server, so pages that handle credentials need no client-side framework. Markup follows
 // the Fire docs (docs/fire/VOCABULARY.md); copy follows docs/fire/WRITING.md. Every argument that is text is escaped here.
 import { ICONS } from '../../public/fire/js/icons.js';
+import { t } from '../i18n/index.mjs';
 export const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const e = escapeHtml;
 export const attrs = (pairs = {}) => Object.entries(pairs).filter(([, v]) => v !== undefined && v !== null && v !== false)
@@ -56,5 +57,5 @@ export const code = value => `<code class="fd-code">${e(value)}</code>`;
 export const table = (label, headers, rows) => `<div class="fd-table-wrap"><div class="fd-table-scroll"><table class="fd-table" aria-label="${e(label)}"><thead><tr>${headers.map(h => `<th>${e(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
 export const actions = (...buttons) => `<div class="fd-form-actions">${buttons.join('')}</div>`;
 // "or" between two ways to do one thing.
-export const orDivider = '<div class="fd-row" data-gap="3" role="separator" aria-label="or"><hr class="fd-divider fd-grow"><span class="fd-eyebrow">or</span><hr class="fd-divider fd-grow"></div>';
+export const orDivider = env => { const or = e(t(env, 'or')); return `<div class="fd-row" data-gap="3" role="separator" aria-label="${or}"><hr class="fd-divider fd-grow"><span class="fd-eyebrow">${or}</span><hr class="fd-divider fd-grow"></div>`; };
 export const small = text => `<p class="fd-small fd-muted">${e(text)}</p>`;

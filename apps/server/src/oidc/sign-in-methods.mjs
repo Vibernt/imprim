@@ -7,7 +7,7 @@ const domainPattern = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a
 export function validateSignInSettings(methods, domains = []) {
     invariant(Array.isArray(methods) && methods.length > 0 && methods.length <= 16 &&
         methods.every(isMethod) && new Set(methods).size === methods.length,
-    'client_config', `sign_in_methods must be a nonempty ordered list of distinct methods: ${METHODS.join(', ')} or a provider id from the realm config.`, 503);
+    'client_config', 'sign_in_methods must be a nonempty ordered list of distinct methods: {methods} or a provider id from the realm config.', 503, { methods: METHODS.join(', ') });
     invariant(Array.isArray(domains) && domains.every(domain => typeof domain === 'string' && domain.length <= 253 && domainPattern.test(domain)) &&
         new Set(domains).size === domains.length, 'client_config', 'google_hosted_domains must contain distinct lowercase domains.', 503);
     return { methods, domains };
