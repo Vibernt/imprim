@@ -279,3 +279,19 @@ test('a request accepting either level signs in with one factor and says which i
     const claims = claimsOf((await (await w.exchange(signed.code)).json()).id_token);
     assert.equal(claims.acr, 'urn:imprim:acr:sf');
 });
+
+test('sign-out with only state signs the person out; a return address still needs the app', async t => {
+    const w = await world(t), signed = await login(w, t);
+    const page = await w.call('/logout?state=only', { headers: { cookie: signed.cookie } });
+    assert.equal(page.status, 200);
+    const html = await page.text();
+    assert.ok(!html.includes('value="only"'), 'a lone state is not carried into the form');
+    const csrf = signed.cookie.match(/__Host-vi_csrf=([^;]+)/)[1];
+    const out = await w.call('/logout', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: w.env.ISSUER, cookie: signed.cookie },
+        body: new URLSearchParams({ csrf, state: 'only' }) });
+    assert.equal(out.status, 303);
+    assert.equal(out.headers.get('location'), w.env.ISSUER + '/signed-out');
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM sessions').get().n, 0);
+    const refused = await w.call('/logout?' + new URLSearchParams({ post_logout_redirect_uri: 'https://app.example/bye', state: 'x' }), { headers: { cookie: signed.cookie } });
+    assert.equal(refused.status, 400);
+});

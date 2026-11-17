@@ -14,10 +14,12 @@ async function parameters(env, values, session) {
         invariant(!values.client_id || values.client_id === hint.aud, 'invalid_request', 'Logout client does not match hint.');
         values.client_id = hint.aud;
     }
-    // Signing out from Imprim's own pages (the console, the account) names no app. Nothing can be carried then, so no
-    // outside address is ever reached: the person lands on /signed-out.
+    // Without an app (Imprim's own pages, or an app that sent only state) there is nowhere to return to, so no outside
+    // address is ever reached: the person signs out and lands on /signed-out. state only travels with a return
+    // address, so on its own it is dropped (RP-Initiated Logout 1.0, section 2); a return address is refused.
     if (!values.client_id) {
-        invariant(!values.post_logout_redirect_uri && !values.state, 'invalid_request', 'A return address needs the app’s client_id.');
+        invariant(!values.post_logout_redirect_uri, 'invalid_request', 'A return address needs the app’s client_id.');
+        delete values.state;
         return values;
     }
     const client = await getClient(env, values.client_id);

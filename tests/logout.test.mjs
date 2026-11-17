@@ -96,8 +96,9 @@ test('a person signs out from Imprim\'s own pages: no app is named, so nothing o
     assert.match(html, /<form method="post" action="\/logout">/); assert.match(html, /href="\/account"[^>]*><span>Stay signed in<\/span>/);
     assert.equal(ask.headers.get('content-security-policy').match(/form-action ([^;]+)/)[1], "'self'");
     assert.equal(sessions(), 1);
-    // Without an app, a return address or state is refused, on GET and on POST.
-    for (const extra of [{ post_logout_redirect_uri: 'https://evil.example/' }, { post_logout_redirect_uri: 'https://app.example/bye' }, { state: 'x' }]) {
+    // Without an app, a return address is refused, on GET and on POST. (A lone state is dropped instead; see
+    // oidc-certification.test.mjs.)
+    for (const extra of [{ post_logout_redirect_uri: 'https://evil.example/' }, { post_logout_redirect_uri: 'https://app.example/bye' }]) {
         assert.equal((await w.call('/logout?' + new URLSearchParams(extra), { headers: { cookie: signed.cookie } })).status, 400);
         const post = await w.call('/logout', { method: 'POST', headers: { origin: w.env.ISSUER, cookie: signed.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf, ...extra }) });
         assert.equal(post.status, 400);

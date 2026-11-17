@@ -14,7 +14,7 @@ identity; apps keep workspace admission, memberships, roles, local sessions and 
 | `GET /authorize` or `POST /authorize` | Exact registered client/redirect validation, then SSO or sign-in. POST takes a form body. |
 | `POST /token` | Form-encoded authorization-code exchange; confidential clients use HTTP Basic or `client_secret_post`. |
 | `GET /userinfo` or `POST /userinfo` | Bearer opaque access token in the header, or as `access_token` in a POST form body (RFC 6750 §2.2), never both and never in the query; `sub`, and email claims if `email` was authorized. |
-| `GET /logout` | Validate client/return URI, show confirmation; no cookie-authenticated destructive GET. With no `client_id` it is a person signing out from Imprim's own pages: no return URI or state is accepted, and it ends at `/signed-out`. |
+| `GET /logout` | Validate client/return URI, show confirmation; no cookie-authenticated destructive GET. With no `client_id` it is a person signing out from Imprim's own pages: a return URI is refused, a lone `state` is ignored (it only travels with a return URI), and it ends at `/signed-out`. |
 | `POST /logout` | Form-encoded same-origin CSRF confirmation; deletes identity session and associated tokens/codes. |
 | `POST /v1/invitations` | JSON `{email}`, confidential client Basic authentication; upserts a 30-day invitation. |
 | `POST /v1/auth/magic/request` | JSON `{email, request_id, turnstile}`; neutral `{accepted:true}` after browser/challenge checks. |
