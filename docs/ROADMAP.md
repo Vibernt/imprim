@@ -24,12 +24,14 @@ Planned, roughly in order. Each item is an issue to discuss before code:
 2. **Native review of the translations.** The Spanish, French, German and Portuguese catalogues are drafts until
    native speakers have read them. Then more languages, and the admin console.
 
-Certification: run the conformance suite's Basic, Config, RP-Initiated Logout and Back-Channel Logout plans on
-staging, then self-certify ([OpenID certification](CERTIFICATION.md)). Dynamic OP would need open registration for web apps.
+Certification: the conformance suite's Basic, Config, RP-Initiated Logout and Back-Channel Logout plans passed on
+staging on 2026-11-17 with no failures; what remains is submitting them to self-certify
+([OpenID certification](CERTIFICATION.md)). Dynamic OP would need open registration for web apps.
 
-Still to verify live: Claude Code, Cursor and Codex against a real MCP resource; device flow from a CLI; Workers
-egress and DNS-rebinding behaviour; Safari and Chrome cookie flows; Queue delivery against a real app; the Fire
-interface on a deployed Worker ([Security](SECURITY.md#not-yet-verified-live)). The
+Verified live on 2026-11-17: Claude Code against a real MCP resource in production, from consent through refresh to
+revocation delivered to the app. Still to verify live: Cursor and Codex; device flow from a CLI; Workers egress and
+DNS-rebinding behaviour; Safari and Chrome cookie flows; retry and deduplication by a real app; the Fire interface on
+a deployed Worker ([Security](SECURITY.md#not-yet-verified-live)). The
 [MCP probe](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe) is the target for the agent and device
 checks: a test MCP server for staging, and a scripted agent that runs the device flow, refresh, reuse detection and
 revocation delivery end to end.

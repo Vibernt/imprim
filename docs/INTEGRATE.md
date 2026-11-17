@@ -50,6 +50,13 @@ when a person's account changes (`event_token`). Verify each with `identity.veri
 [package README](https://github.com/Vibernt/imprim/blob/main/packages/imprim-client/README.md) has a complete handler. Delivery is at least once and is
 retried for 24 hours.
 
+If your app was down or missed an agent revocation, it is still safe: the agent's refresh stopped the moment the
+person revoked, and its access token expires within 60 seconds. To catch up after an outage, list the live grants
+with `GET /v1/grants` (or `listGrants`) and drop any you hold that are not in it, or introspect a token you are
+unsure of. Revocation is final, so events cannot arrive in a harmful order: a revoked `grant_id` never becomes live
+again, and a person who reconnects gets a new one. An event names one grant, so revoking one of an agent's grants
+leaves its others working.
+
 ## 4. Accept agents on your MCP server
 
 1. Ask a realm admin to set the client's agent policy: `agent_access: "on"`; `agent_resource_prefixes`, for
@@ -75,6 +82,11 @@ retried for 24 hours.
 
 The resource must name exactly one workspace and be in canonical form (no trailing slash, no needless
 percent-encoding). The token's audience is that exact string.
+
+Agents usually ask for every scope in your metadata's `scopes_supported`. Claude Code does unless its `.mcp.json`
+pins the server's scopes, for example `"oauth": { "scopes": "read-only" }`, and the consent page shows the person
+exactly what was asked for. List your least powerful scope first and describe each one plainly in the catalogue, and
+check the person's role on every call whatever the token says.
 
 ## 5. Build an agent that connects
 

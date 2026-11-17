@@ -135,6 +135,8 @@ pages and emails in five languages with branded HTML email, the changes the Open
 (classic OpenID Connect per app, `id_token_hint`, `POST /authorize`, `client_secret_post`, RS256 ID tokens) and the
 fixes it found, to the 2026-11-15 release: the security pass, realms, passwords, two-factor, the account pages,
 passkeys, the provider registry, machines, DPoP, user events, branding and the Fire interface.
+On 2026-11-17 Claude Code connected to a Vibernt app's MCP server through production: a person approved a read-only
+grant, the token refreshed after its 60 seconds, and revoking it from the account page reached the app in 7 seconds.
 What has not been verified against live Cloudflare is listed in [Security](docs/SECURITY.md#not-yet-verified-live).
 What comes next is in the [Roadmap](docs/ROADMAP.md).
 

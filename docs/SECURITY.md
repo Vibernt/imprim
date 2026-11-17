@@ -42,7 +42,11 @@ This repository does not record which commit a deployment runs or which clients 
 Worker's deployments in Cloudflare before relying on a behaviour described here. The reference deployment's state
 (see the README's Status) is:
 
-- **Production** runs every migration, `0001`–`0023`. Migration `0023` (agents at scale) and the `AGENT_LIMITER` binding
+- **Production** runs every migration, `0001`–`0023`. On 2026-11-17 a person connected Claude Code to a Vibernt app's
+  MCP server through production: Claude Code registered with its client ID metadata document, the person signed in
+  and approved a `read-only` grant, the app's read tools answered, the token refreshed after its 60 seconds, and when
+  the person revoked the grant from the account page, the signed revocation event reached the app's back-channel
+  7 seconds later and the agent lost access. Migration `0023` (agents at scale) and the `AGENT_LIMITER` binding
   were applied and deployed on 2026-11-17 after a backup; an agent token request then got an OAuth error rather than a
   missing-binding failure, and the sign-in page and JWKS were unchanged. Migrations `0020`–`0022` (classic OpenID Connect, languages
   and HTML email, RS256) were applied and deployed on 2026-11-17, after a backup and after the same release passed the
@@ -53,9 +57,8 @@ Worker's deployments in Cloudflare before relying on a behaviour described here.
   release ran on staging. That day: discovery answered with DPoP and the new grant types; JWKS still listed the
   existing key, so tokens issued before the upgrade keep verifying; users, clients, agent grants and refresh tokens
   kept their counts; the Fire files and Imprim's modules are served as static assets; the sign-in page rendered for
-  each registered app; and a scheduled run finished without an exception. Not tried there by a person yet: a
-  complete sign-in, an agent connection, a back-channel delivery, or the console (its administrators must first add
-  a second factor). Apps on it need client 0.3.0 or later for revocation events.
+  each registered app; and a scheduled run finished without an exception. Not tried there by a person yet: the
+  console (its administrators must first add a second factor). Apps on it need client 0.3.0 or later for revocation events.
 - **Staging** also runs migrations `0010`–`0018` (passwords, two-factor, account page, passkeys, providers,
   machines, DPoP and exchange, user events, branding), applied on 2026-11-15. There, discovery (client credentials,
   token exchange, introspection, revocation, DPoP and `acr` values), JWKS, the theme and page assets, the branded
