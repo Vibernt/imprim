@@ -12,7 +12,9 @@ export async function confirmedFactors(env, userId) {
     return (await env.DB.prepare(`SELECT id,type,name,created,last_used FROM mfa_factors WHERE user_id=?1 AND confirmed=1
         UNION ALL SELECT id,'passkey',name,created,last_used FROM webauthn_credentials WHERE user_id=?1 ORDER BY created`).bind(userId).all()).results;
 }
-const acrRequested = row => (row?.acr_values || '').split(' ').includes(ACR_MFA);
+// acr_values lists the levels an app accepts, in order of preference (OIDC Core 3.1.2.1). A second factor is demanded
+// only when the app accepts nothing less: it lists the MFA level and not the single-factor one.
+export const acrRequested = row => { const values = (row?.acr_values || '').split(' '); return values.includes(ACR_MFA) && !values.includes(ACR_SINGLE); };
 // What this sign-in needs: 'none', 'verify' (has a factor) or 'enrol' (must add one first).
 async function mfaNeed(env, { client, session, row, agent = false }) {
     const factors = await confirmedFactors(env, session.user_id);

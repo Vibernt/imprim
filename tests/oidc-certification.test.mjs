@@ -259,3 +259,20 @@ test('max_age counts whole seconds, so a sign-in late in a second still meets ma
     assert.equal(withinMaxAge(signedIn, 0, 1_800_000_000_999), true);
     assert.equal(withinMaxAge(signedIn, 0, 1_800_000_001_000), false);
 });
+
+test('acr_values demands a second factor only when the single-factor level is not acceptable', async () => {
+    const { acrRequested } = await import('../apps/server/src/auth/mfa.mjs');
+    assert.equal(acrRequested({ acr_values: 'urn:imprim:acr:mfa' }), true);
+    assert.equal(acrRequested({ acr_values: 'urn:imprim:acr:mfa something-else' }), true);
+    assert.equal(acrRequested({ acr_values: 'urn:imprim:acr:sf urn:imprim:acr:mfa' }), false);
+    assert.equal(acrRequested({ acr_values: 'urn:imprim:acr:mfa urn:imprim:acr:sf' }), false);
+    assert.equal(acrRequested({ acr_values: 'urn:imprim:acr:sf' }), false);
+    assert.equal(acrRequested({ acr_values: null }), false);
+});
+test('a request accepting either level signs in with one factor and says which it got', async t => {
+    const w = await world(t);
+    const signed = await signIn(w, t, { acr_values: 'urn:imprim:acr:sf urn:imprim:acr:mfa' });
+    assert.ok(signed.code);
+    const claims = claimsOf((await (await w.exchange(signed.code)).json()).id_token);
+    assert.equal(claims.acr, 'urn:imprim:acr:sf');
+});

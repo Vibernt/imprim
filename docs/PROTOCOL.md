@@ -184,7 +184,8 @@ single-use recovery codes (shown once, stored as SHA-256). Ten wrong codes withi
 attempts are counted before they are checked, so a parallel burst cannot pass the limit. A client may let a
 **trusted browser** skip that client's second factor (trust is per app) for `mfa_trusted_device_days` (1–90, default 0 = never). Trusted browsers
 are forgotten when a password or factor changes. **Step-up:** `acr_values=urn:imprim:acr:mfa` demands a second
-factor in this session, and a trusted browser does not count. `max_age` (seconds) treats an older primary sign-in as
+factor in this session, and a trusted browser does not count. `acr_values` lists acceptable levels in order of
+preference, so a request that also lists `urn:imprim:acr:sf` accepts a single factor and demands nothing more. `max_age` (seconds) treats an older primary sign-in as
 none, and also bounds the age of the second factor. `prompt=login` and `max_age` are enforced again when the code is
 issued, however the sign-in continued. The ID token carries `acr` (`urn:imprim:acr:mfa` after a second
 factor, otherwise `urn:imprim:acr:sf`) and `amr` gains `otp` and `mfa`. Under `prompt=none`, a needed second factor
