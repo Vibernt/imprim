@@ -6,7 +6,11 @@ only. Delete the stopgap when Fire ships the request.
 
 ## Open
 
-None. `localCss` is empty, so no page links the stopgap stylesheet.
+| Request | Why | Stopgap |
+|---|---|---|
+| Fire's scripts take their labels from the page (for example `data-label-show`, `data-label-hide` on `fd-secret`, `data-label-collapse` on the sidebar toggle, `data-label-open` on the phone menu), so a translated page has no English left | Imprim's pages come in five languages; a few labels written by Fire's modules (password show or hide, "Expand sidebar"/"Collapse sidebar", "Open menu"/"Close menu", "Menu", "Search options") stay English | None: the server renders the first label of each in the page's language; only the labels Fire's scripts swap in stay English |
+
+`localCss` is empty, so no page links the stopgap stylesheet.
 
 ## Shipped
 

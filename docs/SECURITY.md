@@ -69,7 +69,8 @@ been deployed yet.
 Node tests use a real SQLite adapter and controlled provider, mail, rate and queue responses. They do not prove:
 
 - native Safari, Chrome and Firefox cookie flows, or the Fire pages and Tweaks panel in real browsers;
-- real Gmail, Outlook and iCloud delivery;
+- real Gmail, Outlook and iCloud delivery, and how those clients show the HTML part, its inline logo and dark mode;
+- the Spanish, French, German and Portuguese translations, which await native review;
 - GitHub, Google, Microsoft and Apple credential acceptance with real apps and tenants;
 - Cloudflare rate-limit behaviour, deployed D1 migration and concurrency, or Workers Static Assets headers;
 - Worker egress and the DNS-rebinding boundary for metadata and `jwks_uri` fetches;
