@@ -99,7 +99,7 @@ test('review: a losing unblock sends no event, and apps without the opt-in or a 
     const person = await login(w, t);
     await w.exchange(person.code);
     const id = w.env.DB.db.prepare("SELECT id FROM users WHERE email='person@example.com'").get().id;
-    w.env.DB.db.exec("INSERT INTO client_admissions VALUES('" + id + "','other',0)");
+    w.env.DB.db.exec("INSERT INTO client_admissions(user_id,client_id,created) VALUES('" + id + "','other',0)");
     const admin = await adminLogin(w);
     assert.equal((await admin.post(`users/${id}/block`)).status, 200);
     w.env.DB.db.exec(`UPDATE users SET status='deleted' WHERE id='${id}'`);

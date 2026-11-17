@@ -51,7 +51,7 @@ test('invited policy neutral refusal; invite is client-scoped and expires', asyn
 });
 for (const kind of ['admitted existing', 'domain']) test(`invited policy admits ${kind}`, async t => {
     const w = await world(t, 'invited'); turnstile(t);
-    if (kind === 'admitted existing') w.env.DB.db.exec("INSERT INTO users(id,email,email_verified,created) VALUES('existing','person@example.com',1,0); INSERT INTO client_admissions VALUES('existing','app',0)");
+    if (kind === 'admitted existing') w.env.DB.db.exec("INSERT INTO users(id,email,email_verified,created) VALUES('existing','person@example.com',1,0); INSERT INTO client_admissions(user_id,client_id,created) VALUES('existing','app',0)");
     else w.env.DB.db.exec(`UPDATE clients SET allowed_domains='["example.com"]'`);
     const flow = await begin(w); await request(w, flow);
     assert.equal(w.mails.length, 1);
@@ -59,7 +59,7 @@ for (const kind of ['admitted existing', 'domain']) test(`invited policy admits 
 });
 test('an account that exists for another app is not admitted to an invited app (S3)', async t => {
     const w = await world(t, 'invited'); turnstile(t);
-    w.env.DB.db.exec("INSERT INTO users(id,email,email_verified,created) VALUES('existing','person@example.com',1,0); INSERT INTO client_admissions VALUES('existing','other',0)");
+    w.env.DB.db.exec("INSERT INTO users(id,email,email_verified,created) VALUES('existing','person@example.com',1,0); INSERT INTO client_admissions(user_id,client_id,created) VALUES('existing','other',0)");
     const flow = await begin(w); await request(w, flow);
     assert.equal(w.mails.length, 0);
 });

@@ -14,7 +14,9 @@ export const ENGLISH_ONLY = [/^admin\//, /^machines\//, /^branding\//, /^realms\
     /^oidc\/(token|keys|jwt|discovery|backchannel|app-sessions|logout-hint)\.mjs$/,
     /^agents\/(token|registration|revocation|grants|client-auth|settings)\.mjs$/,
     /^services\/(invitations|outbox|outbox-destination|outbox-expiry|maintenance|retention|user-events|audit|notify)\.mjs$/,
-    /^lib\/(crypto|cbor|qr)\.mjs$/];
+    /^lib\/(crypto|cbor|qr)\.mjs$/,
+    // The workspace API answers apps, not people; only the invitation email (workspaces/email.mjs) is translated.
+    /^workspaces\/(?!email\.mjs$)/];
 const STRING = String.raw`'((?:\\.|[^'\\])*)'`;
 const unquote = text => text.replace(/\\(.)/g, '$1');
 async function files(dir, base = '') {

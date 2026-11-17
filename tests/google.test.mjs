@@ -74,7 +74,7 @@ for (const admission of ['invitation', 'allowlisted domain', 'admitted existing 
     const w = await world(t, 'invited'), fake = fakeGoogle(t, w, { iss: 'accounts.google.com' });
     if (admission === 'invitation') w.env.DB.db.prepare("INSERT INTO invitations VALUES('app','person@example.com',?)").run(Date.now() + 60000);
     if (admission === 'allowlisted domain') w.env.DB.db.exec(`UPDATE clients SET allowed_domains='["example.com"]'`);
-    if (admission === 'admitted existing account') w.env.DB.db.exec("INSERT INTO users(id,email,created) VALUES('old','person@example.com',0); INSERT INTO client_admissions VALUES('old','app',0)");
+    if (admission === 'admitted existing account') w.env.DB.db.exec("INSERT INTO users(id,email,created) VALUES('old','person@example.com',0); INSERT INTO client_admissions(user_id,client_id,created) VALUES('old','app',0)");
     assert.equal((await googleCallback(w, await fake.start())).status, 303);
 });
 test('Google invited policy refuses an existing account the app never admitted (S3)', async t => {

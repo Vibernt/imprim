@@ -295,7 +295,7 @@ test('review 1: a public client is named by a bare client_id, so its /token call
 });
 test('review 2: the refresh admission fence checks the grant holder, not any admitted user', async t => {
     const w = await agentWorld(t), { tokens } = await w.grant();
-    w.env.DB.db.exec("INSERT INTO users(id,email,created) VALUES('someone','someone@example.com',0); INSERT INTO client_admissions VALUES('someone','app',0)");
+    w.env.DB.db.exec("INSERT INTO users(id,email,created) VALUES('someone','someone@example.com',0); INSERT INTO client_admissions(user_id,client_id,created) VALUES('someone','app',0)");
     w.env.DB.db.prepare('DELETE FROM client_admissions WHERE user_id=?').run(w.user.id);
     await error(await w.refresh(tokens.refresh_token), 'invalid_grant');
 });
