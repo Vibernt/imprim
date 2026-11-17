@@ -521,4 +521,7 @@ export default Object.freeze({
     "This app asked for a different account. Sign in as that person.": "Esta aplicación pidió otra cuenta. Inicia sesión como esa persona.",
     "Too many token requests for this grant.": "Demasiadas solicitudes de token para esta autorización.",
     "Too many token requests from this agent at this app.": "Demasiadas solicitudes de token de este agente en esta aplicación.",
+    // Workspaces: admission
+    "A workspace invitation changed. Sign in again.": "Una invitación al espacio de trabajo cambió. Vuelve a iniciar sesión.",
+    "Join this workspace before connecting an agent.": "Únete a este espacio de trabajo antes de conectar un agente.",
 });

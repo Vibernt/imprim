@@ -5,6 +5,7 @@ import { agentSettings } from './settings.mjs';
 import { resourceUrl, underPrefix } from './uris.mjs';
 import { resolveAgent } from './registration.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { workspaceClientSql } from '../workspaces/access.mjs';
 export async function ownerOf(env, resource) {
     resourceUrl(resource);
     const { results } = await env.DB.prepare('SELECT * FROM clients WHERE realm_id=?').bind(realmId(env)).all();
@@ -32,3 +33,22 @@ export async function checkPolicy(env, values, session) {
     if (session) requireMethod(current, session.method, session.google_hd, true);
     return { app: current, agent, settings, method };
 }
+
+const registeredWorkspace = `SELECT w.id,w.name FROM workspace_resources wr
+    JOIN workspaces w ON w.id=wr.workspace_id JOIN clients c ON c.realm_id=w.realm_id
+    WHERE wr.resource=? AND c.id=? AND c.realm_id=? AND w.status='active' AND ${workspaceClientSql('c')}`;
+const workspaceMember = `EXISTS(SELECT 1 FROM workspace_members m WHERE m.workspace_id=registered.id AND m.user_id=?)`;
+export function requireWorkspaceMember(allowed) {
+    invariant(allowed, 'access_denied', 'Join this workspace before connecting an agent.', 403);
+}
+export async function consentWorkspaceName(env, app, resource, userId) {
+    const registered = await env.DB.prepare(`SELECT name,${workspaceMember} AS member FROM (${registeredWorkspace}) registered`)
+        .bind(userId, resource, app.id, realmId(env)).first();
+    requireWorkspaceMember(!registered || registered.member === 1);
+    return registered?.name ?? null;
+}
+// Consent must still be eligible when the request is consumed and the grant inserted.
+export const workspaceConsentGuard = (env, app, resource, userId) => ({
+    sql: `NOT EXISTS(SELECT 1 FROM (${registeredWorkspace}) registered WHERE NOT ${workspaceMember})`,
+    args: [resource, app.id, realmId(env), userId]
+});

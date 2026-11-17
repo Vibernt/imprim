@@ -8,6 +8,7 @@ import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { heading, result, section, button, linkButton, hidden, callout, kv, code, actions, icon } from '../pages/ui.mjs';
 import { brandingFor } from '../branding/tokens.mjs';
 import { validateAgentRequest } from './authorize.mjs';
+import { consentWorkspaceName, requireWorkspaceMember, workspaceConsentGuard } from './policy.mjs';
 import { workspace } from './uris.mjs';
 import { admitSession, admissionGuard } from '../services/admission.mjs';
 import { mfaGate } from '../auth/mfa.mjs';
@@ -29,7 +30,7 @@ function agentAssurance(row, agent, method) {
 }
 // Shown whenever the code or callback can reach someone other than the person at this screen.
 const phishing = env => callout(t(env, 'Only approve your own connection'), t(env, 'Approve only if you started it just now, on this device or your own. If someone sent you this link or code, choose Deny: approving gives them access as you.'), { tone: 'danger' });
-function consentPage(request, env, row, context) {
+function consentPage(request, env, row, context, workspaceName) {
     const { agent, app, settings, method } = context;
     const assurance = agentAssurance(row, agent, method), name = agent.client_name;
     const host = method === 'metadata_document' ? code(new URL(agent.client_id).host) : '';
@@ -44,7 +45,8 @@ function consentPage(request, env, row, context) {
         `<li>${icon('check')}<span>${code(scope)} ${e(settings.agent_scope_catalogue[scope])}</span></li>`).join('')}</ul>`;
     return page(t(env, 'Connect agent'), heading(title, intro || t(env, 'Approving lets it act as you, within the access below.')) +
         (assurance === 'key' || assurance === 'redirect' ? '' : phishing(env)) +
-        kv([[t(env, 'Agent host'), identity], [t(env, 'App'), e(brand.name || app.id)], [t(env, 'Workspace'), code(workspace(row.resource))], [t(env, 'Resource'), code(row.resource)]], 1) +
+        kv([[t(env, 'Agent host'), identity], [t(env, 'App'), e(brand.name || app.id)],
+            [t(env, 'Workspace'), workspaceName === null ? code(workspace(row.resource)) : e(workspaceName)], [t(env, 'Resource'), code(row.resource)]], 1) +
         section(t(env, 'What it can do'), tPlural(env, days, 'Access lasts at most {count} day. The app checks your permissions on every call.', 'Access lasts at most {count} days. The app checks your permissions on every call.'), scopes) +
         `<form method="post" action="/agent/consent">${hidden('request_id', row.id)}${hidden('csrf', cookies(request)[CSRF_COOKIE] || '')}
 ${actions(button(t(env, 'Deny'), { name: 'decision', value: 'deny', variant: 'outline' }), button(t(env, 'Approve'), { name: 'decision', value: 'approve', variant: 'primary' }))}</form>`,
@@ -59,19 +61,22 @@ export async function consent(request, env) {
     invariant(row.agent_client_id, 'invalid_request', 'Agent request required.');
     const context = await validateAgentRequest(env, row, session);
     await admitSession(env, context.app, session);
+    const workspaceName = await consentWorkspaceName(env, context.app, row.resource, session.user_id);
     const gate = await mfaGate(env, request, { client: context.app, session, row, agent: true });
     if (gate) return redirect(`${env.ISSUER}${gate}`);
-    if (request.method === 'GET') return consentPage(request, env, row, context);
+    if (request.method === 'GET') return consentPage(request, env, row, context, workspaceName);
     invariant(['approve','deny'].includes(body.decision), 'invalid_request', 'Choose Approve or Deny.');
     const approve = body.decision === 'approve', now = Date.now(), grantId = crypto.randomUUID();
     const code = randomToken(), codeHash = await sha256(code);
     const batch = [];
     // Insert only while the browser request, session and (if present) device are still live.
     const guard = policyGuard(context.app, row.resource), admission = admissionGuard('s.user_id', context.app.id);
+    const workspaceAccess = workspaceConsentGuard(env, context.app, row.resource, session.user_id);
     const eligible = `id=? AND browser_hash=? AND expires_at>? AND EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id
         WHERE s.hash=? AND s.expires_at>? AND u.status='active' AND u.merged_into IS NULL AND ${admission.sql})
-        AND (device_hash IS NULL OR EXISTS(SELECT 1 FROM agent_devices d WHERE d.hash=device_hash AND d.status='pending' AND d.expires_at>?)) AND ${guard.sql}`;
-    const args = [row.id, row.browser_hash, now, session.hash, now, ...admission.args, now, ...guard.args];
+        AND (device_hash IS NULL OR EXISTS(SELECT 1 FROM agent_devices d WHERE d.hash=device_hash AND d.status='pending' AND d.expires_at>?))
+        AND ${guard.sql} AND ${workspaceAccess.sql}`;
+    const args = [row.id, row.browser_hash, now, session.hash, now, ...admission.args, now, ...guard.args, ...workspaceAccess.args];
     if (approve) {
         const live = await env.DB.prepare('SELECT count(*) AS n FROM agent_grants WHERE user_id=? AND revoked_at IS NULL AND expires_at>?').bind(session.user_id, now).first();
         invariant(live.n < MAX_LIVE_GRANTS, 'access_denied', 'You have {count} connected agents, the most allowed. Revoke one in your account, then try again.', 403, { count: MAX_LIVE_GRANTS });
@@ -91,7 +96,9 @@ export async function consent(request, env) {
     const deleteIndex = batch.length - 1;
     if (row.device_hash) batch.push(env.DB.prepare(`UPDATE agent_devices SET status=?,grant_id=? WHERE hash=? AND status='pending' AND expires_at>? AND changes()=1`)
         .bind(approve ? 'approved' : 'denied', approve ? grantId : null, row.device_hash, now));
+    batch.push(env.DB.prepare(`SELECT ${workspaceAccess.sql} AS allowed`).bind(...workspaceAccess.args));
     const written = await env.DB.batch(batch);
+    requireWorkspaceMember(written.at(-1).results[0].allowed === 1);
     invariant(written[deleteIndex].results.length === 1 && (!approve || written[0].meta.changes === 1), 'invalid_request', 'This request was already answered or has expired. Start again from the agent.');
     if (approve) {
         await env.DB.prepare('UPDATE agent_clients SET last_used=? WHERE id=?').bind(now, row.agent_client_id).run();
