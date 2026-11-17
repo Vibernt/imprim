@@ -79,7 +79,7 @@ back automatically. Restore the backup only if a migration itself is wrong, and 
 
 ## Upgrading an existing deployment
 
-Migrations run in order, `0001` to `0020`, and each one is applied once. A Worker built from this repository expects
+Migrations run in order, `0001` to `0021`, and each one is applied once. A Worker built from this repository expects
 every migration in it, and an older Worker cannot always run against a newer schema, so apply, configure and deploy
 **back to back**, in a quiet minute. Rehearse the whole sequence on staging first.
 
@@ -156,9 +156,9 @@ Follow [Releases](#releases): staging first, then production with a backup. Thre
   verification or user events. An app still on `identity-client` `0.2.0` keeps signing people in, but refuses agent
   revocation events until it upgrades ([Clients](CLIENTS.md#upgrading-from-identity-client-020)).
 
-## Upgrading to migration 0020
+## Upgrading to migration 0021
 
-`0020` adds languages and HTML email: `auth_requests.ui_locales` and `users.locale`, both optional. It needs no new
+`0021` adds languages and HTML email: `auth_requests.ui_locales` and `users.locale`, both optional. It needs no new
 binding or secret. On the day:
 
 - **Pages follow the browser's language.** People whose browser asks for Spanish, French, German or Portuguese see

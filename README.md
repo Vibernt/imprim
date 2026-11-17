@@ -95,7 +95,7 @@ npm run check
 |---|---|
 | `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, languages (`i18n/`), email, maintenance |
 | `apps/server/public/` | Static assets: the vendored Fire design system (`fire/`), the branding editor (`imprim/`) and `_headers` |
-| `apps/server/migrations/` | D1 schema, `0001` to `0020` |
+| `apps/server/migrations/` | D1 schema, `0001` to `0021` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
 | `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
 | `scripts/` | Offline SQL generators for realms, clients and user imports; checks (including translations); email preview; client build |
@@ -113,7 +113,7 @@ fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (IS
 Vibernt runs Imprim in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`.
 Both run the same release, deployed on 2026-11-15: the security pass, realms, passwords, two-factor, the account
 pages, passkeys, the provider registry, machines, DPoP, user events, branding and the Fire interface (migrations
-`0001`–`0019`; see [Deploying](docs/DEPLOY.md)). Languages and HTML email (migration `0020`) are not deployed yet.
+`0001`–`0019`; see [Deploying](docs/DEPLOY.md)). Languages and HTML email (migration `0021`) are not released yet.
 What has not been verified against live Cloudflare is listed in [Security](docs/SECURITY.md#not-yet-verified-live).
 What comes next is in the [Roadmap](docs/ROADMAP.md).
 
