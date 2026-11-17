@@ -23,6 +23,12 @@ step.
 
 Docs: **https://vibernt.github.io/imprim/**. Start with [Getting started](docs/GETTING_STARTED.md).
 
+## Why Imprim exists
+
+### [Read: Agents act for people. Identity should say so.](https://www.linkedin.com/pulse/agents-act-people-identity-should-say-so-vidhatanand-v--rmqic/)
+
+How agents get into software today, where identity providers fall short for them, and the approach Imprim takes.
+
 ## In one view
 
 <picture>
