@@ -200,6 +200,26 @@ test('client invitation and missing ID token', async t => {
 test('vendored body hash matches header', async () => {
     const file = await readFile(new URL('../dist/imprim-client.mjs', import.meta.url), 'utf8');
     const [header, ...body] = file.split('\n');
-    assert.match(header, /^\/\/ imprim-client 0\.8\.1 body-sha256 [a-f0-9]{64}/);
+    assert.match(header, /^\/\/ imprim-client 0\.8\.2 body-sha256 [a-f0-9]{64}/);
     assert.equal(header.split(' ').at(-1), createHash('sha256').update(body.join('\n')).digest('hex'));
+});
+test('every client request refuses redirects with redirect manual, never error (Workers reject it)', async () => {
+    const sources = await Promise.all(['index.mjs', 'jwt.mjs', 'backchannel.mjs', 'workspaces.mjs', 'resources.mjs', 'dpop.mjs']
+        .map(name => readFile(new URL(`../packages/imprim-client/${name}`, import.meta.url), 'utf8').catch(() => '')));
+    assert.ok(sources.every(source => !/redirect:\s*'(error|follow)'/.test(source)), 'no redirect error or follow in the client');
+    const seen = [];
+    const metadata = { issuer: 'https://id.example.com', jwks_uri: 'https://id.example.com/jwks', token_endpoint: 'https://id.example.com/token' };
+    for (const redirected of [new Response(null, { status: 302, headers: { location: 'https://evil.example/' } }), Object.assign(new Response(null, { status: 200 }), {}), 'opaque']) {
+        const fetch = async (url, init) => {
+            seen.push(init?.redirect);
+            if (redirected === 'opaque') return Object.defineProperty(new Response(null, { status: 200 }), 'type', { value: 'opaqueredirect' });
+            return redirected.status === 302 ? redirected : Response.json(metadata);
+        };
+        const client = createClient({ issuer: 'https://id.example.com', clientId: 'app', clientSecret: 'secret', fetch });
+        if (redirected === 'opaque' || redirected.status === 302) {
+            await assert.rejects(client.memberships('sub'), error => error instanceof IdentityError && error.code === 'network');
+            await assert.rejects(client.introspect('token'), error => error instanceof IdentityError && error.code === 'network');
+        }
+    }
+    assert.ok(seen.length > 0 && seen.every(value => value === 'manual'), JSON.stringify(seen));
 });

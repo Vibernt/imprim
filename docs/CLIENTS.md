@@ -341,6 +341,7 @@ What each version changed:
 | 0.3.0 | Wire change: agent revocation events are `secevent+jwt`. `iss` is required on the authorization response. Error text handling, JWKS refresh after 10 minutes, a failed discovery is not cached. Details below. |
 | 0.4.0 | Step-up: `startLogin({ acrValues, maxAge })`; ID tokens carry `acr`. |
 | 0.5.0 | `verifyAccessToken` checks a DPoP proof for a bound token (`dpop`, `requireDpop`) and returns `dpop_jti`. |
+| 0.8.2 | Every request uses `redirect: 'manual'` and treats any redirect as a failure, so the client works inside Cloudflare Workers, which reject `redirect: 'error'`. Nothing else changes. |
 | 0.8.1 | `handleCallback` can return the ID token for `actor_token`. Nothing else changes. |
 | 0.8.0 | Shared and personal workspace methods for confidential clients. `verifyBackchannel` accepts `workspace_token` and returns `kind: 'workspace'`. |
 | 0.7.0 | `listGrants` (paged, `sub` filter), `revokeGrant` and `introspect` for confidential clients. |

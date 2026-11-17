@@ -42,7 +42,7 @@ for (const [method, args, verb, target, body] of requests) test(`workspace clien
     } });
     assert.deepEqual(await client[method](...args), response);
     const headers = { authorization: 'Basic ' + btoa('app%3Aid:key%20%2B%3A') };
-    const expected = { method: verb, redirect: 'error', headers };
+    const expected = { method: verb, redirect: 'manual', headers };
     if (body !== undefined) {
         headers['content-type'] = 'application/json';
         expected.body = JSON.stringify(body);

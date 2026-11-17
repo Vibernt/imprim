@@ -41,9 +41,15 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
     const issuerText = base.href.replace(/\/$/, '');
     const transport = fetchOption || globalThis.fetch;
     if (typeof transport !== 'function') fail('configuration', 'fetch is required.');
-    const request = async (url, init) => {
-        try { return await transport(url, init); }
+    // Every call refuses redirects: credentials are never forwarded. Cloudflare Workers reject the 'error' redirect
+    // mode (0.8.2), so 'manual' is used and any redirect is a failure.
+    const request = async (url, init = {}) => {
+        let response;
+        try { response = await transport(url, { ...init, redirect: 'manual' }); }
         catch (error) { fail('network', `Identity request failed: ${error?.message || 'network error'}`); }
+        if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400))
+            fail('network', `Identity request was redirected (HTTP ${response.status}).`);
+        return response;
     };
     let discoveryPromise, jwks, jwksAt = 0;
     async function discovery() {
@@ -180,7 +186,7 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
     }
     async function workspaceRequest(method, path, body) {
         const headers = { authorization: appCredentials('The workspace API') };
-        const init = { method, headers, redirect: 'error' };
+        const init = { method, headers };
         if (body !== undefined) {
             headers['content-type'] = 'application/json';
             init.body = JSON.stringify(body);

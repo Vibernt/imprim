@@ -5,6 +5,7 @@ describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
 ## Unreleased
 
+- Client `0.8.2`: every request refuses redirects with `redirect: 'manual'`; `0.8.1` used `redirect: 'error'` for workspace calls, which Cloudflare Workers reject.
 - Apps with workspace administration enabled can invite owners, revoke invitations, and close team workspaces using their product before the first member joins.
 - Re-registering a workspace resource to the same workspace by the same app returns the current snapshot without changing it.
 - Apps can manage only their own workspace product and may add it to an active workspace when acting for an owner or realm admin.
