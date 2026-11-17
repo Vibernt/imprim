@@ -5,7 +5,7 @@ const oauthErrors = new Set(['invalid_request', 'access_denied', 'login_required
 import { uniqueParams, readBody, tokenShape } from '../lib/http.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { getSession, cookie, cookies, BROWSER_COOKIE } from '../auth/session.mjs';
-import { authorizationResponse, completeAuthorization } from './requests.mjs';
+import { authorizationResponse, completeAuthorization, withinMaxAge } from './requests.mjs';
 import { allowsMethod } from './sign-in-methods.mjs';
 import { ownIdToken } from './logout-hint.mjs';
 import { signInPage } from '../pages/sign-in.mjs';
@@ -52,7 +52,7 @@ export async function authorize(request, env) {
     }
     let session = query.prompt === 'login' ? null : await getSession(request, env);
     // max_age: an older primary sign-in counts as no sign-in (OIDC Core 3.1.2.1).
-    if (session && query.max_age !== undefined && session.auth_time + Number(query.max_age) < Math.floor(Date.now() / 1000)) session = null;
+    if (session && query.max_age !== undefined && !withinMaxAge(session.auth_time, Number(query.max_age))) session = null;
     if (session && !allowsMethod(client, session.method, session.google_hd, true)) session = null;
     // Someone other than the hinted person counts as no sign-in: prompt=none says login_required, otherwise sign in.
     if (session && hint && session.user_id !== hint.sub) session = null;

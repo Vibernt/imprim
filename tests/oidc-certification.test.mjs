@@ -249,3 +249,13 @@ test('the conformance setup SQL gives the suite working classic clients and a pa
     const refused = await w.post('/v1/auth/password', { request_id: other.request_id, email: 'suite@example.com', password: 'a long test password', turnstile: crypto.randomUUID() }, other.cookie);
     assert.notEqual(refused.status, 200);
 });
+
+test('max_age counts whole seconds, so a sign-in late in a second still meets max_age=1', async () => {
+    const { withinMaxAge } = await import('../apps/server/src/oidc/requests.mjs');
+    const signedIn = 1_800_000_000; // auth_time, rounded down from 1_800_000_000.950
+    assert.equal(withinMaxAge(signedIn, 1, 1_800_000_001_150), true); // 0.2 s later
+    assert.equal(withinMaxAge(signedIn, 1, 1_800_000_001_999), true);
+    assert.equal(withinMaxAge(signedIn, 1, 1_800_000_002_000), false); // two whole seconds
+    assert.equal(withinMaxAge(signedIn, 0, 1_800_000_000_999), true);
+    assert.equal(withinMaxAge(signedIn, 0, 1_800_000_001_000), false);
+});

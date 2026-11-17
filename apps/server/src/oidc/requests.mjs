@@ -8,6 +8,9 @@ import { requireMethod } from './sign-in-methods.mjs';
 import { sessionByHash } from '../auth/session.mjs';
 import { admitSession, admissionGuard } from '../services/admission.mjs';
 import { mfaGate } from '../auth/mfa.mjs';
+// max_age is whole seconds since auth_time, which is itself whole seconds (OIDC Core 3.1.2.1). Comparing the rounded
+// auth_time with the clock in milliseconds would refuse a sign-in made late in a second, one second too soon.
+export const withinMaxAge = (authTime, maxAge, now = Date.now()) => Math.floor(now / 1000) - authTime <= maxAge;
 export async function pendingRequest(env, request, id) {
     invariant(typeof id === 'string' && id.length <= 100, 'invalid_request', 'Authorization request required.');
     const row = await env.DB.prepare('SELECT * FROM auth_requests WHERE id=? AND expires_at>?').bind(id, Date.now()).first();
@@ -31,7 +34,7 @@ export async function completeAuthorization(env, request, id, session, responseC
     // session must be newer than the request, or than max_age.
     const created = row.expires_at - 1800000, authMs = session.auth_time * 1000;
     invariant(row.prompt !== 'login' || authMs >= created - 1000, 'login_required', 'This app asked for a fresh sign-in. Sign in again.', 401);
-    invariant(row.max_age == null || authMs >= Date.now() - row.max_age * 1000, 'login_required', 'This app asked for a recent sign-in. Sign in again.', 401);
+    invariant(row.max_age == null || withinMaxAge(session.auth_time, row.max_age), 'login_required', 'This app asked for a recent sign-in. Sign in again.', 401);
     // An id_token_hint named the person this app expects; nobody else may finish the request.
     invariant(row.hint_sub == null || row.hint_sub === session.user_id, 'login_required', 'This app asked for a different account. Sign in as that person.', 401);
     await admitSession(env, client, session);
