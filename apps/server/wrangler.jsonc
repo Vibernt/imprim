@@ -21,7 +21,8 @@
   "send_email": [{ "name": "EMAIL" }],
   "ratelimits": [
     { "name": "AUTH_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
-    { "name": "API_LIMITER", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } }
+    { "name": "API_LIMITER", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } },
+        { "name": "AGENT_LIMITER", "namespace_id": "1003", "simple": { "limit": 1200, "period": 60 } }
   ],
   "queues": {
     "producers": [{ "binding": "LOGOUT_QUEUE", "queue": "imprim-logout" }],
@@ -41,7 +42,8 @@
       "send_email": [{ "name": "EMAIL" }],
       "ratelimits": [
         { "name": "AUTH_LIMITER", "namespace_id": "5201", "simple": { "limit": 20, "period": 60 } },
-        { "name": "API_LIMITER", "namespace_id": "5202", "simple": { "limit": 120, "period": 60 } }
+        { "name": "API_LIMITER", "namespace_id": "5202", "simple": { "limit": 120, "period": 60 } },
+        { "name": "AGENT_LIMITER", "namespace_id": "5203", "simple": { "limit": 1200, "period": 60 } }
       ],
       "queues": {
         "producers": [{ "binding": "LOGOUT_QUEUE", "queue": "imprim-staging-logout" }],
@@ -59,7 +61,8 @@
       "send_email": [{ "name": "EMAIL" }],
       "ratelimits": [
         { "name": "AUTH_LIMITER", "namespace_id": "5101", "simple": { "limit": 20, "period": 60 } },
-        { "name": "API_LIMITER", "namespace_id": "5102", "simple": { "limit": 120, "period": 60 } }
+        { "name": "API_LIMITER", "namespace_id": "5102", "simple": { "limit": 120, "period": 60 } },
+        { "name": "AGENT_LIMITER", "namespace_id": "5103", "simple": { "limit": 1200, "period": 60 } }
       ],
       "queues": {
         "producers": [{ "binding": "LOGOUT_QUEUE", "queue": "vibernt-identity-logout" }],

@@ -28,6 +28,9 @@ export async function tokenMaterial(env, grant, scope = grant.scope, jkt = null)
     // require a fresh approval (one-shot owner approvals) without trusting iat, which every refresh renews.
     const token = await signAgentJwt(env, { iss: env.ISSUER, aud: grant.resource, sub: grant.user_id,
         client_id: grant.client_id, grant_id: grant.id, grant_issued_at: Math.floor(grant.created / 1000), scope,
+        // What the consent page could say about who the agent is: key, redirect, claimed or none. Information for the
+        // app (to trust a verified agent more, say), never a permission. Grants made before it existed carry none.
+        ...(grant.assurance ? { agent_assurance: grant.assurance } : {}),
         ...(jkt ? { cnf: { jkt } } : {}), jti: crypto.randomUUID(), iat: now, exp });
     return { hash: await sha256(refresh), response: { access_token: token, token_type: jkt ? 'DPoP' : 'Bearer', expires_in: exp - now, refresh_token: refresh, scope } };
 }

@@ -104,7 +104,9 @@ key, app, scopes and resource prefixes. The tool then signs a `private_key_jwt` 
 
 Resource servers that can't verify JWTs locally, or that want revocation to take effect at once, call `POST /introspect`
 with the app's credentials. A workspace admin screen in your app can list and revoke connected agents through
-`GET /v1/grants?resource=…` and `POST /v1/grants/revoke`.
+`GET /v1/grants?resource=…` (paged, filterable by person) and `POST /v1/grants/revoke`, or through
+`imprim-client` 0.7.0's `listGrants`, `revokeGrant` and `introspect`. Agent tokens carry `agent_assurance`, how sure
+Imprim is about who the agent is, if your app wants to trust verified agents more.
 
 [`examples/mcp-probe`](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe) is a complete MCP server that
 does all of the above, with a scripted agent that tests it end to end.

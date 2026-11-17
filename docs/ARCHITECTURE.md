@@ -17,13 +17,13 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 | Upstream providers | GitHub, Google, Microsoft, Apple and any OIDC issuer; their tokens are not stored. |
 | Have I Been Pwned | Range API (k-anonymity) for breached-password checks; only a 5-character hash prefix leaves. |
 | Turnstile | Checks email requests when both keys are configured. |
-| `AUTH_LIMITER`, `API_LIMITER` | Per-IP Workers rate bindings. |
+| `AUTH_LIMITER`, `API_LIMITER`, `AGENT_LIMITER` | Per-IP Workers rate bindings; `AGENT_LIMITER` is the looser one for agent token requests. |
 | `LOGOUT_QUEUE` | Delivers back-channel logout, agent revocation and user lifecycle events; failures retry and reach the DLQ. |
 | Every-minute trigger | Rotates keys per realm, deletes expired state and re-queues pending back-channel events. |
 
 ## D1 schema
 
-Migrations `0001` through `0022` create or extend these tables. Every realm-owned row carries `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0023` create or extend these tables. Every realm-owned row carries `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|

@@ -12,6 +12,7 @@ import { authenticateAgent } from './client-auth.mjs';
 import { pollDevice } from './device.mjs';
 import { matchRedirect } from './uris.mjs';
 import { resolveAgent } from './registration.mjs';
+import { limitAgentGrant } from '../auth/rate-limit.mjs';
 // A lost refresh response can be retried for this long without killing the grant (see refresh()).
 export const REFRESH_GRACE_MS = 10000;
 // A running agent refreshes about 1,440 times a day; this bounds a holder that loops (S5).
@@ -30,6 +31,7 @@ export async function agentToken(request, env, body, ctx) {
     invariant(code.challenge === challenge && code.redirect_uri === body.redirect_uri, 'invalid_grant', 'Code or redirect or verifier mismatch.');
     const { grant, app, agent } = await grantContext(env, code.grant_id);
     invariant(grant.client_id === body.client_id && grant.resource === body.resource, 'invalid_grant', 'Code client or resource mismatch.');
+    await limitAgentGrant(env, grant, app);
     invariant(agent.grant_types.includes('authorization_code'), 'unauthorized_client', 'Code flow is no longer registered.');
     await authenticateAgent(env, agent, body, '/token');
     matchRedirect(agent, body.redirect_uri);
@@ -86,6 +88,7 @@ async function refresh(env, body, ctx, jkt = null) {
         spending = { ...token, ...successor, grace: 1 };
     }
     const { grant, agent, app } = await grantContext(env, token.grant_id);
+    await limitAgentGrant(env, grant, app);
     invariant(agent.grant_types.includes('refresh_token'), 'unauthorized_client', 'Refresh is not registered.');
     await authenticateAgent(env, agent, body, '/token');
     const scope = narrowed(grant, body.scope);

@@ -135,12 +135,43 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
             return url.href;
         },
         async inviteEmail(email) {
-            if (clientSecret === undefined) fail('configuration', 'Invitations require a confidential client.');
             if (typeof email !== 'string' || !email.includes('@')) fail('configuration', 'Invalid email.');
-            const authorization = `Basic ${btoa(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`)}`;
-            return responseJson(await request(`${issuerText}/v1/invitations`, { method: 'POST', headers: { authorization, 'content-type': 'application/json' }, body: JSON.stringify({ email }) }), 'invitation');
+            return responseJson(await request(`${issuerText}/v1/invitations`, { method: 'POST', headers: { authorization: appCredentials('Invitations'), 'content-type': 'application/json' }, body: JSON.stringify({ email }) }), 'invitation');
+        },
+        // The live agent grants on one of this app's resources, a page at a time: { grants, next_cursor }.
+        async listGrants({ resource, sub, limit, cursor } = {}) {
+            if (typeof resource !== 'string' || !resource.startsWith('https://')) fail('configuration', 'resource is an HTTPS URL.');
+            if ((sub !== undefined && typeof sub !== 'string') || (cursor !== undefined && cursor !== null && typeof cursor !== 'string') ||
+                (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 200))) fail('configuration', 'Invalid grant list options.');
+            const query = new URLSearchParams({ resource });
+            if (sub !== undefined) query.set('sub', sub);
+            if (limit !== undefined) query.set('limit', String(limit));
+            if (cursor) query.set('cursor', cursor);
+            const data = await responseJson(await request(`${issuerText}/v1/grants?${query}`, { headers: { authorization: appCredentials('The grant list') } }), 'grants');
+            if (!Array.isArray(data?.grants)) fail('grants', 'Invalid grant list.');
+            return { grants: data.grants, next_cursor: typeof data.next_cursor === 'string' ? data.next_cursor : null };
+        },
+        // Revoke one agent grant on this app's resources; the agent's tokens stop and a revocation event follows.
+        async revokeGrant(grantId) {
+            if (typeof grantId !== 'string' || !grantId || grantId.length > 64) fail('configuration', 'Invalid grant id.');
+            return responseJson(await request(`${issuerText}/v1/grants/revoke`, { method: 'POST', headers: { authorization: appCredentials('Revoking a grant'),
+                'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_id: grantId }) }), 'revoke');
+        },
+        // RFC 7662 introspection of an agent access token for this app's resources. { active: false } when it is not live.
+        async introspect(token, { tokenTypeHint } = {}) {
+            if (typeof token !== 'string' || !token || token.length > 8192) fail('configuration', 'Invalid token.');
+            const form = new URLSearchParams({ token });
+            if (tokenTypeHint !== undefined) form.set('token_type_hint', tokenTypeHint);
+            const data = await responseJson(await request(`${issuerText}/introspect`, { method: 'POST', headers: { authorization: appCredentials('Introspection'),
+                'content-type': 'application/x-www-form-urlencoded' }, body: form }), 'introspection');
+            if (typeof data?.active !== 'boolean') fail('introspection', 'Invalid introspection response.');
+            return data;
         }
     };
+    function appCredentials(what) {
+        if (clientSecret === undefined) fail('configuration', `${what} requires a confidential client.`);
+        return `Basic ${btoa(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`)}`;
+    }
 }
 
 export const wwwAuthenticate = options => challengeHeader(options, fail);

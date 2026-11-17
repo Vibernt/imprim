@@ -381,13 +381,25 @@ HTTP `max-age` or `Expires` controls the D1 metadata cache; subtract `Age` and a
 at one hour and cache size at 2,000 entries (documents and agent JWKS). Every document is kept for at least five
 minutes, including one marked `no-store`, so a refresh loop cannot turn the fetcher into a traffic source.
 Anonymous `/authorize` requests for agents spend a 60-per-hour address budget. Expired fetch failures never serve stale data. Documents are not app-policy caches: app settings
-are reread at every stage. DCR clients unused for 30 days are rejected immediately and removed by registration/
-every-minute maintenance; completed consent and token use update their last-use time. Grants and audit history survive.
+are reread at every stage. DCR clients unused for 30 days are rejected and removed by every-minute maintenance, unless
+a grant made with them is still live: a person who uses an assistant once a month keeps it working. Completed consent
+and token use update their last-use time. Grants and audit history survive.
 
 ### Agent tokens, rotation and revocation
 
 Access JWTs use the existing sealed ES256 ring, `typ=at+jwt`, with `iss`, scalar `aud=resource`, unchanged human `sub`,
-agent `client_id`, nonempty `grant_id` (the grant to deny on revocation), space-separated `scope`, random `jti`, integer `iat` and `exp`. Lifetime is 60 seconds, shortened
+agent `client_id`, nonempty `grant_id` (the grant to deny on revocation), space-separated `scope`, random `jti`, integer `iat` and `exp`.
+`agent_assurance` is what the consent page could say about the agent: `key` (it proves a key its host published),
+`redirect` (codes reach only an HTTPS address its host published), `claimed` (a loopback or device flow) or `none`
+(it registered itself). It is information for the app, never a permission; grants made before 2026-11-17 carry none.
+Introspection returns it too.
+
+**Agent token budgets.** Hosted agents share their provider's addresses, so agent requests to `/token` spend the
+`AGENT_LIMITER` address budget (1,200 a minute per address), and a refused request also spends the strict
+`API_LIMITER` address budget (120 a minute), so guessing stays slow; waiting for device consent is not a refusal. Once
+the grant is known, two budgets per minute apply: 60 for the grant, and the app's `agent_token_rate` (3,000 by
+default) for each agent, such as ChatGPT or Claude, across everyone using it at that app. Refused requests count, so
+an agent that keeps trying stays held until the minute ends. Over a budget is `429 rate_limit`. Lifetime is 60 seconds, shortened
 at the grant deadline. No access token or raw refresh token is stored. Refresh tokens are 256-bit random and stored
 as SHA-256 digests; spent hashes and their replacement digest remain to detect replay. Grant lifetime defaults to
 90 days and is capped by the owning app. A policy increase cannot extend existing consent; a reduction applies to
@@ -440,8 +452,10 @@ from its key. An exchanged token, or one for another audience, revokes nothing. 
 grants on its own resources. Anything else is ignored without saying why. Revoking an access token revokes its
 whole grant.
 
-**App grant API.** `GET /v1/grants?resource=<workspace resource>` lists the live agent grants on that resource:
-person `sub`, agent, scope, created, last used. `POST /v1/grants/revoke {grant_id}` revokes one, for example when a
+**App grant API.** `GET /v1/grants?resource=<workspace resource>` lists the live agent grants on that resource, newest
+first: person `sub`, agent, `agent_assurance`, scope, created, last used. `sub=` narrows it to one person. A page holds
+`limit` grants (1 to 200, default 200); `next_cursor` in the response is passed back as `cursor=` for the next page and
+is `null` on the last. A malformed `limit`, `cursor` or `sub` is `invalid_request`. `POST /v1/grants/revoke {grant_id}` revokes one, for example when a
 member leaves the workspace; the agent's refresh is refused at once and the revocation event follows. Both use the
 app's client credentials and work only on the app's own resources. Who in the workspace may call them is the app's
 decision.

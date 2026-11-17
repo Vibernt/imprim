@@ -10,10 +10,11 @@ setup and [Operations](OPERATIONS.md) for running it. Nothing below is a browser
 
 | Name | Kind | Notes |
 |---|---|---|
-| `DB` | D1 | All state, migrations `0001`–`0022` in `apps/server/migrations`. |
+| `DB` | D1 | All state, migrations `0001`–`0023` in `apps/server/migrations`. |
 | `EMAIL` | Cloudflare `send_email` binding | Sign-in links and security notices. Each realm's sender domain must be enabled for Email sending. |
 | `AUTH_LIMITER` | Rate limit, 20 per 60 seconds | Sign-in routes, per address (IPv6 /64). A missing binding fails the request. |
-| `API_LIMITER` | Rate limit, 120 per 60 seconds | Other routes per address; `/token`, `/userinfo` and `/v1/invitations` per authenticated client. Missing fails. |
+| `API_LIMITER` | Rate limit, 120 per 60 seconds | Other routes per address; `/token`, `/userinfo` and `/v1/invitations` per authenticated client; refused agent token requests per address. Missing fails. |
+| `AGENT_LIMITER` | Rate limit, 1,200 per 60 seconds | Agent requests to `/token`, per address: hosted agents share their provider's addresses. Missing fails. |
 | `LOGOUT_QUEUE` | Queue producer | Back-channel logout, agent revocation and user events. |
 | Queue consumer | Same queue, batches of 10, 5 retries, then a dead-letter queue | Each environment names its own queue and dead-letter queue. |
 | Cron | `* * * * *` | Delivery, key rotation per realm, expiry and retention ([Operations](OPERATIONS.md#retention-and-the-scheduled-handler)). |
@@ -61,6 +62,7 @@ and never writes D1. JSON columns are shown decoded.
 | `user_events` | `off` | `on` sends signed user lifecycle events to `backchannel_uri`. |
 | `classic_oidc` | `off` | `on` lets a confidential app leave out PKCE and the nonce and ignores its `claims` requests, for OpenID Connect libraries written before OAuth 2.1 ([Protocol](PROTOCOL.md#authorization)). Refused for public clients. |
 | `id_token_signed_response_alg` | `ES256` | `RS256` signs this app's ID tokens and logout tokens with the realm's RSA ring, for libraries that need it. `imprim-client` verifies ES256 only. |
+| `agent_token_rate` | `3000` | Agent token requests a minute for each agent (ChatGPT, Claude…) across everyone using it at this app, 10 to 100000. Each grant also has 60 a minute. |
 | `version` | `0` | Incremented on every edit; an edit must send the current version. |
 
 The seed script accepts every setting in this table except `version`, with the console's rules. It never overwrites

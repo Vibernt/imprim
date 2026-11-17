@@ -79,7 +79,7 @@ back automatically. Restore the backup only if a migration itself is wrong, and 
 
 ## Upgrading an existing deployment
 
-Migrations run in order, `0001` to `0022`, and each one is applied once. A Worker built from this repository expects
+Migrations run in order, `0001` to `0023`, and each one is applied once. A Worker built from this repository expects
 every migration in it, and an older Worker cannot always run against a newer schema, so apply, configure and deploy
 **back to back**, in a quiet minute. Rehearse the whole sequence on staging first.
 
@@ -156,6 +156,14 @@ Follow [Releases](#releases): staging first, then production with a backup. Thre
   verification or user events. An app still on `identity-client` `0.2.0` keeps signing people in, but refuses agent
   revocation events until it upgrades ([Clients](CLIENTS.md#upgrading-from-identity-client-020)).
 
+## Upgrading to migration 0023
+
+`0023` adds the per-app `agent_token_rate` (3,000 a minute per agent), the assurance each new agent grant records, and
+two indexes for the grants API. The Worker also needs a third rate-limit binding, `AGENT_LIMITER` (1,200 per 60
+seconds, an unused `namespace_id`), in each environment's `ratelimits`; without it agent token requests fail with
+`rate_limit_config`. Agents connected before the upgrade keep working; their tokens carry no `agent_assurance` until
+the person connects again.
+
 ## Upgrading to migrations 0020 and 0022
 
 `0020` adds the per-app `classic_oidc` switch (off) and the `id_token_hint` record on pending requests. `0022` gives
@@ -186,7 +194,8 @@ look at it in light and dark mode before production.
 | `DB` | D1 | All state. Migrations in `apps/server/migrations`. |
 | `LOGOUT_QUEUE` | Queue producer and consumer | Back-channel logout, agent revocation and user events. Dead-letter queue after 5 retries. |
 | `AUTH_LIMITER` | Rate limit | Sign-in routes, per address (IPv6 /64). |
-| `API_LIMITER` | Rate limit | Other routes per address; `/token`, `/userinfo` and invitations per authenticated client. |
+| `API_LIMITER` | Rate limit | Other routes per address; `/token`, `/userinfo` and invitations per authenticated client; refused agent token requests per address. |
+| `AGENT_LIMITER` | Rate limit, 1,200 per 60 seconds | Agent requests to `/token`, per address. Required from migration `0023`. |
 | `EMAIL` | Email sending | Sign-in links and security notices. |
 | Static assets | `"assets": { "directory": "public" }` | Fire's CSS, modules and fonts at `/fire/*`, and the branding editor at `/imprim/*`, served before the Worker runs. Headers in `public/_headers`. No binding name; other paths reach the Worker. |
 | Cron `* * * * *` | Trigger | Outbox dispatch, expiry sweeps, key rotation per realm, retention. |

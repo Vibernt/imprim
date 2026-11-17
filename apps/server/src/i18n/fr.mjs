@@ -519,4 +519,6 @@ export default Object.freeze({
     "Request objects are not supported.": "Les objets de requête ne sont pas pris en charge.",
     "The ID token hint was issued to another app.": "L’indice de jeton d’identité a été émis pour une autre application.",
     "This app asked for a different account. Sign in as that person.": "Cette application a demandé un autre compte. Connectez-vous en tant que cette personne.",
+    "Too many token requests for this grant.": "Trop de demandes de jeton pour cette autorisation.",
+    "Too many token requests from this agent at this app.": "Trop de demandes de jeton de cet agent dans cette application.",
 });

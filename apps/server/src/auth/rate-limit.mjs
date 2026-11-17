@@ -19,6 +19,16 @@ async function limitKey(env, binding, key) {
 }
 export const limitAddress = (env, request, binding = 'API_LIMITER') => limitKey(env, binding, 'ip:' + clientAddress(request));
 export const limitClient = (env, clientId) => limitKey(env, 'API_LIMITER', 'client:' + clientId);
+// Agent token requests (S2). Hosted agents (ChatGPT, Claude) call from shared provider addresses, so the address budget
+// for agents is the looser AGENT_LIMITER, and failures also spend the strict API_LIMITER address budget. Once the
+// grant is known, two D1 budgets per minute apply: one per grant, and one per agent at each app, which the app sets
+// as agent_token_rate.
+export const AGENT_GRANT_PER_MINUTE = 60;
+export async function limitAgentGrant(env, grant, app) {
+    invariant(await budget(env, 'agent-grant:' + grant.id, AGENT_GRANT_PER_MINUTE, 60000), 'rate_limit', 'Too many token requests for this grant.', 429);
+    invariant(await budget(env, `agent-client:${app.id}:${await sha256(grant.client_id)}`, app.agent_token_rate ?? 3000, 60000),
+        'rate_limit', 'Too many token requests from this agent at this app.', 429);
+}
 // Admission-independent D1 budget, ported from magic.mjs. This is a separate global budget.
 async function budget(env, key, max, windowMs = 3600000) {
     const now = Date.now();

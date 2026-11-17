@@ -77,9 +77,10 @@ export async function consent(request, env) {
         invariant(live.n < MAX_LIVE_GRANTS, 'access_denied', 'You have {count} connected agents, the most allowed. Revoke one in your account, then try again.', 403, { count: MAX_LIVE_GRANTS });
     }
     if (approve) {
-        batch.push(env.DB.prepare(`INSERT INTO agent_grants(id,client_id,client_name,registration_method,app_id,user_id,resource,scope,method,google_hd,created,last_used,expires_at)
-            SELECT ?,agent_client_id,?,?,client_id,?,resource,scope,?,?,?,?,? FROM auth_requests WHERE ${eligible}`)
-            .bind(grantId, context.agent.client_name, context.method, session.user_id, session.method, session.google_hd,
+        // The grant keeps the assurance this page showed; the agent's tokens carry it as agent_assurance.
+        batch.push(env.DB.prepare(`INSERT INTO agent_grants(id,client_id,client_name,registration_method,assurance,app_id,user_id,resource,scope,method,google_hd,created,last_used,expires_at)
+            SELECT ?,agent_client_id,?,?,?,client_id,?,resource,scope,?,?,?,?,? FROM auth_requests WHERE ${eligible}`)
+            .bind(grantId, context.agent.client_name, context.method, agentAssurance(row, context.agent, context.method), session.user_id, session.method, session.google_hd,
                 now, now, now + context.settings.agent_max_grant_days * 86400000, ...args));
         if (!row.device_hash) batch.push(env.DB.prepare(`INSERT INTO agent_codes(hash,grant_id,redirect_uri,challenge,session_hash,expires_at)
             SELECT ?,id,?,?,?,? FROM agent_grants WHERE id=?`).bind(codeHash, row.redirect_uri, row.challenge, session.hash, now + 60000, grantId));

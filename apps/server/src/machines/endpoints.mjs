@@ -2,7 +2,7 @@
 // and grants for resources it owns.
 import { invariant } from '../lib/errors.mjs';
 import { json, readBody, tokenShape, uniqueParams } from '../lib/http.mjs';
-import { from64, sha256 } from '../lib/crypto.mjs';
+import { from64, b64url, sha256 } from '../lib/crypto.mjs';
 import { authenticatedClient } from '../oidc/token.mjs';
 import { jwksDocument } from '../oidc/keys.mjs';
 import { ownerOf, } from '../agents/policy.mjs';
@@ -44,9 +44,9 @@ export async function introspect(request, env) {
     const body = await readBody(request, 'form'), client = await authenticatedClient(request, env, body, true);
     const claims = await localAccessToken(env, body.token);
     if (!claims || !await owns(env, client, claims.aud) || !await stillLive(env, claims)) return json({ active: false });
-    const { iss, sub, aud, scope, client_id, grant_id, exp, iat, act, cnf, grant_issued_at } = claims;
+    const { iss, sub, aud, scope, client_id, grant_id, exp, iat, act, cnf, grant_issued_at, agent_assurance } = claims;
     return json({ active: true, token_type: cnf ? 'DPoP' : 'Bearer', iss, sub, aud, scope, client_id, grant_id, exp, iat,
-        ...(grant_issued_at ? { grant_issued_at } : {}), ...(act ? { act } : {}), ...(cnf ? { cnf } : {}) });
+        ...(grant_issued_at ? { grant_issued_at } : {}), ...(agent_assurance ? { agent_assurance } : {}), ...(act ? { act } : {}), ...(cnf ? { cnf } : {}) });
 }
 // RFC 7009: always 200. An agent revokes its own grant (by refresh or access token); an app revokes grants on its
 // own resources. Anything else is ignored without saying why.
@@ -77,17 +77,35 @@ export async function revoke(request, env, ctx) {
     queueRevocation(env, ctx, await revokeGrant(env, grant.id, grant.user_id, app ? 'app_revoke' : 'agent_self_revoke'));
     return new Response(null, { status: 200 });
 }
-// GET /v1/grants?resource=…: the live agent grants on one of this app's resources (a workspace admin's view).
+// GET /v1/grants?resource=…[&sub=…][&limit=…][&cursor=…]: the live agent grants on one of this app's resources, newest
+// first, a page at a time (a workspace admin's view). next_cursor is null on the last page.
 // POST /v1/grants/revoke {grant_id}: revoke one, for example when a member leaves the workspace.
+export const GRANTS_PAGE_MAX = 200;
+const cursorOf = g => b64url(new TextEncoder().encode(JSON.stringify([g.created, g.id])));
+function readCursor(value) {
+    let position;
+    try { position = JSON.parse(new TextDecoder().decode(from64(value))); } catch { position = null; }
+    invariant(typeof value === 'string' && value.length <= 200 && Array.isArray(position) && position.length === 2 && Number.isSafeInteger(position[0]) &&
+        typeof position[1] === 'string' && position[1].length <= 64, 'invalid_request', 'Invalid cursor.');
+    return position;
+}
 export async function appGrants(request, env, ctx) {
     if (request.method === 'GET') {
         const query = uniqueParams(new URL(request.url).searchParams), client = await authenticatedClient(request, env, {}, true);
         resourceUrl(query.resource);
         invariant(await owns(env, client, query.resource), 'invalid_target', 'That resource does not belong to this app.', 403);
-        const { results } = await env.DB.prepare(`SELECT id,user_id,client_id,client_name,registration_method,scope,created,last_used,expires_at FROM agent_grants
-            WHERE app_id=? AND resource=? AND revoked_at IS NULL AND expires_at>? ORDER BY created DESC LIMIT 200`).bind(client.id, query.resource, Date.now()).all();
-        return json({ grants: results.map(g => ({ grant_id: g.id, sub: g.user_id, agent: g.client_id, agent_name: g.client_name,
-            agent_verified: g.registration_method === 'metadata_document', scope: g.scope, created: g.created, last_used: g.last_used, expires_at: g.expires_at })) });
+        invariant(query.limit === undefined || /^[1-9]\d{0,2}$/.test(query.limit) && Number(query.limit) <= GRANTS_PAGE_MAX, 'invalid_request', 'limit is 1 to {max}.', 400, { max: GRANTS_PAGE_MAX });
+        invariant(query.sub === undefined || (query.sub.length > 0 && query.sub.length <= 200), 'invalid_request', 'Invalid sub.');
+        const limit = Number(query.limit ?? GRANTS_PAGE_MAX), after = query.cursor === undefined ? null : readCursor(query.cursor);
+        const { results } = await env.DB.prepare(`SELECT id,user_id,client_id,client_name,registration_method,assurance,scope,created,last_used,expires_at FROM agent_grants
+            WHERE app_id=? AND resource=? AND revoked_at IS NULL AND expires_at>? AND (? IS NULL OR user_id=?)
+            AND (? IS NULL OR created<? OR (created=? AND id<?)) ORDER BY created DESC, id DESC LIMIT ?`)
+            .bind(client.id, query.resource, Date.now(), query.sub ?? null, query.sub ?? null, after?.[0] ?? null, after?.[0] ?? null, after?.[0] ?? null, after?.[1] ?? null, limit + 1).all();
+        const page = results.slice(0, limit);
+        return json({ grants: page.map(g => ({ grant_id: g.id, sub: g.user_id, agent: g.client_id, agent_name: g.client_name,
+            agent_verified: g.registration_method === 'metadata_document', ...(g.assurance ? { agent_assurance: g.assurance } : {}),
+            scope: g.scope, created: g.created, last_used: g.last_used, expires_at: g.expires_at })),
+            next_cursor: results.length > limit ? cursorOf(page.at(-1)) : null });
     }
     const body = await readBody(request, 'form'), client = await authenticatedClient(request, env, body, true);
     invariant(typeof body.grant_id === 'string' && body.grant_id.length <= 64, 'invalid_request', 'grant_id required.');

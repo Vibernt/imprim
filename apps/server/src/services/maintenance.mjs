@@ -6,6 +6,7 @@ import { keySweep } from '../oidc/keys.mjs';
 import { recordDeliveryError } from './outbox-expiry.mjs';
 import { cleanExpiredAppSessions } from '../oidc/app-sessions.mjs';
 import { deliverUserEvent } from './user-events.mjs';
+import { REGISTRATION_IDLE_MS } from '../agents/registration.mjs';
 import { configuredRealms, realmEnv } from '../realms/realm.mjs';
 export async function scheduled(env) {
     // Delivery is independent of key maintenance: a bad sealing key must not stop enqueueing.
@@ -23,7 +24,10 @@ async function maintain(env) {
         await env.DB.prepare(`DELETE FROM ${table} WHERE expires_at<=?`).bind(now).run();
     // Retain expired device codes for a day so pollers receive expired_token after the sweep.
     await env.DB.prepare('DELETE FROM agent_devices WHERE expires_at<=?').bind(now - 86400000).run();
-    await env.DB.prepare('DELETE FROM agent_clients WHERE last_used<=?').bind(now - 30 * 86400000).run();
+    // An unused self-registration goes after 30 days, but never while a grant made with it is live: a person who uses
+    // an assistant once a month would otherwise find it unable to refresh.
+    await env.DB.prepare(`DELETE FROM agent_clients WHERE last_used<=? AND NOT EXISTS(SELECT 1 FROM agent_grants g
+        WHERE g.client_id=agent_clients.id AND g.revoked_at IS NULL AND g.expires_at>?)`).bind(now - REGISTRATION_IDLE_MS, now).run();
     await sweepGrants(env, now);
     await env.DB.prepare('DELETE FROM trusted_devices WHERE expires_at<=?').bind(now).run();
     await env.DB.prepare('DELETE FROM mfa_factors WHERE confirmed=0 AND created<=?').bind(now - 3600000).run();

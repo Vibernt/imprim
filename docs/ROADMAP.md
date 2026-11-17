@@ -14,7 +14,8 @@ Tweaks panel in the console; pages and emails in English, Spanish, French, Germa
 `ui_locales`, the person's saved language, `Accept-Language` and the brand, with per-language brand words
 ([Languages](TRANSLATING.md)); a branded HTML part, light and dark, beside the plain text of every email;
 `id_token_hint`, `POST /authorize`, `client_secret_post`, UserInfo body tokens, per-app classic OpenID Connect and
-RS256 ID tokens,
+RS256 ID tokens; agents at scale (token budgets per grant and per agent, grants API paging, `listGrants`, `revokeGrant`
+and `introspect` in `imprim-client`, `agent_assurance`, registrations kept while a grant is live),
 for the OpenID conformance suite ([OpenID certification](CERTIFICATION.md)).
 
 Planned, roughly in order. Each item is an issue to discuss before code:

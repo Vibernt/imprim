@@ -19,7 +19,7 @@ test('workspace and Worker configuration: neutral template, staging and producti
     assert.deepEqual(Object.keys(config.env).sort(), ['production', 'staging']);
     for (const target of [config, config.env.staging, config.env.production]) {
         assert.equal(target.d1_databases[0].binding, 'DB');
-        assert.deepEqual(target.ratelimits.map(x => x.name).sort(), ['API_LIMITER', 'AUTH_LIMITER']);
+        assert.deepEqual(target.ratelimits.map(x => x.name).sort(), ['AGENT_LIMITER', 'API_LIMITER', 'AUTH_LIMITER']);
         assert.equal(target.send_email[0].name, 'EMAIL'); assert.equal(target.queues.producers[0].binding, 'LOGOUT_QUEUE');
         assert.equal(target.queues.consumers[0].max_retries, 5);
         assert.ok(target.queues.consumers[0].dead_letter_queue);

@@ -28,6 +28,8 @@ export function validatePolicySettings(config, agent) {
     invariant(['off', 'on'].includes(config.user_events ?? 'off'), 'invalid_request', 'user_events is off or on.');
     invariant(['off', 'on'].includes(config.classic_oidc ?? 'off'), 'invalid_request', 'classic_oidc is off or on.');
     invariant(['ES256', 'RS256'].includes(config.id_token_signed_response_alg ?? 'ES256'), 'invalid_request', 'id_token_signed_response_alg is ES256 or RS256.');
+    invariant(Number.isInteger(config.agent_token_rate ?? 3000) && (config.agent_token_rate ?? 3000) >= 10 && (config.agent_token_rate ?? 3000) <= 100000,
+        'invalid_request', 'agent_token_rate is a whole number of token requests per agent per minute, 10 to 100000.');
     const exchange = config.token_exchange_from ?? {};
     invariant(exchange && typeof exchange === 'object' && !Array.isArray(exchange) && Object.keys(exchange).length <= 20 &&
         Object.entries(exchange).every(([id, scopes]) => /^[A-Za-z0-9_-]{1,200}$/.test(id) && id !== config.id && Array.isArray(scopes) && scopes.length > 0 &&
@@ -57,7 +59,7 @@ function validate(config) {
 export async function saveClient(env, actor, id, input) {
     const old = id ? await getAdminClient(env, id) : null;
     const allowed = ['id','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev',
-        'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa','agent_dpop','token_exchange_from','user_events','classic_oidc','id_token_signed_response_alg',...settingNames, ...(old ? ['version'] : [])];
+        'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa','agent_dpop','token_exchange_from','user_events','classic_oidc','id_token_signed_response_alg','agent_token_rate',...settingNames, ...(old ? ['version'] : [])];
     invariant(Object.keys(input).every(k => allowed.includes(k)), 'invalid_request', 'Unknown client field; secrets cannot be supplied.');
     invariant(!id || input.id === undefined || input.id === id, 'invalid_request', 'Client id cannot change.');
     if (old) {

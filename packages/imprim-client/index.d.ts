@@ -42,5 +42,17 @@ export interface IdentityClient {
     handleUserEvent(request: Request): Promise<{ sub: string; event: UserEventName; data: UserEventClaims['data']; toe: number; jti: string }>;
     logoutUrl(options?: { idTokenHint?: string; postLogoutRedirectUri?: string; state?: string }): Promise<string>;
     inviteEmail(email: string): Promise<{ accepted: boolean; expires_at: number }>;
+    listGrants(options: { resource: string; sub?: string; limit?: number; cursor?: string | null }): Promise<{ grants: AgentGrant[]; next_cursor: string | null }>;
+    revokeGrant(grantId: string): Promise<{ grant_id: string; revoked: true }>;
+    introspect(token: string, options?: { tokenTypeHint?: 'access_token' | 'refresh_token' }): Promise<Introspection>;
 }
+export type AgentAssurance = 'key' | 'redirect' | 'claimed' | 'none';
+export interface AgentGrant {
+    grant_id: string; sub: string; agent: string; agent_name: string; agent_verified: boolean; agent_assurance?: AgentAssurance;
+    scope: string; created: number; last_used: number | null; expires_at: number;
+}
+export type Introspection = { active: false } | {
+    active: true; token_type: 'Bearer' | 'DPoP'; iss: string; sub: string; aud: string; scope: string; client_id: string; grant_id: string;
+    exp: number; iat: number; grant_issued_at?: number; agent_assurance?: AgentAssurance; act?: { sub: string }; cnf?: { jkt: string };
+};
 export function createClient(options: ClientOptions): IdentityClient;

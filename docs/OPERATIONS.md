@@ -57,7 +57,7 @@ expired state:
 |---|---|
 | Email links, upstream OAuth states, pending requests, codes, UserInfo tokens, sessions, invitations, rate-limit rows, passkey challenges, pending email changes, DPoP and assertion replay records | Until their own expiry |
 | Expired device codes | One more day, so polling agents get `expired_token` |
-| Dynamic agent registrations | 30 days after last use |
+| Dynamic agent registrations | 30 days after last use, but never while a grant made with them is live |
 | Spent agent refresh tokens | 7 days (the reuse-detection window) |
 | Revoked or expired agent grants | 30 days, still listed at `/account/agents`, then deleted with their tokens |
 | Delivered outbox rows | 30 days, at most 500 rows per outbox per run |

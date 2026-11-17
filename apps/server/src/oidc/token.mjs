@@ -3,7 +3,7 @@ import { serviceToken } from '../machines/service-token.mjs';
 import { exchangeToken, TOKEN_EXCHANGE } from '../machines/exchange.mjs';
 import { authenticateClient, registeredUri } from './clients.mjs';
 import { readBody, json, tokenShape } from '../lib/http.mjs';
-import { invariant } from '../lib/errors.mjs';
+import { invariant, AppError } from '../lib/errors.mjs';
 import { sha256, challengeOf, randomToken } from '../lib/crypto.mjs';
 import { sessionByHash } from '../auth/session.mjs';
 import { signIdToken } from './jwt.mjs';
@@ -27,9 +27,14 @@ export async function token(request, env, ctx) {
     if (body.grant_type === 'client_credentials') { await limitAddress(env, request); return serviceToken(request, env, body); }
     if (body.grant_type === TOKEN_EXCHANGE) return exchangeToken(env, await authenticatedClient(request, env, body, true, { post: true }), body);
     if (body.resource !== undefined || body.client_id?.startsWith('https://') || body.client_id?.startsWith('agent_') || ['refresh_token','urn:ietf:params:oauth:grant-type:device_code'].includes(body.grant_type)) {
-        // Agents run on people's own machines, not shared Worker egress, so their budget stays per address.
-        await limitAddress(env, request);
-        return agentToken(request, env, body, ctx);
+        // Agents spend the looser agent address budget; a refused request also spends the strict one, so guessing stays
+        // slow. Waiting for consent is not a refusal. Per-grant and per-agent budgets apply inside (auth/rate-limit.mjs).
+        await limitAddress(env, request, 'AGENT_LIMITER');
+        try { return await agentToken(request, env, body, ctx); }
+        catch (error) {
+            if (error instanceof AppError && error.status < 500 && !['rate_limit', 'authorization_pending', 'slow_down'].includes(error.code)) await limitAddress(env, request);
+            throw error;
+        }
     }
     const client = await authenticatedClient(request, env, body, false, { post: true });
     invariant(body.grant_type === 'authorization_code', 'unsupported_grant_type', 'Only authorization_code is supported.');

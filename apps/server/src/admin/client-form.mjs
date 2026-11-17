@@ -6,7 +6,7 @@ import { invariant } from '../lib/errors.mjs';
 const LISTS = ['redirect_uris', 'post_logout_uris', 'allowed_domains', 'google_hosted_domains', 'agent_allowlist', 'agent_resource_prefixes'];
 // Groups of checkboxes, each box named `group.choice`. The order of the boxes is the order saved.
 const GROUPS = ['sign_in_methods', 'agent_registration_methods'];
-const NUMBERS = ['dev', 'agent_max_grant_days', 'version', 'mfa_trusted_device_days'];
+const NUMBERS = ['dev', 'agent_max_grant_days', 'version', 'mfa_trusted_device_days', 'agent_token_rate'];
 // A switch posts its "on" value when checked and nothing otherwise: [on, off].
 export const SWITCHES = { dev: ['1', 0], agent_access: ['on', 'off'], user_events: ['on', 'off'], agent_consent_mfa: ['required', 'off'], agent_dpop: ['required', 'optional'], classic_oidc: ['on', 'off'] };
 const lines = text => text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);

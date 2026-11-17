@@ -1,4 +1,4 @@
-# imprim-client 0.6.0
+# imprim-client 0.7.0
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
 named `@vibernt/identity-client`. To move an app from that version, follow
@@ -99,6 +99,17 @@ export async function agentRequest(token, resource, appStore) {
 its durable commit. Key replay records by trusted issuer and `jti` if accepting multiple issuers. Identity can re-sign
 an outbox event later with the same `jti`; preserve replay records while retries are possible. Grant denials must
 cover all unexpired tokens, and logout/denial effects must remain idempotent on retries. No storage is held by the SDK.
+
+## Agent grants (0.7.0)
+
+For a confidential client, the calls a workspace admin screen needs:
+
+- `client.listGrants({ resource, sub?, limit?, cursor? })` returns `{ grants, next_cursor }`: one page (up to 200) of
+  the live agent grants on one of the app's resources, newest first. Pass `next_cursor` back as `cursor`; it is `null`
+  on the last page. `sub` narrows the list to one person.
+- `client.revokeGrant(grantId)` revokes one; the agent's refresh stops and a revocation event follows.
+- `client.introspect(token, { tokenTypeHint? })` returns `{ active: false }`, or the live token's claims, including
+  `agent_assurance` (`key`, `redirect`, `claimed` or `none`).
 
 ## Agent access and adoption
 

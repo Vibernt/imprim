@@ -6,7 +6,7 @@ import { hidden, button, linkButton, actions } from '../pages/ui.mjs';
 import { text, shown, list, pairs, json, choice, checks, toggle, amount, cols, formSection, advanced } from '../pages/forms.mjs';
 import { SWITCHES } from './client-form.mjs';
 const NEW = { id: '', redirect_uris: [], post_logout_uris: [], backchannel_uri: '', signup_policy: 'invited', sign_in_methods: ['email'], google_hosted_domains: [],
-    allowed_domains: [], branding: { name: '' }, dev: 0, mfa: 'off', mfa_trusted_device_days: 0, agent_consent_mfa: 'off', agent_dpop: 'optional', classic_oidc: 'off', id_token_signed_response_alg: 'ES256', token_exchange_from: {},
+    allowed_domains: [], branding: { name: '' }, dev: 0, mfa: 'off', mfa_trusted_device_days: 0, agent_consent_mfa: 'off', agent_dpop: 'optional', classic_oidc: 'off', id_token_signed_response_alg: 'ES256', agent_token_rate: 3000, token_exchange_from: {},
     user_events: 'off', agent_access: 'off', agent_registration_methods: ['metadata_document'], agent_allowlist: [], agent_scope_catalogue: {}, agent_resource_prefixes: [], agent_max_grant_days: 90 };
 export const METHODS = { email: 'Email link', password: 'Password', passkey: 'Passkey', github: 'GitHub', google: 'Google' };
 const HOST = '^[a-z0-9-]+(\\.[a-z0-9-]+)+$';
@@ -44,6 +44,7 @@ export function clientForm(client, csrf, { providers = {} } = {}) {
         list({ id: 'f-agent_resource_prefixes', label: 'Resources', name: 'agent_resource_prefixes', values: value.agent_resource_prefixes, pattern: '^https://', placeholder: 'https://notes.example/w/', hint: 'Agents may ask for URLs that start with one of these.' }) +
         list({ id: 'f-agent_allowlist', label: 'Allowed agents', name: 'agent_allowlist', values: value.agent_allowlist, placeholder: 'agent.example.com', hint: 'An agent’s host or its full client URL. Leave empty to allow any agent.' }) +
         amount({ id: 'f-agent_max_grant_days', label: 'Longest grant', name: 'agent_max_grant_days', value: value.agent_max_grant_days, unit: 'days', min: 1, hint: 'People approve again after this long.' }) +
+        amount({ id: 'f-agent_token_rate', label: 'Token requests per agent', name: 'agent_token_rate', value: value.agent_token_rate ?? 3000, unit: 'a minute', min: 10, max: 100000, hint: 'For each agent, such as ChatGPT or Claude, across everyone who uses it here. Each connection also has its own limit of 60 a minute.' }) +
         toggle({ id: 'f-agent_consent_mfa', label: 'Second factor at consent', desc: 'Ask for a code or a passkey before a person approves an agent.', name: 'agent_consent_mfa', on: SWITCHES.agent_consent_mfa[0], checked: on(value, 'agent_consent_mfa') }) +
         toggle({ id: 'f-agent_dpop', label: 'Require key-bound tokens', desc: 'Agents must prove a key with every request (DPoP), so a stolen token is useless.', name: 'agent_dpop', on: SWITCHES.agent_dpop[0], checked: on(value, 'agent_dpop') }));
     const machines = formSection('machines', 'Machines and events', 'Services calling each other, and events about people.',

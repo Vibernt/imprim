@@ -12,7 +12,8 @@ export async function world(t, policy = 'open') {
         GITHUB_CLIENT_ID: 'github-client', GITHUB_CLIENT_SECRET: 'github-secret',
         DB: d1Database(), EMAIL: { async send(mail) { mails.push(mail); return { messageId: 'test' }; } },
         AUTH_LIMITER: { async limit() { return { success: true }; } },
-        API_LIMITER: { async limit() { return { success: true }; } }
+        API_LIMITER: { async limit() { return { success: true }; } },
+        AGENT_LIMITER: { async limit() { return { success: true }; } }
     };
     base.DB.db.prepare("UPDATE realms SET issuer='https://id.vibernt.ai', display_name='Vibernt' WHERE id='default'").run();
     base.DB.db.prepare("INSERT INTO admins(realm_id,email,role,created) VALUES('default','admin@example.com','platform',0)").run();

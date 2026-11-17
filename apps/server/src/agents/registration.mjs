@@ -7,6 +7,8 @@ import { fetchMetadata, metadataUrl, cacheLifetime } from './metadata-http.mjs';
 import { validateKeys } from './client-auth.mjs';
 import { realmId } from '../realms/realm.mjs';
 const GRANTS = ['authorization_code','refresh_token','urn:ietf:params:oauth:grant-type:device_code'];
+// A self-registration nobody has used for this long is gone, unless a live grant still uses it.
+export const REGISTRATION_IDLE_MS = 30 * 86400000;
 // Bidirectional overrides and control characters let a name render differently from what it says (S11).
 export const displayName = value => value.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, '').trim();
 function validateMetadata(document, id) {
@@ -30,7 +32,9 @@ function validateMetadata(document, id) {
 export async function resolveAgent(env, id) {
     invariant(typeof id === 'string' && id.length <= 2048, 'invalid_client', 'Agent client_id required.');
     if (!id.startsWith('https://')) {
-        const row = await env.DB.prepare('SELECT * FROM agent_clients WHERE id=? AND realm_id=? AND last_used>?').bind(id, realmId(env), Date.now() - 30 * 86400000).first();
+        const now = Date.now();
+        const row = await env.DB.prepare(`SELECT * FROM agent_clients WHERE id=? AND realm_id=? AND (last_used>? OR EXISTS(SELECT 1 FROM agent_grants g
+            WHERE g.client_id=agent_clients.id AND g.revoked_at IS NULL AND g.expires_at>?))`).bind(id, realmId(env), now - REGISTRATION_IDLE_MS, now).first();
         invariant(row, 'invalid_client', 'Unknown or unused expired agent registration.');
         return validateMetadata(JSON.parse(row.metadata), id);
     }

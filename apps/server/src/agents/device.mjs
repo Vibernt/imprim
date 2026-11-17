@@ -1,4 +1,5 @@
 import { liveGrantGuard } from './guards.mjs';
+import { limitAgentGrant } from '../auth/rate-limit.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { readBody, json, uniqueParams, tokenShape } from '../lib/http.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
@@ -65,7 +66,9 @@ export async function pollDevice(env, body, jkt = null) {
     invariant(row, 'invalid_grant', 'Device request unavailable.');
     invariant(row.poll_marker === marker, 'slow_down', 'Increase the polling interval by five seconds.');
     invariant(row.status === 'approved', 'authorization_pending', 'Waiting for human consent.');
-    const { grant, app } = await grantContext(env, row.grant_id), bound = dpopFor(app, grant, jkt), material = await tokenMaterial(env, grant, grant.scope, bound);
+    const { grant, app } = await grantContext(env, row.grant_id);
+    await limitAgentGrant(env, grant, app);
+    const bound = dpopFor(app, grant, jkt), material = await tokenMaterial(env, grant, grant.scope, bound);
     const guard = liveGrantGuard(grant, app, Date.now());
     const result = await env.DB.batch([
         env.DB.prepare(`INSERT INTO agent_refresh_tokens(hash,grant_id,created) SELECT ?,d.grant_id,? FROM agent_devices d JOIN agent_grants g ON g.id=d.grant_id
