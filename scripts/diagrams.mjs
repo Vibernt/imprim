@@ -1,58 +1,95 @@
-// Draws the README and docs graphics as SVG, in a light and a dark version, from one source.
+// Draws the README and docs graphics as SVG, in Fire's light and dark looks, from one source.
 //   node scripts/diagrams.mjs            writes docs/assets/diagrams/{overview,comparison}-{light,dark}.svg
+// They follow Fire (docs/fire): one ink, one accent (ember), hairlines instead of boxes, mono eyebrows, the dot
+// grid and corner marks, Geist type (embedded, so GitHub shows it too) and Imprim's dot-matrix wordmark and numerals.
 // A palette may also use CSS custom properties (var(--…)), so a page can inline a graphic that follows its theme.
 // Every line of text is measured against its box; a line that would overflow fails the build.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { dotMatrix } from '../apps/server/src/pages/dots.mjs';
 
-const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
-const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+const SANS = "'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const MONO = "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+// Fire's tokens (apps/server/public/fire/tokens.css), resolved for each scheme. Muted text is ink at 64%; the grid
+// dots are faint ink, as Fire's texture rules set them.
 export const PALETTES = {
-    light: { bg: '#ffffff', panel: '#f6f7f9', ink: '#15181e', muted: '#566070', rule: '#d5dae2', accent: '#2b47c9', accentSoft: '#eef1fc',
-        onAccent: '#ffffff', good: '#1f7a4d', partial: '#b7791f', none: '#9aa2b1', sans: SANS, mono: MONO },
-    dark: { bg: '#0d1117', panel: '#161b22', ink: '#e6edf3', muted: '#9aa4b2', rule: '#30363d', accent: '#8ea2ff', accentSoft: '#1a2040',
-        onAccent: '#0d1117', good: '#3fb950', partial: '#d29922', none: '#6e7681', sans: SANS, mono: MONO }
+    light: { bg: '#f9f9f9', surface: '#ffffff', sunken: '#f4f4f4', ink: '#262626', muted: '#737373', line: '#e8e8e8', strong: '#d4d4d4',
+        accent: '#fa5d19', accentSoft: '#fff4ee', good: '#2fb457', partial: '#e8a917', none: '#c4c4c4', grid: '#c8c8c8', sans: SANS, mono: MONO },
+    dark: { bg: '#0a0a0a', surface: '#141414', sunken: '#060606', ink: '#f5f5f5', muted: '#a3a3a3', line: '#2a2a2a', strong: '#3d3d3d',
+        accent: '#fb6a2a', accentSoft: '#2b1d16', good: '#4ccd75', partial: '#f0c550', none: '#525252', grid: '#333333', sans: SANS, mono: MONO }
 };
 
 const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-// A deliberately generous estimate of rendered width, so text that passes here fits in any common font.
+// A deliberately generous estimate of rendered width, so text that passes here fits in Geist and its fallbacks.
 const widthOf = (text, size, mono) => text.length * size * (mono ? 0.62 : 0.57);
+
+function fontFaces() {
+    const face = (family, file) => `@font-face{font-family:'${family}';font-weight:100 900;src:url(data:font/woff2;base64,${
+        readFileSync(new URL(`../apps/server/public/fire/fonts/${file}`, import.meta.url)).toString('base64')}) format('woff2')}`;
+    return `<style>${face('Geist', 'geist-latin-wght-normal.woff2')}${face('Geist Mono', 'geist-mono-latin-wght-normal.woff2')}</style>`;
+}
 
 function canvas(c, prefix) {
     const parts = [];
     const api = {
-        rect(x, y, w, h, { fill = 'none', stroke = 'none', r = 10, width = 1, dash } = {}) {
-            parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${width}${dash ? `;stroke-dasharray:${dash}` : ''}"/>`);
+        rect(x, y, w, h, { fill = 'none', stroke = 'none', r = 12, width = 1 } = {}) {
+            parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" style="fill:${fill};stroke:${stroke};stroke-width:${width}"/>`);
         },
-        // lines: one string or several; each is checked against maxWidth.
         text(x, y, lines, { size = 14, weight = 400, fill = c.ink, anchor = 'start', mono = false, spacing = 0, gap = 1.45, maxWidth, upper = false } = {}) {
-            const list = Array.isArray(lines) ? lines : [lines];
+            const list = (Array.isArray(lines) ? lines : [lines]).map(line => upper ? line.toUpperCase() : line);
             for (const line of list) {
-                const shown = upper ? line.toUpperCase() : line;
-                const width = widthOf(shown, size, mono) + spacing * size * shown.length;
+                const width = widthOf(line, size, mono) + Math.max(0, spacing) * size * line.length;
                 if (maxWidth && width > maxWidth) throw new Error(`${prefix}: "${line}" is about ${Math.round(width)}px, wider than ${maxWidth}px`);
             }
             const font = mono ? c.mono : c.sans;
-            list.forEach((line, i) => parts.push(`<text x="${x}" y="${(y + i * size * gap).toFixed(1)}" text-anchor="${anchor}" style="font-family:${font};font-size:${size}px;font-weight:${weight};fill:${fill}${spacing ? `;letter-spacing:${spacing}em` : ''}">${esc(upper ? line.toUpperCase() : line)}</text>`));
+            list.forEach((line, i) => parts.push(`<text x="${x}" y="${(y + i * size * gap).toFixed(1)}" text-anchor="${anchor}" style="font-family:${font};font-size:${size}px;font-weight:${weight};fill:${fill}${spacing ? `;letter-spacing:${spacing}em` : ''}">${esc(line)}</text>`));
         },
-        line(x1, y1, x2, y2, { stroke = c.rule, width = 1, dash, arrow } = {}) {
-            parts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${stroke};stroke-width:${width}${dash ? `;stroke-dasharray:${dash}` : ''}"${arrow ? ` marker-end="url(#${prefix}-arrow)"` : ''}/>`);
+        // Fire's eyebrow: small mono capitals, tracked out.
+        eyebrow(x, y, text, { fill = c.muted, anchor = 'start', maxWidth } = {}) {
+            api.text(x, y, text, { size: 11, mono: true, upper: true, spacing: 0.06, fill, anchor, maxWidth, weight: 500 });
         },
-        badge(x, y, label) {
-            parts.push(`<circle cx="${x}" cy="${y}" r="12" style="fill:${c.accent}"/>`);
-            parts.push(`<text x="${x}" y="${y + 4.5}" text-anchor="middle" style="font-family:${c.sans};font-size:13px;font-weight:700;fill:${c.onAccent}">${label}</text>`);
+        // A dotted flow line with an arrowhead: the dots echo the wordmark.
+        flow(x1, y1, x2, y2) {
+            parts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${c.accent};stroke-width:2.4;stroke-linecap:round;stroke-dasharray:0 6" marker-end="url(#${prefix}-arrow)"/>`);
+        },
+        line(x1, y1, x2, y2, { stroke = c.line, width = 1 } = {}) {
+            parts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${stroke};stroke-width:${width}"/>`);
+        },
+        // Text in Imprim's dot matrix: lit dots in `fill`, unlit dots faint, `pitch` pixels per dot.
+        matrix(x, y, text, pitch, fill = c.ink) {
+            const m = dotMatrix(text);
+            parts.push(`<g transform="translate(${x} ${y}) scale(${pitch})"><path d="${m.unlit}" style="fill:${fill};opacity:.14"/><path d="${m.lit}" style="fill:${fill}"/></g>`);
+            return m.width * pitch;
+        },
+        // A step number: a small tile with the digit in the dot matrix.
+        step(x, y, n) {
+            parts.push(`<rect x="${x - 16}" y="${y - 16}" width="32" height="32" rx="9" style="fill:${c.surface};stroke:${c.accent};stroke-width:1.2"/>`);
+            api.matrix(x - 7.5, y - 10.5, String(n), 3, c.accent);
+        },
+        // Fire's corner marks: a hairline cross on each corner of a box, pushed out by `gap`.
+        corners(x, y, w, h, { stroke = c.strong, gap = 8 } = {}) {
+            const arm = 4.5;
+            for (const [cx, cy] of [[x - gap, y - gap], [x + w + gap, y - gap], [x - gap, y + h + gap], [x + w + gap, y + h + gap]])
+                parts.push(`<path d="M${cx - arm} ${cy}H${cx + arm}M${cx} ${cy - arm}V${cy + arm}" style="fill:none;stroke:${stroke};stroke-width:1"/>`);
         },
         mark(x, y, kind) {
-            if (kind === 'full') parts.push(`<circle cx="${x}" cy="${y}" r="8" style="fill:${c.good}"/>`);
-            else if (kind === 'part') parts.push(`<circle cx="${x}" cy="${y}" r="7" style="fill:none;stroke:${c.partial};stroke-width:2"/><path d="M${x} ${y - 7} A7 7 0 0 0 ${x} ${y + 7} Z" style="fill:${c.partial}"/>`);
-            else if (kind === 'none') parts.push(`<circle cx="${x}" cy="${y}" r="7" style="fill:none;stroke:${c.none};stroke-width:2"/>`);
-            else parts.push(`<line x1="${x - 7}" y1="${y}" x2="${x + 7}" y2="${y}" style="stroke:${c.none};stroke-width:2"/>`);
+            if (kind === 'full') parts.push(`<circle cx="${x}" cy="${y}" r="6.5" style="fill:${c.good}"/>`);
+            else if (kind === 'part') parts.push(`<circle cx="${x}" cy="${y}" r="5.8" style="fill:none;stroke:${c.partial};stroke-width:1.6"/><path d="M${x} ${y - 5.8} A5.8 5.8 0 0 0 ${x} ${y + 5.8} Z" style="fill:${c.partial}"/>`);
+            else if (kind === 'none') parts.push(`<circle cx="${x}" cy="${y}" r="5.8" style="fill:none;stroke:${c.none};stroke-width:1.6"/>`);
+            else parts.push(`<line x1="${x - 6}" y1="${y}" x2="${x + 6}" y2="${y}" style="stroke:${c.none};stroke-width:1.6"/>`);
         },
-        raw(svg) { parts.push(svg); },
-        done(w, h, title, description) {
+        done(w, h, title, description, { fonts = true } = {}) {
             return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" role="img" aria-labelledby="${prefix}-title ${prefix}-desc">
 <title id="${prefix}-title">${esc(title)}</title><desc id="${prefix}-desc">${esc(description)}</desc>
-<defs><marker id="${prefix}-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill:${c.accent}"/></marker></defs>
+${fonts ? fontFaces() : ''}
+<defs>
+<marker id="${prefix}-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" style="fill:${c.accent}"/></marker>
+<pattern id="${prefix}-grid" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="8" cy="8" r="1" style="fill:${c.grid}"/></pattern>
+<radialGradient id="${prefix}-fade" cx="50%" cy="50%" r="62%"><stop offset="0" style="stop-color:#fff;stop-opacity:1"/><stop offset="1" style="stop-color:#fff;stop-opacity:0"/></radialGradient>
+<mask id="${prefix}-mask"><rect width="${w}" height="${h}" style="fill:url(#${prefix}-fade)"/></mask>
+</defs>
+<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="16" style="fill:${c.bg};stroke:${c.line}"/>
+<rect width="${w}" height="${h}" style="fill:url(#${prefix}-grid)" mask="url(#${prefix}-mask)"/>
 ${parts.join('\n')}
 </svg>
 `;
@@ -62,87 +99,83 @@ ${parts.join('\n')}
 }
 
 // How Imprim works, in one picture: a person, their agent, the app, and what flows between them.
-export function overview(c, prefix = 'overview') {
-    const d = canvas(c, prefix), W = 1200, H = 720;
-    d.rect(0.5, 0.5, W - 1, H - 1, { fill: c.bg, stroke: c.rule, r: 16 });
-    const title = (x, y, text) => d.text(x, y, text, { size: 21, weight: 700, maxWidth: 210 });
-    const body = (x, y, lines, maxWidth) => d.text(x, y, lines, { size: 15, fill: c.muted, maxWidth });
-    const label = (x, y, text, maxWidth) => d.text(x, y, text, { size: 11.5, weight: 700, fill: c.accent, spacing: 0.08, upper: true, maxWidth });
+export function overview(c, { prefix = 'overview', fonts = true } = {}) {
+    const d = canvas(c, prefix), W = 1200, H = 740, T = 36;
+    const card = (x, y, w, h) => d.rect(x, y + T, w, h, { fill: c.surface, stroke: c.line });
+    const title = (x, y, text) => d.text(x, y + T, text, { size: 19, weight: 500, spacing: -0.01, maxWidth: 210 });
+    const body = (x, y, lines, maxWidth) => d.text(x, y + T, lines, { size: 14.5, fill: c.muted, maxWidth });
+    const note = (x, y, lines, options = {}) => d.text(x, y + T, lines, { size: 13, fill: c.muted, gap: 1.35, ...options });
+    d.eyebrow(40, 42, 'In one view');
+    d.matrix(1160 - dotMatrix('IMPRIM').width * 2, 31, 'IMPRIM', 2, c.muted);
 
     // Person, top left.
-    d.rect(40, 70, 250, 200, { fill: c.panel, stroke: c.rule });
-    title(62, 106, 'Person');
-    body(62, 138, ['Signs in once per brand', 'Approves one workspace', 'and named scopes', 'Sees and revokes each', 'agent at any time'], 210);
-    // Imprim, top centre.
-    d.rect(440, 40, 320, 330, { fill: c.accentSoft, stroke: c.accent, width: 2, r: 14 });
-    d.text(462, 80, 'Imprim', { size: 26, weight: 800 });
-    d.text(462, 103, 'OpenID Connect and OAuth 2.1', { size: 13.5, fill: c.muted, maxWidth: 280 });
-    const rows = [['People', ['Email link, password, passkeys,', 'Google, GitHub, any OIDC; MFA']],
+    card(40, 70, 250, 200);
+    d.eyebrow(62, 98 + T, 'Human');
+    title(62, 126, 'Person');
+    body(62, 156, ['Signs in once per brand', 'Approves one workspace', 'and named scopes', 'Sees and revokes each', 'agent at any time'], 210);
+    // Imprim, top centre: the accent card, framed by corner marks.
+    d.rect(440, 40 + T, 320, 330, { fill: c.accentSoft, stroke: c.accent, width: 1.2, r: 14 });
+    d.corners(440, 40 + T, 320, 330, { stroke: c.accent });
+    d.matrix(462, 64 + T, 'IMPRIM', 4, c.ink);
+    d.eyebrow(462, 114 + T, 'OIDC · OAuth 2.1 · Workers + D1', { maxWidth: 280 });
+    [['People', ['Email link, password, passkeys,', 'Google, GitHub, any OIDC; MFA']],
         ['Agents', ['Any agent, 60-second tokens,', 'rotating refresh, DPoP']],
         ['Machines', ['Signed keys, never shared secrets;', 'token exchange between apps']],
-        ['Realms', ['Many brands on one deployment']]];
-    rows.forEach(([name, lines], i) => {
-        const y = 138 + i * 58;
-        label(462, y, name, 270);
-        d.text(462, y + 20, lines, { size: 14, maxWidth: 280, gap: 1.3 });
+        ['Realms', ['Many brands on one deployment']]].forEach(([name, lines], i) => {
+        const y = 148 + i * 56 + T;
+        d.eyebrow(462, y, name, { fill: c.accent, maxWidth: 270 });
+        d.text(462, y + 19, lines, { size: 14, maxWidth: 280, gap: 1.3 });
     });
     // The app, top right.
-    d.rect(910, 70, 250, 200, { fill: c.panel, stroke: c.rule });
-    title(932, 106, 'Your MCP server');
-    body(932, 138, ['Checks the token is for', 'this exact workspace', 'Matches scopes to the', 'person’s current role', 'Keeps its own sessions'], 210);
+    card(910, 70, 250, 200);
+    d.eyebrow(932, 98 + T, 'Resource');
+    title(932, 126, 'Your MCP server');
+    body(932, 156, ['Checks the token is for', 'this exact workspace', 'Matches scopes to the', 'person’s current role', 'Keeps its own sessions'], 210);
     // The agent, bottom centre.
-    d.rect(430, 510, 340, 130, { fill: c.panel, stroke: c.rule });
-    title(452, 546, 'Agent');
-    body(452, 576, ['Claude Code, Cursor, Codex, a CLI', 'Acts for the person, never as them', 'Holds no secret of its own'], 298);
-
-    // The access token, bottom left.
-    d.rect(40, 420, 250, 262, { fill: c.bg, stroke: c.accent, dash: '5 4' });
-    label(62, 452, 'The access token', 210);
+    card(430, 510, 340, 140);
+    d.eyebrow(452, 538 + T, 'Public client');
+    title(452, 566, 'Agent');
+    body(452, 596, ['Claude Code, Cursor, Codex, a CLI', 'Acts for the person, never as them'], 298);
+    // The access token, bottom left: a sunken code well.
+    d.rect(40, 430 + T, 250, 250, { fill: c.sunken, stroke: c.line });
+    d.eyebrow(62, 460 + T, 'Access token · at+jwt', { maxWidth: 210 });
     [['sub', 'the person'], ['client_id', 'the agent'], ['grant_id', 'the consent'], ['aud', 'one workspace'], ['scope', 'the ceiling'], ['exp', '60 seconds']]
         .forEach(([key, value], i) => {
-            const y = 486 + i * 32;
-            d.text(62, y, key, { size: 14, mono: true, maxWidth: 90 });
-            d.text(158, y, value, { size: 14.5, fill: c.muted, maxWidth: 118 });
+            const y = 494 + i * 30 + T;
+            d.text(62, y, key, { size: 13.5, mono: true, fill: c.accent, maxWidth: 90 });
+            d.text(158, y, value, { size: 14, maxWidth: 118 });
         });
     // Revocation, bottom right.
-    d.rect(910, 420, 250, 262, { fill: c.bg, stroke: c.rule });
-    label(932, 452, 'When the person revokes', 210);
-    ['Refresh stops at once', 'A signed event reaches', 'App refuses the grant', 'The last token ends'].forEach((text, i) => {
-        const y = 490 + i * 46;
-        d.raw(`<circle cx="942" cy="${y - 5}" r="10" style="fill:none;stroke:${c.accent};stroke-width:1.5"/>`);
-        d.text(942, y - 0.5, String(i + 1), { size: 12, weight: 700, fill: c.accent, anchor: 'middle' });
-        d.text(962, y, text, { size: 14.5, maxWidth: 190 });
+    card(910, 430, 250, 250);
+    d.eyebrow(932, 460 + T, 'When the person revokes', { maxWidth: 210 });
+    [['Refresh stops at once'], ['A signed event reaches', 'the app'], ['App refuses the grant'], ['The last token ends', 'within 60 seconds']].forEach((lines, i) => {
+        const y = 496 + i * 46 + T;
+        d.text(932, y, String(i + 1).padStart(2, '0'), { size: 12, mono: true, fill: c.accent, weight: 500 });
+        d.text(960, y, lines, { size: 14, maxWidth: 186, gap: 1.3 });
     });
-    d.text(962, 555, 'the app', { size: 14.5, maxWidth: 190 });
-    d.text(962, 647, 'within 60 seconds', { size: 14.5, maxWidth: 190 });
 
-    // Flows. 1: person gives the agent the app's address.
-    d.line(215, 272, 442, 508, { stroke: c.accent, width: 2, arrow: true });
-    d.badge(318, 375, 1);
-    d.text(334, 352, ['gives it the', 'app’s address'], { size: 13.5, fill: c.muted, maxWidth: 102, gap: 1.3 });
-    // 2: the agent asks Imprim for one workspace.
-    d.line(560, 508, 560, 374, { stroke: c.accent, width: 2, arrow: true });
-    d.badge(560, 440, 2);
-    d.text(544, 425, ['asks for one', 'workspace'], { size: 13.5, fill: c.muted, anchor: 'end', maxWidth: 110, gap: 1.3 });
-    // 3: the person signs in and approves.
-    d.line(292, 170, 436, 170, { stroke: c.accent, width: 2, arrow: true });
-    d.badge(364, 170, 3);
-    d.text(364, 146, 'signs in, approves', { size: 13.5, fill: c.muted, anchor: 'middle', maxWidth: 140 });
-    // 4: Imprim issues the token.
-    d.line(640, 374, 640, 508, { stroke: c.accent, width: 2, arrow: true });
-    d.badge(640, 440, 4);
-    d.text(658, 425, ['60-second token,', 'rotating refresh'], { size: 13.5, fill: c.muted, maxWidth: 140, gap: 1.3 });
-    // 5: the agent calls the app with it.
-    d.line(772, 556, 1030, 274, { stroke: c.accent, width: 2, arrow: true });
-    d.badge(930, 381, 5);
-    d.text(972, 366, ['calls the app', 'with the token'], { size: 13.5, fill: c.muted, maxWidth: 110, gap: 1.3 });
-    // 6: Imprim tells the app about revocation, sign-out and account changes.
-    d.line(764, 170, 906, 170, { stroke: c.accent, width: 2, arrow: true });
-    d.badge(835, 170, 6);
-    d.text(835, 146, 'signed events', { size: 13.5, fill: c.muted, anchor: 'middle', maxWidth: 140 });
-    d.text(835, 200, ['revoke, sign-out,', 'account changes'], { size: 12.5, fill: c.muted, anchor: 'middle', maxWidth: 140, gap: 1.3 });
+    // Flows, numbered in the order of one connection.
+    d.flow(215, 274 + T, 438, 504 + T);           // 1: the person gives the agent the app's address
+    d.step(318, 380 + T, 1);
+    note(340, 326, ['gives it the', 'app’s address'], { maxWidth: 98 });
+    d.flow(560, 506 + T, 560, 378 + T);           // 2: the agent asks Imprim for one workspace
+    d.step(560, 442 + T, 2);
+    note(540, 432, ['asks for one', 'workspace'], { anchor: 'end', maxWidth: 110 });
+    d.flow(294, 170 + T, 434, 170 + T);           // 3: the person signs in and approves
+    d.step(364, 170 + T, 3);
+    note(364, 145, 'signs in, approves', { anchor: 'middle', maxWidth: 136 });
+    d.flow(640, 376 + T, 640, 504 + T);           // 4: Imprim issues the token
+    d.step(640, 442 + T, 4);
+    note(662, 432, ['60-second token,', 'rotating refresh'], { maxWidth: 140 });
+    d.flow(772, 556 + T, 1026, 278 + T);          // 5: the agent calls the app with it
+    d.step(930, 383 + T, 5);
+    note(954, 370, ['calls the app', 'with the token'], { maxWidth: 110 });
+    d.flow(766, 170 + T, 904, 170 + T);           // 6: Imprim tells the app what changed
+    d.step(835, 170 + T, 6);
+    note(835, 145, 'signed events', { anchor: 'middle', maxWidth: 136 });
+    note(835, 205, ['revoke, sign-out,', 'account changes'], { anchor: 'middle', maxWidth: 136, size: 12.5 });
     return d.done(W, H, 'Imprim in one view',
-        'A person gives their agent an app address. The agent asks Imprim for one workspace, the person signs in and approves, and Imprim issues a 60-second token naming the person, the agent and the grant. The agent calls the app, which checks the workspace and the person’s current role. When the person revokes, refresh stops and a signed event tells the app.');
+        'A person gives their agent an app address. The agent asks Imprim for one workspace, the person signs in and approves, and Imprim issues a 60-second token naming the person, the agent and the grant. The agent calls the app, which checks the workspace and the person’s current role. When the person revokes, refresh stops and a signed event tells the app.', { fonts });
 }
 
 // How Imprim's defaults compare with the main kinds of identity system.
@@ -160,34 +193,37 @@ export const ROWS = [
     ['Open source, runs in your own account', ['full', 'none', 'none', 'full', 'na']],
     ['Fully managed, nothing to run', ['none', 'full', 'full', 'none', 'na']]
 ];
-export function comparison(c, prefix = 'comparison') {
-    const d = canvas(c, prefix), W = 1200, top = 112, rowH = 46, H = top + ROWS.length * rowH + 118;
+export function comparison(c, { prefix = 'comparison', fonts = true } = {}) {
+    const d = canvas(c, prefix), W = 1200, top = 146, rowH = 46, H = top + ROWS.length * rowH + 132;
     const x0 = 440, col = (W - 30 - x0) / COLUMNS.length, centre = i => Math.round(x0 + col * i + col / 2);
-    d.rect(0.5, 0.5, W - 1, H - 1, { fill: c.bg, stroke: c.rule, r: 16 });
-    d.rect(x0 + 4, 20, col - 8, H - 116, { fill: c.accentSoft, stroke: c.accent, width: 1.5, r: 12 });
+    d.eyebrow(40, 42, 'How it compares');
+    d.matrix(1160 - dotMatrix('IMPRIM').width * 2, 31, 'IMPRIM', 2, c.muted);
+    d.rect(x0 + 4, 68, col - 8, top + ROWS.length * rowH - 56, { fill: c.accentSoft, stroke: c.accent, width: 1.2, r: 12 });
+    d.corners(x0 + 4, 68, col - 8, top + ROWS.length * rowH - 56, { stroke: c.accent, gap: 6 });
     COLUMNS.forEach(([name, note], i) => {
-        d.text(centre(i), 60, name, { size: i === 0 ? 18 : 15, weight: i === 0 ? 800 : 700, anchor: 'middle', fill: i === 0 ? c.accent : c.ink, maxWidth: col - 12 });
-        d.text(centre(i), 82, note, { size: 12, anchor: 'middle', fill: c.muted, maxWidth: col - 12 });
+        if (i === 0) d.matrix(centre(0) - dotMatrix('IMPRIM').width * 1.5, 90, 'IMPRIM', 3, c.ink);
+        else d.text(centre(i), 106, name, { size: 15, weight: 500, anchor: 'middle', maxWidth: col - 12 });
+        d.text(centre(i), 128, note, { size: 12, anchor: 'middle', fill: i === 0 ? c.accent : c.muted, maxWidth: col - 12 });
     });
     ROWS.forEach(([label, marks, note], r) => {
         const y = top + r * rowH;
         d.line(30, y, W - 30, y);
-        d.text(40, y + 29, label, { size: 15, maxWidth: x0 - 60 });
+        d.text(40, y + 29, label, { size: 14.5, maxWidth: x0 - 60 });
         marks.forEach((kind, i) => d.mark(centre(i), y + 24, kind));
-        if (note) d.text(centre(0) + 14, y + 28, note, { size: 11.5, fill: c.muted, maxWidth: 60 });
+        if (note) d.text(centre(0) + 13, y + 28, note, { size: 11, mono: true, fill: c.muted, maxWidth: 60 });
     });
-    const legendY = top + ROWS.length * rowH + 40;
-    d.line(30, legendY - 40, W - 30, legendY - 40);
+    const legendY = top + ROWS.length * rowH + 56;
+    d.line(30, legendY - 56, W - 30, legendY - 56);
     [['full', 'Built in and on by default'], ['part', 'Possible with configuration, add-ons or code'], ['none', 'Not provided'], ['na', 'Not applicable']]
         .forEach(([kind, text], i) => {
             const x = [48, 290, 668, 850][i];
             d.mark(x, legendY - 5, kind);
-            d.text(x + 18, legendY, text, { size: 13.5, fill: c.muted, maxWidth: 360 });
+            d.text(x + 16, legendY, text, { size: 13, fill: c.muted, maxWidth: 360 });
         });
     d.text(40, legendY + 36, ['Kinds of system, not single products: each cell is the usual default in public documentation as of November 2026.',
         'Many products do more with configuration or paid add-ons.'], { size: 12, fill: c.muted, maxWidth: W - 80, gap: 1.4 });
     return d.done(W, H, 'How Imprim compares',
-        'Imprim against workforce identity providers, developer authentication platforms, self-hosted identity providers and API keys, on agent delegation, audience, token lifetime, revocation, consent, refresh rotation, enterprise directory features, open source and managed hosting.');
+        'Imprim against workforce identity providers, developer authentication platforms, self-hosted identity providers and API keys, on agent delegation, audience, token lifetime, revocation, consent, refresh rotation, enterprise directory features, open source and managed hosting.', { fonts });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -18,8 +18,11 @@ function matrix(glyphs) {
         rows(glyph).forEach((row, y) => [...row].forEach((cell, dx) => (cell === '1' ? lit : unlit).push(dot(x + dx + 0.5, y + 0.5))));
         x += 6;
     }
-    return { width: x - 1, paths: `<path opacity=".14" d="${unlit.join('')}"/><path d="${lit.join('')}"/>` };
+    return { width: x - 1, lit: lit.join(''), unlit: unlit.join(''), paths: `<path opacity=".14" d="${unlit.join('')}"/><path d="${lit.join('')}"/>` };
 }
+// Any text in the dot matrix (letters and digits; anything else is a diamond), for drawings that place and colour
+// the dots themselves: { width, lit, unlit } with path data in units of one dot pitch, seven units tall.
+export const dotMatrix = text => matrix([...String(text).toUpperCase()].map(ch => FONT[ch] || OTHER));
 const wordmark = matrix([...'IMPRIM'].map(letter => FONT[letter]));
 // The IMPRIM wordmark. `size` is "sm" for the "Powered by" line.
 export const dotLogo = (size = '') => `<svg class="fd-wordmark"${size ? ` data-size="${size}"` : ''} viewBox="0 0 ${wordmark.width} 7" fill="currentColor" role="img" aria-label="Imprim">${wordmark.paths}</svg>`;
