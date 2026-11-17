@@ -42,7 +42,11 @@ This repository does not record which commit a deployment runs or which clients 
 Worker's deployments in Cloudflare before relying on a behaviour described here. The reference deployment's state
 (see the README's Status) is:
 
-- **Production** runs every migration, `0001`–`0019`. Migrations `0010`–`0019` and the Fire interface were applied
+- **Production** runs every migration, `0001`–`0022`. Migrations `0020`–`0022` (classic OpenID Connect, languages
+  and HTML email, RS256) were applied and deployed on 2026-11-17, after a backup and after the same release passed the
+  OpenID conformance suite on staging. That day discovery listed ES256 and RS256, JWKS kept the existing ES256 key
+  beside the new RS256 one, every app's sign-in page rendered, and an app without the classic switch was still
+  refused a request without PKCE. Migrations `0010`–`0019` and the Fire interface were applied
   and deployed on 2026-11-15, after a backup and a rehearsal of the migrations on a copy of it, and after the same
   release ran on staging. That day: discovery answered with DPoP and the new grant types; JWKS still listed the
   existing key, so tokens issued before the upgrade keep verifying; users, clients, agent grants and refresh tokens

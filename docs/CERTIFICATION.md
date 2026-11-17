@@ -19,6 +19,40 @@ Some Basic OP tests are skipped by design: the `address` and `phone` scopes (not
 `request_uri` (refused with `request_not_supported` and `request_uri_not_supported`, which the suite accepts) and
 refresh tokens (people's app sign-ins have none).
 
+## Results
+
+The reference staging deployment (`https://id-staging.vibernt.ai`) ran all four plans on 2026-11-17, on the release
+production now runs. There were no failures.
+
+| Profile | Tests | Passed | Review | Warning | Skipped |
+|---|---|---|---|---|---|
+| Basic OP | 35 | 22 | 4 | 4 | 5 |
+| Config OP | 1 | 1 | | | |
+| RP-Initiated Logout OP | 11 | 3 | 8 | | |
+| Back-Channel Logout OP | 2 | 2 | | | |
+
+- **Review** means a screenshot was uploaded for the Foundation's reviewer: a second sign-in page after `prompt=login`
+  or `max_age=1`, an error page for an unregistered redirect or a bad logout hint, or the signed-out page.
+- **Warnings** are two kinds, neither a requirement. The test person had no display name, so UserInfo had no `name`.
+  Imprim puts `email` in the ID token when the app asks for the email scope, which the suite flags as unrequested.
+- **Skipped** are the `address` and `phone` scopes and both together, request objects (refused with
+  `request_not_supported`, as the suite accepts) and refresh tokens for people's app sign-ins, none of which Imprim
+  offers.
+
+The suite found four faults, each fixed with a test in
+[`tests/oidc-certification.test.mjs`](../tests/oidc-certification.test.mjs):
+
+1. `max_age=1` refused a sign-in made late in a second, because `auth_time` is whole seconds and was compared with
+   the clock in milliseconds.
+2. `acr_values` listing both levels demanded a second factor; it lists acceptable levels, so it now does only when
+   the MFA level is listed alone.
+3. A request object was refused with `invalid_request` when `state` was inside it; it is now checked first and
+   refused with `request_not_supported`.
+4. A sign-out carrying only `state` was refused; it now signs the person out.
+
+Config OP needs RS256 listed for ID tokens, so Imprim now offers it per app
+([`tests/rs256.test.mjs`](../tests/rs256.test.mjs)).
+
 ## How the suite signs in
 
 The suite is an OpenID Connect client written to OpenID Connect Core, so its requests leave out PKCE and, in one

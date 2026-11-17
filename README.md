@@ -32,6 +32,23 @@ Docs: **https://vibernt.github.io/imprim/**. Start with [Getting started](docs/G
 
 How agents get into software today, where identity providers fall short for them, and the approach Imprim takes.
 
+## OpenID conformance
+
+Imprim passes the OpenID Foundation's [conformance suite](https://www.certification.openid.net/), the tests the
+Foundation uses for certification, with **no failures** in all four OpenID provider profiles it implements:
+
+| Profile | Tests | Result |
+|---|---|---|
+| Basic OP | 35 | 22 passed, 4 for review (screenshots), 4 warnings, 5 skipped (features Imprim does not offer) |
+| Config OP | 1 | Passed |
+| RP-Initiated Logout OP | 11 | 3 passed, 8 for review (screenshots) |
+| Back-Channel Logout OP | 2 | Passed |
+
+Run on 2026-11-17 against the reference staging deployment, the same release production runs. How to run it,
+what each warning and skip means, and what the suite found are in [OpenID certification](docs/CERTIFICATION.md).
+The protocol behaviour it checks is covered by [`tests/oidc-certification.test.mjs`](tests/oidc-certification.test.mjs)
+and [`tests/rs256.test.mjs`](tests/rs256.test.mjs), which run on every push.
+
 ## In one view
 
 <picture>
@@ -95,7 +112,7 @@ npm run check
 |---|---|
 | `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, languages (`i18n/`), email, maintenance |
 | `apps/server/public/` | Static assets: the vendored Fire design system (`fire/`), the branding editor (`imprim/`) and `_headers` |
-| `apps/server/migrations/` | D1 schema, `0001` to `0021` |
+| `apps/server/migrations/` | D1 schema, `0001` to `0022` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
 | `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
 | `scripts/` | Offline SQL generators for realms, clients and user imports; checks (including translations); email preview; client build |
@@ -111,9 +128,11 @@ fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (IS
 ## Status
 
 Vibernt runs Imprim in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`.
-Both run the same release, deployed on 2026-11-15: the security pass, realms, passwords, two-factor, the account
-pages, passkeys, the provider registry, machines, DPoP, user events, branding and the Fire interface (migrations
-`0001`–`0019`; see [Deploying](docs/DEPLOY.md)). Languages and HTML email (migration `0021`) are not released yet.
+Both run the same release, deployed on 2026-11-17 (migrations `0001`–`0022`; see [Deploying](docs/DEPLOY.md)). It adds
+pages and emails in five languages with branded HTML email, the changes the OpenID conformance suite needed
+(classic OpenID Connect per app, `id_token_hint`, `POST /authorize`, `client_secret_post`, RS256 ID tokens) and the
+fixes it found, to the 2026-11-15 release: the security pass, realms, passwords, two-factor, the account pages,
+passkeys, the provider registry, machines, DPoP, user events, branding and the Fire interface.
 What has not been verified against live Cloudflare is listed in [Security](docs/SECURITY.md#not-yet-verified-live).
 What comes next is in the [Roadmap](docs/ROADMAP.md).
 

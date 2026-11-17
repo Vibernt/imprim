@@ -79,7 +79,7 @@ back automatically. Restore the backup only if a migration itself is wrong, and 
 
 ## Upgrading an existing deployment
 
-Migrations run in order, `0001` to `0021`, and each one is applied once. A Worker built from this repository expects
+Migrations run in order, `0001` to `0022`, and each one is applied once. A Worker built from this repository expects
 every migration in it, and an older Worker cannot always run against a newer schema, so apply, configure and deploy
 **back to back**, in a quiet minute. Rehearse the whole sequence on staging first.
 
@@ -155,6 +155,14 @@ Follow [Releases](#releases): staging first, then production with a backup. Thre
 - **Apps** can stay on client `0.3.0`. Upgrade to `0.6.0` to use step-up (`acrValues`, `maxAge`), DPoP
   verification or user events. An app still on `identity-client` `0.2.0` keeps signing people in, but refuses agent
   revocation events until it upgrades ([Clients](CLIENTS.md#upgrading-from-identity-client-020)).
+
+## Upgrading to migrations 0020 and 0022
+
+`0020` adds the per-app `classic_oidc` switch (off) and the `id_token_hint` record on pending requests. `0022` gives
+each realm a second signing ring for RS256: it rebuilds `signing_keys` with an `alg` column, keeping every existing
+key, its `kid` and its windows as ES256, and adds the per-app `id_token_signed_response_alg` (ES256). Tokens issued
+before the upgrade keep verifying, and apps see no change until they choose otherwise. The RS256 ring is created on
+the first JWKS request after the deploy. Neither needs a new binding or secret.
 
 ## Upgrading to migration 0021
 
