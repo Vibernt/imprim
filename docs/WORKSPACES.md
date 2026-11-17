@@ -111,9 +111,9 @@ join an active workspace in its realm by adding its own product. Bodies are JSON
 | `DELETE /v1/workspaces/{id}/members/{sub}` | actor admin+, or the member themself | `{ actor_token }`; refused if it would leave no owner |
 | `POST /v1/workspaces/{id}/close` | actor owner | `{ actor_token }`; `409 workspace_held` with the reasons while any hold exists |
 | `PUT` / `DELETE /v1/workspaces/{id}/holds` | app | `{ reason }`; one hold per app per workspace |
-| `PUT` / `DELETE /v1/workspaces/{id}/resources` | app | `{ resource }`; the resource must sit under the app's own `agent_resource_prefixes` and be unregistered (`409` otherwise) |
+| `PUT` / `DELETE /v1/workspaces/{id}/resources` | app | `{ resource }`; the resource must sit under the app's own `agent_resource_prefixes`. Re-registering the same resource to the same workspace by the same app returns `200` with the current workspace snapshot and changes nothing. A registration held by another workspace or app returns `409`. |
 
-Rules every write enforces in one `DB.batch`, guarded so concurrent writes cannot break them: the workspace is
+Rules every change enforces in one `DB.batch`, guarded so concurrent writes cannot break them: the workspace is
 active; `version` rises by one; a team workspace keeps at least one owner (`409 last_owner`); a personal workspace
 never gains a second member; the matching events go into the outbox; an `audit` row records actor and change.
 

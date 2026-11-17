@@ -114,23 +114,28 @@ function writeChecks(env, client, actor, id, now, creating, joinGuard) {
     return checks;
 }
 
-// The conditional write claims the next version. The assertion aborts the transaction if the claim affected no
-// row, so even an unguarded dependent statement (including access teardown) cannot run on a refused request.
+// The conditional write claims the next version. The assertion aborts the batch if no version was claimed,
+// unless all guards passed and the requested state already exists.
 async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, create, joinGuard,
-    effects = [], afterEvent = [], event, eventOptions, audit, detail = {} }) {
+    effects = [], afterEvent = [], event, eventOptions, audit, detail = {}, writeIf, finalEffect }) {
     const guards = [...writeChecks(env, client, actor, id, now, Boolean(create), joinGuard), ...checks];
     const where = guards.map(guard => `(${guard.sql})`).join(' AND '), args = guards.flatMap(guard => guard.args);
+    const condition = writeIf ? ` AND (${writeIf.sql})` : '', conditionArgs = writeIf?.args ?? [];
     const write = create
         ? env.DB.prepare(`INSERT INTO workspaces(id,realm_id,kind,name,personal_owner,created) SELECT ?,?,?,?,?,? WHERE ${where}`)
             .bind(id, realmId(env), create.kind, create.name, create.owner, now, ...args)
-        : env.DB.prepare(`UPDATE workspaces SET version=version+1 WHERE id=? AND ${where}`).bind(id, ...args);
-    const assertion = env.DB.prepare('INSERT INTO admin_assertions(ok) SELECT CASE WHEN changes()=1 THEN 1 ELSE 0 END');
+        : env.DB.prepare(`UPDATE workspaces SET version=version+1 WHERE id=? AND ${where}${condition}`).bind(id, ...args, ...conditionArgs);
+    const assertion = writeIf
+        ? env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT 0 WHERE changes()<>1 AND NOT (${where} AND NOT (${writeIf.sql}))`)
+            .bind(...args, ...conditionArgs)
+        : env.DB.prepare('INSERT INTO admin_assertions(ok) SELECT CASE WHEN changes()=1 THEN 1 ELSE 0 END');
     const record = env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id)
-        SELECT ?,?,?,json_set(?,'$.version',version),?,realm_id FROM workspaces WHERE id=?`)
-        .bind(audit ?? event, actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, ...(client ? { client_id: client.id } : { source: 'admin_console' }) }), now, id);
+        SELECT ?,?,?,json_set(?,'$.version',version),?,realm_id FROM workspaces WHERE id=?${condition}`)
+        .bind(audit ?? event, actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, ...(client ? { client_id: client.id } : { source: 'admin_console' }) }), now, id, ...conditionArgs);
     let result;
     try {
-        result = await env.DB.batch([write, assertion, ...effects, ...workspaceEventStatements(env, id, event, eventOptions), ...afterEvent, record,
+        result = await env.DB.batch([write, assertion, ...effects, ...workspaceEventStatements(env, id, event, { ...eventOptions, writeIf }),
+            ...afterEvent, record, ...(finalEffect ? [finalEffect] : []),
             env.DB.prepare(`SELECT w.id AS workspace_id,w.name,w.kind,w.status,w.version,${productList} AS products FROM workspaces w WHERE w.id=?`).bind(id)]);
     } catch (error) {
         if (![error.message, error.cause?.message].some(message => message?.includes('CHECK constraint failed: admin_assertions'))) throw error;
@@ -143,7 +148,7 @@ async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, 
         }
         invariant(false, 'conflict', 'Workspace or permissions changed. Reload and try again.', 409);
     }
-    invariant(result[0].meta.changes === 1, 'conflict', 'Workspace write was not applied.', 409);
+    invariant(writeIf || result[0].meta.changes === 1, 'conflict', 'Workspace write was not applied.', 409);
     return withProducts(result.at(-1).results[0]);
 }
 
@@ -310,23 +315,35 @@ export function deleteWorkspaceHold(env, client, id) {
         event: 'workspace-updated', audit: 'workspace-hold-deleted' });
 }
 
-export function changeWorkspaceResource(env, client, id, resource, registering) {
+function resourcePrefixCheck(client, resource) {
     resourceUrl(resource);
     invariant(agentSettings(client).agent_resource_prefixes.some(prefix => underPrefix(resource, prefix)),
         'invalid_target', 'That resource does not belong to this app.', 403);
-    const now = Date.now(), checks = [
-        denied('EXISTS(SELECT 1 FROM clients WHERE id=? AND agent_resource_prefixes=?)',
-            [client.id, client.agent_resource_prefixes], 'App resource prefixes changed.'),
-        registering
-            ? conflict('NOT EXISTS(SELECT 1 FROM workspace_resources WHERE resource=?)', [resource], 'resource_registered', 'Resource is already registered.')
-            : missing('EXISTS(SELECT 1 FROM workspace_resources WHERE resource=? AND workspace_id=? AND client_id=?)',
-                [resource, id, client.id], 'Workspace resource not found.')
-    ];
-    const statement = registering
-        ? env.DB.prepare('INSERT INTO workspace_resources(resource,workspace_id,client_id,created) VALUES(?,?,?,?)').bind(resource, id, client.id, now)
-        : env.DB.prepare('DELETE FROM workspace_resources WHERE resource=? AND workspace_id=? AND client_id=?').bind(resource, id, client.id);
-    return guardedWrite(env, { client, id, now, checks, effects: [statement], event: 'workspace-updated',
-        audit: registering ? 'workspace-resource-put' : 'workspace-resource-deleted', detail: { resource } });
+    return denied('EXISTS(SELECT 1 FROM clients WHERE id=? AND agent_resource_prefixes=?)',
+        [client.id, client.agent_resource_prefixes], 'App resource prefixes changed.');
+}
+
+export function putWorkspaceResource(env, client, id, resource) {
+    const checks = [resourcePrefixCheck(client, resource),
+        conflict('NOT EXISTS(SELECT 1 FROM workspace_resources WHERE resource=? AND (workspace_id<>? OR client_id<>?))',
+            [resource, id, client.id], 'resource_registered', 'Resource is already registered.')];
+    const now = Date.now();
+    const writeIf = { sql: 'NOT EXISTS(SELECT 1 FROM workspace_resources WHERE resource=?)', args: [resource] };
+    // Insert last so the version, outbox and audit all use the same registration condition.
+    const finalEffect = env.DB.prepare(`INSERT INTO workspace_resources(resource,workspace_id,client_id,created)
+        SELECT ?,?,?,? WHERE ${writeIf.sql}`).bind(resource, id, client.id, now, ...writeIf.args);
+    return guardedWrite(env, { client, id, now, checks, writeIf, finalEffect, event: 'workspace-updated',
+        audit: 'workspace-resource-put', detail: { resource } });
+}
+
+export function deleteWorkspaceResource(env, client, id, resource) {
+    const checks = [resourcePrefixCheck(client, resource),
+        missing('EXISTS(SELECT 1 FROM workspace_resources WHERE resource=? AND workspace_id=? AND client_id=?)',
+            [resource, id, client.id], 'Workspace resource not found.')];
+    const statement = env.DB.prepare('DELETE FROM workspace_resources WHERE resource=? AND workspace_id=? AND client_id=?')
+        .bind(resource, id, client.id);
+    return guardedWrite(env, { client, id, checks, effects: [statement], event: 'workspace-updated',
+        audit: 'workspace-resource-deleted', detail: { resource } });
 }
 
 // The console supplies its verified session. App entry points still use a client and a live actor token.

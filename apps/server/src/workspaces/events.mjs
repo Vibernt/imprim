@@ -6,7 +6,7 @@ export const WORKSPACE_EVENTS = ['workspace-member-added', 'workspace-member-rem
 // One outbox row per recipient: every shared app in the workspace's realm with a back-channel URI whose product the
 // workspace uses. Read the version inside the batch. For product changes, the caller can capture recipients after
 // insertions and before deletions, with removeProducts projecting the final list into the event's payload.
-export function workspaceEventStatements(env, workspaceId, event, { userId = null, payload = {}, extraProducts = [], removeProducts = [] } = {}) {
+export function workspaceEventStatements(env, workspaceId, event, { userId = null, payload = {}, extraProducts = [], removeProducts = [], writeIf } = {}) {
     invariant(WORKSPACE_EVENTS.includes(event), 'event_config', 'Unknown workspace event.', 503);
     const now = Date.now();
     let eventPayload = 'json_set(?,\'$.workspace_id\',w.id,\'$.version\',w.version)';
@@ -23,6 +23,6 @@ export function workspaceEventStatements(env, workspaceId, event, { userId = nul
         FROM workspaces w JOIN clients c ON c.realm_id=w.realm_id
         WHERE w.id=? AND c.workspaces='shared' AND c.backchannel_uri IS NOT NULL AND c.product IS NOT NULL
           AND (c.product IN (SELECT product FROM workspace_products WHERE workspace_id=w.id)
-            OR c.product IN (SELECT value FROM json_each(?)))`)
-        .bind(...args, now, workspaceId, JSON.stringify(extraProducts))];
+            OR c.product IN (SELECT value FROM json_each(?)))${writeIf ? ` AND (${writeIf.sql})` : ''}`)
+        .bind(...args, now, workspaceId, JSON.stringify(extraProducts), ...(writeIf?.args ?? []))];
 }

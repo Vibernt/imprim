@@ -9,7 +9,7 @@ import { sendWorkspaceInvitation } from './email.mjs';
 import {
     workspacesEnabled, memberships, getWorkspace, workspaceMembers, workspaceInvitations, createWorkspace,
     renameWorkspace, setWorkspaceProducts, inviteToWorkspace, revokeWorkspaceInvitation, setWorkspaceMemberRole,
-    removeWorkspaceMember, closeWorkspace, putWorkspaceHold, deleteWorkspaceHold, changeWorkspaceResource
+    removeWorkspaceMember, closeWorkspace, putWorkspaceHold, deleteWorkspaceHold, putWorkspaceResource, deleteWorkspaceResource
 } from './model.mjs';
 
 const membershipsPath = (method, path) => method === 'GET' && path === '/v1/memberships';
@@ -92,8 +92,8 @@ export async function workspaceApi(request, env, ctx, url) {
         case 'GET invitations': return json({ invitations: await workspaceInvitations(env, client, id) });
         case 'PUT holds': return json(await putWorkspaceHold(env, client, id, body.reason));
         case 'DELETE holds': return json(await deleteWorkspaceHold(env, client, id));
-        case 'PUT resources': case 'DELETE resources':
-            return json(await changeWorkspaceResource(env, client, id, body.resource, method === 'PUT'));
+        case 'PUT resources': return json(await putWorkspaceResource(env, client, id, body.resource));
+        case 'DELETE resources': return json(await deleteWorkspaceResource(env, client, id, body.resource));
     }
     return actorWrite(env, ctx, client, id, route, target, body);
 }

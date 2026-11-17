@@ -497,27 +497,56 @@ test('resources must meet the app prefix and are unique globally; only the regis
     for (const unsafe of ['https://app.example/w%2Fteam', 'https://app.example/w/team?x=1', 'http://app.example/w/team']) {
         await error(await w.api('PUT', path, { resource: unsafe }), 'invalid_target', 400);
     }
+    const count = table => w.db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
+    const outboxBefore = count('workspace_event_outbox'), auditBefore = count('audit');
     const outcomes = await Promise.all([w.api('PUT', path, { resource }), w.api('PUT', path, { resource })]);
-    assert.equal((await response(outcomes.find(r => r.status === 200))).version, 3);
-    await error(outcomes.find(r => r.status !== 200), 'resource_registered', 409);
-    await error(await w.api('PUT', root + '/' + second.workspace_id + '/resources', { resource }), 'resource_registered', 409);
-    await error(await w.api('DELETE', root + '/' + second.workspace_id + '/resources', { resource }), 'not_found', 404);
+    const [registered, raced] = await Promise.all(outcomes.map(r => response(r)));
+    assert.equal(registered.version, 3);
+    assert.deepEqual(raced, registered);
+    assert.equal(count('workspace_resources'), 1);
+    assert.equal(count('workspace_event_outbox'), outboxBefore + 2);
+    assert.equal(count('audit'), auditBefore + 1);
+    const changes = () => w.db.prepare('SELECT total_changes() AS n').get().n;
+    const beforeRetry = changes();
+    assert.deepEqual(await response(await w.api('PUT', path, { resource })), registered);
+    assert.equal(changes(), beforeRetry);
+    assert.equal(count('workspace_event_outbox'), outboxBefore + 2);
+    assert.equal(count('audit'), auditBefore + 1);
+    const secondPath = root + '/' + second.workspace_id + '/resources';
+    const conflict = await response(await w.api('PUT', secondPath, { resource }), 409);
+    assert.deepEqual(conflict, { error: 'resource_registered', error_description: 'Resource is already registered.' });
+    assert.ok(!JSON.stringify(conflict).includes(workspace_id));
+    await error(await w.api('DELETE', secondPath, { resource }), 'not_found', 404);
     await error(await w.api('DELETE', path, { resource }, basic('other')), 'invalid_target', 403);
     // Even if an operator later gives a second app the prefix, that app cannot unregister the first app's resource.
     w.db.prepare("UPDATE clients SET agent_resource_prefixes='[\"https://app.example/w/\"]' WHERE id='other'").run();
+    const sameWorkspaceConflict = await response(await w.api('PUT', path, { resource }, basic('other')), 409);
+    assert.deepEqual(sameWorkspaceConflict, conflict);
+    assert.ok(!JSON.stringify(sameWorkspaceConflict).includes(workspace_id));
+    await w.addTasks(owner, second.workspace_id);
+    const otherWorkspaceConflict = await response(await w.api('PUT', secondPath, { resource }, basic('other')), 409);
+    assert.deepEqual(otherWorkspaceConflict, conflict);
     await error(await w.api('DELETE', path, { resource }, basic('other')), 'not_found', 404);
     const realBatch = w.env.DB.batch.bind(w.env.DB);
+    const appPrefix = w.db.prepare('UPDATE clients SET agent_resource_prefixes=? WHERE id=\'app\'');
     const intercepted = t.mock.method(w.env.DB, 'batch', async statements => {
-        w.db.prepare("UPDATE clients SET agent_resource_prefixes='[]' WHERE id='app'").run();
+        appPrefix.run('[]');
         return realBatch(statements);
     });
-    await error(await w.api('DELETE', path, { resource }), 'access_denied', 403);
+    for (const method of ['PUT', 'DELETE']) {
+        appPrefix.run('["https://app.example/w/"]');
+        await error(await w.api(method, path, { resource }), 'access_denied', 403);
+    }
     intercepted.mock.restore();
     assert.deepEqual({ ...w.db.prepare('SELECT workspace_id,client_id FROM workspace_resources WHERE resource=?').get(resource) }, { workspace_id, client_id: 'app' });
-    w.db.prepare("UPDATE clients SET agent_resource_prefixes='[\"https://app.example/w/\"]' WHERE id='app'").run();
+    appPrefix.run('["https://app.example/w/"]');
     assert.equal((await response(await w.api('DELETE', path, { resource }))).version, 4);
     await error(await w.api('DELETE', path, { resource }), 'not_found', 404);
-    assert.equal((await response(await w.api('PUT', root + '/' + second.workspace_id + '/resources', { resource }))).version, 2);
+    assert.equal((await response(await w.api('PUT', secondPath, { resource }))).version, 3);
+    const renamed = await response(await w.api('PATCH', root + '/' + second.workspace_id, { name: 'Renamed', actor_token: owner.actor_token }));
+    assert.deepEqual(await response(await w.api('PUT', secondPath, { resource })), renamed);
+    await response(await w.api('POST', root + '/' + second.workspace_id + '/close', { actor_token: owner.actor_token }));
+    await error(await w.api('PUT', secondPath, { resource }), 'workspace_closed', 409);
 });
 
 test('closing cannot race a hold or a roster change past the transaction guard', async t => {
