@@ -179,6 +179,9 @@ return createAppSession(claims.sub);
 
 `handleCallback` returns verified claims and throws `IdentityError` with a stable `code`. Treat errors as failed login and create no app session. The app must protect its transaction cookie and reject reuse; the client checks response state, issuer, token signature and claims. `startLogin({prompt:'none'})` uses the existing top-level identity session. The optional `method` query records an app preference, but the server presents the client's configured method list and does not force that preference. Server settings enforce which methods can complete.
 
+Pass `{ idToken: true }` as the third argument to `handleCallback` to receive `{ claims, idToken }` after verification.
+Store the ID token with the app's server-side session, send it only to Imprim as `actor_token`, and never send it to a browser or write it to a log.
+
 `client.logoutUrl({idTokenHint,postLogoutRedirectUri,state})` produces the identity confirmation URL; end the local session under app CSRF first. `client.inviteEmail(email)` requires a confidential client and registers identity admission only. Also for confidential clients (0.7.0): `client.listGrants({resource, sub?, limit?, cursor?})` returns one page of live agent grants on one of the app's resources as `{grants, next_cursor}` (pass `next_cursor` back as `cursor`; it is `null` on the last page); `client.revokeGrant(grantId)` revokes one; `client.introspect(token, {tokenTypeHint?})` returns RFC 7662 `{active: false}` or the live token's claims, `agent_assurance` included. `handleBackchannelLogout(request)` verifies a signed logout token and returns `{sub,sid,jti}`; the app must persist consumed `jti` values, apply each event only once, and acknowledge duplicates with 2xx. Human back-channel logout is delivered through a durable outbox; agent revocation events use the distinct contract below. Return 2xx for authenticated duplicate deliveries after durable deduplication.
 
 Run `node scripts/build-client.mjs` to regenerate the single-file vendored artifact. Its first line records the package version and the SHA-256 of the remaining exact UTF-8 body. Verify both before accepting a vendored copy.
@@ -338,6 +341,7 @@ What each version changed:
 | 0.3.0 | Wire change: agent revocation events are `secevent+jwt`. `iss` is required on the authorization response. Error text handling, JWKS refresh after 10 minutes, a failed discovery is not cached. Details below. |
 | 0.4.0 | Step-up: `startLogin({ acrValues, maxAge })`; ID tokens carry `acr`. |
 | 0.5.0 | `verifyAccessToken` checks a DPoP proof for a bound token (`dpop`, `requireDpop`) and returns `dpop_jti`. |
+| 0.8.1 | `handleCallback` can return the ID token for `actor_token`. Nothing else changes. |
 | 0.8.0 | Shared and personal workspace methods for confidential clients. `verifyBackchannel` accepts `workspace_token` and returns `kind: 'workspace'`. |
 | 0.7.0 | `listGrants` (paged, `sub` filter), `revokeGrant` and `introspect` for confidential clients. |
 | 0.6.0 | User lifecycle events: `event_token`, `verifyUserEventToken`, `handleUserEvent`, and `kind: 'user'` from `verifyBackchannel`. The package is named `imprim-client`. |

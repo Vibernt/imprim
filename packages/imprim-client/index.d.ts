@@ -58,7 +58,8 @@ export interface IdentityClient {
     wwwAuthenticate(options: ChallengeOptions): string;
     // acrValues and maxAge ask for step-up (0.4.0): 'urn:imprim:acr:mfa' demands a second factor in this session.
     startLogin(options?: { state?: string; nonce?: string; prompt?: string; loginHint?: string; method?: 'email' | 'password' | 'github' | 'google'; acrValues?: string; maxAge?: number }): Promise<LoginStart>;
-    handleCallback(url: string | URL, values: LoginValues): Promise<Claims>;
+    handleCallback(url: string | URL, values: LoginValues, options: { idToken: true }): Promise<{ claims: Claims; idToken: string }>;
+    handleCallback(url: string | URL, values: LoginValues, options?: { idToken?: false | undefined }): Promise<Claims>;
     verifyIdToken(jwt: string, options: { nonce: string; maxAge?: number }): Promise<Claims>;
     handleAgentRevocation(request: Request): Promise<{ sub: string; grant_id: string; resource: string; jti: string }>;
     handleBackchannelLogout(request: Request): Promise<{ sub?: string; sid?: string; jti: string }>;

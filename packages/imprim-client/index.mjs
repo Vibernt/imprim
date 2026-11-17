@@ -92,7 +92,9 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
             for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
             return { url: url.href, ...values };
         },
-        async handleCallback(url, { state, nonce, codeVerifier } = {}) {
+        async handleCallback(url, { state, nonce, codeVerifier } = {}, options = {}) {
+            const { idToken: includeIdToken } = options;
+            if (includeIdToken !== undefined && typeof includeIdToken !== 'boolean') fail('configuration', 'idToken must be a boolean.');
             if (!redirectUri) fail('configuration', 'redirectUri is required for login.');
             let callback;
             try { callback = new URL(url); } catch { fail('invalid_response', 'Invalid callback URL.'); }
@@ -114,8 +116,10 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
                 headers.authorization = `Basic ${btoa(encoded)}`;
             } else form.set('client_id', clientId);
             const data = await responseJson(await request((await discovery()).token, { method: 'POST', headers, body: form }), 'token');
-            if (typeof data.id_token !== 'string') fail('invalid_response', 'Token response has no ID token.');
-            return verify(data.id_token, { nonce });
+            const idToken = data.id_token;
+            if (typeof idToken !== 'string') fail('invalid_response', 'Token response has no ID token.');
+            const claims = await verify(idToken, { nonce });
+            return includeIdToken ? { claims, idToken } : claims;
         },
         // A DPoP-bound token (cnf.jkt) needs `dpop: { proof, method, url }`; `requireDpop` refuses bearer tokens.
         // The result carries dpop_jti for the app to deduplicate.

@@ -1,4 +1,4 @@
-# imprim-client 0.8.0
+# imprim-client 0.8.1
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
 named `@vibernt/identity-client`. To move an app from that version, follow
@@ -15,6 +15,9 @@ configuration to share discovery and 24-hour JWKS caching. `redirectUri` is requ
 HTTPS resource prefixes; an empty array denies every revocation resource. Matching requires the same origin and
 an exact path or path-segment prefix (not a string prefix such as `/w` matching `/wrong`). Configuration is copied
 at creation. Network/key failures throw `IdentityError`; no alternate issuer or stale-key fallback is used.
+
+Pass `{ idToken: true }` as the third argument to `handleCallback` to receive `{ claims, idToken }` after verification.
+Store the ID token with the app's server-side session, send it only to Imprim as `actor_token`, and never send it to a browser or write it to a log.
 
 ## Back-channel events
 

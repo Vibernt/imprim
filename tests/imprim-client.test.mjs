@@ -68,6 +68,37 @@ test('client magic link, discovery cache, replay, state and issuer boundaries', 
     await rejects(x.client.handleCallback(errorUrl, flow.login), 'login_required');
 });
 
+test('client callback returns the exact ID token only when requested and verified', async t => {
+    const { w } = await setup(t);
+    const idToken = await signed(w);
+    const claims = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString());
+    const redirectUri = 'https://app.example/callback';
+    const url = new URL(redirectUri);
+    url.search = new URLSearchParams({ code: 'code', state: 'state', iss: w.env.ISSUER });
+    const login = { state: 'state', nonce: 'n', codeVerifier: 'verifier' };
+    let exchanges = 0;
+    const client = createClient({
+        issuer: w.env.ISSUER, clientId: 'app', redirectUri,
+        async fetch(input, init) {
+            const { pathname } = new URL(input);
+            if (pathname !== '/token') return w.call(pathname, init);
+            exchanges++;
+            return Response.json({ id_token: idToken });
+        },
+    });
+
+    for (const idToken of ['yes', 1, null]) {
+        await rejects(client.handleCallback(url, login, { idToken }), 'configuration');
+    }
+    assert.equal(exchanges, 0);
+    assert.deepEqual(await client.handleCallback(url, login), claims);
+    assert.deepEqual(await client.handleCallback(url, login, { idToken: false }), claims);
+    assert.deepEqual(await client.handleCallback(url, login, { idToken: undefined }), claims);
+    assert.deepEqual(await client.handleCallback(url, login, { idToken: true }), { claims, idToken });
+    await assert.rejects(client.handleCallback(url, { ...login, nonce: 'wrong' }, { idToken: true }),
+        { name: 'IdentityError', code: 'invalid_token', message: 'Nonce mismatch.' });
+});
+
 test('client GitHub and Google complete through server handler', async t => {
     const x = await setup(t);
     t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -169,6 +200,6 @@ test('client invitation and missing ID token', async t => {
 test('vendored body hash matches header', async () => {
     const file = await readFile(new URL('../dist/imprim-client.mjs', import.meta.url), 'utf8');
     const [header, ...body] = file.split('\n');
-    assert.match(header, /^\/\/ imprim-client 0\.8\.0 body-sha256 [a-f0-9]{64}/);
+    assert.match(header, /^\/\/ imprim-client 0\.8\.1 body-sha256 [a-f0-9]{64}/);
     assert.equal(header.split(' ').at(-1), createHash('sha256').update(body.join('\n')).digest('hex'));
 });
