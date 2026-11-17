@@ -3,12 +3,13 @@ import { realmId } from '../realms/realm.mjs';
 import { normalizeEmail } from '../services/admission.mjs';
 import { resourceUrl, underPrefix } from '../agents/uris.mjs';
 import { agentSettings } from '../agents/settings.mjs';
+import { adminWriteGuard } from '../admin/auth.mjs';
 import { liveActorSession } from './actor.mjs';
 import { workspaceEventStatements } from './events.mjs';
 import { accessEndStatements } from './teardown.mjs';
 
 const PRODUCT = /^[a-z][a-z0-9-]{1,39}$/;
-const roles = ['owner', 'admin', 'member', 'viewer'];
+export const workspaceRoles = ['owner', 'admin', 'member', 'viewer'];
 const invitationLifetime = 30 * 86400000;
 export const workspaceId = () => 'ws_' + crypto.randomUUID().replaceAll('-', '');
 const realmOn = "SELECT 1 FROM realms WHERE id=? AND status='active' AND json_extract(config,'$.workspaces')='on'";
@@ -75,7 +76,7 @@ function validProducts(products) {
 }
 
 function validRole(role) {
-    invariant(roles.includes(role), 'invalid_request', 'Invalid workspace role.');
+    invariant(workspaceRoles.includes(role), 'invalid_request', 'Invalid workspace role.');
     return role;
 }
 
@@ -86,15 +87,26 @@ const conflict = (sql, args, code, message) => check(sql, args, code, message, 4
 
 function writeChecks(env, client, actor, id, now, creating) {
     const realm = realmId(env);
-    const checks = [
-        missing(`EXISTS(${realmOn})`, [realm]),
-        missing(`EXISTS(SELECT 1 FROM clients WHERE id=? AND realm_id=? AND secret_hash=?
-            AND workspaces='shared' AND product=?)`, [client.id, realm, client.secret_hash, client.product])
-    ];
-    if (!creating) checks.push(
-        missing(`EXISTS(SELECT 1 FROM workspaces w WHERE w.id=? AND w.realm_id=? AND ${usingProduct})`, [id, realm, client.product]),
-        conflict("EXISTS(SELECT 1 FROM workspaces WHERE id=? AND status='active')", [id], 'workspace_closed', 'Workspace is closed.'));
-    if (actor) checks.push(check(`EXISTS(SELECT 1 ${liveActorSession})`, [actor.session.sid, actor.user.id, now, realm],
+    const checks = [missing(`EXISTS(${realmOn})`, [realm])];
+    if (client) {
+        checks.push(missing(`EXISTS(SELECT 1 FROM clients WHERE id=? AND realm_id=? AND secret_hash=?
+            AND workspaces='shared' AND product=?)`, [client.id, realm, client.secret_hash, client.product]));
+    } else {
+        const admin = actor.admin;
+        const { sql, args } = adminWriteGuard(env, admin, true, Date.now());
+        checks.push(conflict(`(${sql} AND EXISTS(SELECT 1 FROM users u WHERE u.id=? AND u.email=? AND u.email_verified=1
+            AND (EXISTS(SELECT 1 FROM mfa_factors WHERE user_id=u.id AND confirmed=1)
+                OR EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id=u.id))))`,
+            [...args, admin.user_id, admin.email], 'conflict', 'Authorization or account changed; reload and reauthenticate.'));
+    }
+    if (!creating) {
+        const productGuard = client ? ` AND ${usingProduct}` : '';
+        checks.push(
+            missing(`EXISTS(SELECT 1 FROM workspaces w WHERE w.id=? AND w.realm_id=?${productGuard})`,
+                [id, realm, ...(client ? [client.product] : [])]),
+            conflict("EXISTS(SELECT 1 FROM workspaces WHERE id=? AND status='active')", [id], 'workspace_closed', 'Workspace is closed.'));
+    }
+    if (client && actor) checks.push(check(`EXISTS(SELECT 1 ${liveActorSession})`, [actor.session.sid, actor.user.id, now, realm],
         'invalid_request', 'Actor token does not name a live session.', 400));
     return checks;
 }
@@ -111,7 +123,7 @@ async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, 
     const assertion = env.DB.prepare('INSERT INTO admin_assertions(ok) SELECT CASE WHEN changes()=1 THEN 1 ELSE 0 END');
     const record = env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id)
         SELECT ?,?,?,json_set(?,'$.version',version),?,realm_id FROM workspaces WHERE id=?`)
-        .bind(audit ?? event, actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, client_id: client.id }), now, id);
+        .bind(audit ?? event, actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, ...(client ? { client_id: client.id } : { source: 'admin_console' }) }), now, id);
     let result;
     try {
         result = await env.DB.batch([write, assertion, ...effects, ...workspaceEventStatements(env, id, event, eventOptions), ...afterEvent, record,
@@ -135,6 +147,7 @@ const membership = (rolesSql = '') => `EXISTS(SELECT 1 FROM workspace_members WH
 const adminMember = membership("AND role IN ('owner','admin')");
 const ownerMember = membership("AND role='owner'");
 const actorRole = (id, actor, sql = adminMember) => denied(sql, [id, actor.user.id]);
+const manage = (id, actor) => actor.admin ? [] : [actorRole(id, actor)];
 const flag = (client, name) => denied(`EXISTS(SELECT 1 FROM clients WHERE id=? AND ${name}='on')`, [client.id], 'App is not enabled for this workspace operation.');
 
 function addProducts(env, id, products, now) {
@@ -145,8 +158,8 @@ function addProducts(env, id, products, now) {
 function newInvitation(env, client, actor, id, email, role, now) {
     const invitationId = crypto.randomUUID(), expires = now + invitationLifetime;
     const statement = env.DB.prepare(`INSERT INTO workspace_invitations(id,workspace_id,email,role,invited_by,via_client,created,expires_at)
-        VALUES(?,?,?,?,?,?,?,?)`).bind(invitationId, id, email, role, actor.user.id, client.id, now, expires);
-    return { statement, expires, message: { invitationId, workspaceId: id, email, role, inviterEmail: actor.user.email, viaClient: client.id } };
+        VALUES(?,?,?,?,?,?,?,?)`).bind(invitationId, id, email, role, client ? actor.user.id : null, client?.id ?? null, now, expires);
+    return { statement, expires, message: { invitationId, workspaceId: id, email, role, inviterEmail: actor.user.email, viaClient: client?.id ?? null } };
 }
 
 export async function createWorkspace(env, client, actor, body) {
@@ -154,11 +167,11 @@ export async function createWorkspace(env, client, actor, body) {
     invariant(kind === 'team' || kind === 'personal', 'invalid_request', 'Invalid workspace kind.');
     const personal = kind === 'personal', now = Date.now(), id = workspaceId();
     const products = validProducts(personal ? [client.product] : body.products);
-    invariant(products.includes(client.product), 'invalid_request', 'Products must include the calling app product.');
+    if (client) invariant(products.includes(client.product), 'invalid_request', 'Products must include the calling app product.');
     const email = personal ? actor.user.email : normalizeEmail(body.first_owner_email);
     const owner = email === actor.user.email ? actor.user.id : null;
     const invitation = owner ? null : newInvitation(env, client, actor, id, email, 'owner', now);
-    const checks = [flag(client, personal ? 'personal_workspaces' : 'workspace_admin'),
+    const checks = [...(client ? [flag(client, personal ? 'personal_workspaces' : 'workspace_admin')] : []),
         conflict('NOT EXISTS(SELECT 1 FROM workspaces WHERE id=?)', [id], 'conflict', 'Workspace id already exists.')];
     if (personal) checks.push(conflict('NOT EXISTS(SELECT 1 FROM workspaces WHERE personal_owner=?)', [actor.user.id],
         'personal_workspace_exists', 'This person already has a personal workspace.'));
@@ -176,7 +189,7 @@ export async function createWorkspace(env, client, actor, body) {
 
 export function renameWorkspace(env, client, actor, id, value) {
     const name = boundedText(value, 120, 'name');
-    return guardedWrite(env, { client, actor, id, checks: [actorRole(id, actor)],
+    return guardedWrite(env, { client, actor, id, checks: manage(id, actor),
         effects: [env.DB.prepare('UPDATE workspaces SET name=? WHERE id=?').bind(name, id)],
         event: 'workspace-updated', detail: { name } });
 }
@@ -186,7 +199,7 @@ export function setWorkspaceProducts(env, client, actor, id, body) {
     invariant(!add.some(product => remove.includes(product)), 'invalid_request', 'A product cannot be added and removed together.');
     const realmAdmin = `EXISTS(SELECT 1 FROM users u JOIN admins a ON a.realm_id=u.realm_id AND a.email=u.email
         WHERE u.id=? AND u.email_verified=1)`;
-    const checks = [flag(client, 'workspace_admin'), denied(`(${ownerMember} OR ${realmAdmin})`, [id, actor.user.id, actor.user.id])];
+    const checks = actor.admin ? [] : [flag(client, 'workspace_admin'), denied(`(${ownerMember} OR ${realmAdmin})`, [id, actor.user.id, actor.user.id])];
     const now = Date.now();
     // Capture recipients after adding and before deleting. The event payload projects the final product list.
     return guardedWrite(env, { client, actor, id, now, checks,
@@ -199,7 +212,7 @@ export function setWorkspaceProducts(env, client, actor, id, body) {
 export async function inviteToWorkspace(env, client, actor, id, body) {
     const email = normalizeEmail(body.email), role = validRole(body.role), now = Date.now();
     const invitation = newInvitation(env, client, actor, id, email, role, now);
-    const checks = [actorRole(id, actor, role === 'owner' ? ownerMember : adminMember),
+    const checks = [...(role === 'owner' ? [actorRole(id, actor, ownerMember)] : manage(id, actor)),
         conflict("EXISTS(SELECT 1 FROM workspaces WHERE id=? AND kind='team')", [id],
             'personal_workspace', 'A personal workspace does not take invitations.')];
     await guardedWrite(env, { client, actor, id, now, checks,
@@ -211,7 +224,7 @@ export async function inviteToWorkspace(env, client, actor, id, body) {
 
 export function revokeWorkspaceInvitation(env, client, actor, id, invitationId) {
     const open = 'id=? AND workspace_id=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>?', now = Date.now();
-    return guardedWrite(env, { client, actor, id, now, checks: [actorRole(id, actor),
+    return guardedWrite(env, { client, actor, id, now, checks: [...manage(id, actor),
         missing(`EXISTS(SELECT 1 FROM workspace_invitations WHERE ${open})`, [invitationId, id, now], 'Invitation not found.')],
         effects: [env.DB.prepare(`UPDATE workspace_invitations SET revoked_at=? WHERE ${open}`).bind(now, invitationId, id, now)],
         event: 'workspace-updated', audit: 'workspace-invitation-revoked', detail: { invitation_id: invitationId } });
@@ -220,14 +233,15 @@ export function revokeWorkspaceInvitation(env, client, actor, id, invitationId) 
 function memberChangeChecks(id, actor, sub, role = null) {
     const removing = role === null;
     const selfLeave = removing && actor.user.id === sub;
+    const ownerAuthority = denied(role === 'owner' ? ownerMember : `(NOT ${ownerMember} OR ${ownerMember})`,
+        role === 'owner' ? [id, actor.user.id] : [id, sub, id, actor.user.id], 'Only an owner may grant or remove the owner role.');
+    const lastOwner = role === 'owner' ? [] : [conflict(`(NOT ${ownerMember} OR
+        EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id!=? AND role='owner'))`,
+        [id, sub, id, sub], 'last_owner', 'Workspace must keep an owner.')];
     return [
-        actorRole(id, actor, selfLeave ? membership() : adminMember),
+        ...(actor.admin ? [] : [actorRole(id, actor, selfLeave ? membership() : adminMember)]),
         missing(membership(), [id, sub], 'Workspace member not found.'),
-        denied(role === 'owner' ? ownerMember : `(NOT ${ownerMember} OR ${ownerMember})`,
-            role === 'owner' ? [id, actor.user.id] : [id, sub, id, actor.user.id], 'Only an owner may grant or remove the owner role.'),
-        ...(role === 'owner' ? [] : [conflict(`(NOT ${ownerMember} OR
-            EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id!=? AND role='owner'))`,
-        [id, sub, id, sub], 'last_owner', 'Workspace must keep an owner.')])
+        ...(actor.admin ? [...lastOwner, ownerAuthority] : [ownerAuthority, ...lastOwner])
     ];
 }
 
@@ -246,13 +260,15 @@ export function removeWorkspaceMember(env, client, actor, id, sub) {
 }
 
 export async function closeWorkspace(env, client, actor, id) {
-    const now = Date.now(), { results } = await env.DB.prepare('SELECT user_id FROM workspace_members WHERE workspace_id=? ORDER BY user_id').bind(id).all();
+    const now = Date.now();
+    const { results } = await env.DB.prepare(`SELECT m.user_id FROM workspace_members m JOIN workspaces w ON w.id=m.workspace_id
+        WHERE w.id=? AND w.realm_id=? ORDER BY m.user_id`).bind(id, realmId(env)).all();
     const members = results.map(row => row.user_id);
     const held = conflict('NOT EXISTS(SELECT 1 FROM workspace_holds WHERE workspace_id=?)', [id], 'workspace_held', async () => {
         const { results: holds } = await env.DB.prepare('SELECT reason FROM workspace_holds WHERE workspace_id=? ORDER BY client_id').bind(id).all();
         return 'Workspace is held. Reasons include ' + holds.map(hold => hold.reason).join(', ');
     });
-    const checks = [actorRole(id, actor, ownerMember), held,
+    const checks = [...(actor.admin ? [] : [actorRole(id, actor, ownerMember)]), held,
         conflict(`NOT EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id NOT IN (SELECT value FROM json_each(?)))
             AND (SELECT count(*) FROM workspace_members WHERE workspace_id=?)=?`,
         [id, JSON.stringify(members), id, members.length], 'conflict', 'Workspace membership changed. Reload and try again.')];
@@ -294,4 +310,19 @@ export function changeWorkspaceResource(env, client, id, resource, registering) 
         : env.DB.prepare('DELETE FROM workspace_resources WHERE resource=? AND workspace_id=? AND client_id=?').bind(resource, id, client.id);
     return guardedWrite(env, { client, id, now, checks, effects: [statement], event: 'workspace-updated',
         audit: registering ? 'workspace-resource-put' : 'workspace-resource-deleted', detail: { resource } });
+}
+
+// The console supplies its verified session. App entry points still use a client and a live actor token.
+export function adminWorkspaceWrites(env, admin) {
+    const actor = { admin, user: { id: admin.user_id, email: admin.email } };
+    return {
+        create: body => createWorkspace(env, null, actor, { ...body, kind: 'team' }),
+        rename: (id, name) => renameWorkspace(env, null, actor, id, name),
+        products: (id, body) => setWorkspaceProducts(env, null, actor, id, body),
+        invite: (id, body) => inviteToWorkspace(env, null, actor, id, body),
+        revokeInvitation: (id, invitationId) => revokeWorkspaceInvitation(env, null, actor, id, invitationId),
+        changeRole: (id, sub, role) => setWorkspaceMemberRole(env, null, actor, id, sub, role),
+        removeMember: (id, sub) => removeWorkspaceMember(env, null, actor, id, sub),
+        close: id => closeWorkspace(env, null, actor, id)
+    };
 }

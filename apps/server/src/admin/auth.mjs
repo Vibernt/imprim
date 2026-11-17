@@ -28,6 +28,17 @@ export function auditStatement(env, actor, event, target, detail = {}) {
     return env.DB.prepare('INSERT INTO audit(event,actor,target,detail,created,realm_id) VALUES(?,?,?,?,?,?)')
         .bind(event, actor, target, JSON.stringify(detail), Date.now(), env.REALM?.id ?? null);
 }
+// The workspace model also uses this predicate in its conditional version claim.
+export function adminWriteGuard(env, session, destructive, now) {
+    return {
+        sql: `EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.hash=? AND s.user_id=?
+            AND s.method='email' AND s.admin_until>? AND s.expires_at>? AND s.auth_time>=? AND s.mfa_at>?
+            AND u.status='active' AND u.merged_into IS NULL AND u.realm_id=?
+            AND EXISTS(SELECT 1 FROM admins a WHERE a.realm_id=u.realm_id AND a.email=u.email AND (a.role='platform' OR ?=0)))`,
+        args: [session.hash, session.user_id, now, now, destructive ? Math.floor((now - 600000) / 1000) + 1 : 0,
+            now - ADMIN_MFA_MS, realmId(env), session.role === 'platform' ? 1 : 0]
+    };
+}
 // Every admin write batch rechecks the authenticating session, including after key generation.
 export function mutationEnvironment(env, session, destructive) {
     return { ...env, DB: {
@@ -35,13 +46,8 @@ export function mutationEnvironment(env, session, destructive) {
         raw: env.DB.raw ?? env.DB,
         prepare: sql => env.DB.prepare(sql),
         async batch(statements) {
-            const now = Date.now();
-            const guard = env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT CASE WHEN EXISTS(
-                SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.hash=? AND s.user_id=?
-                AND s.method='email' AND s.admin_until>? AND s.expires_at>? AND s.auth_time>=? AND s.mfa_at>?
-                AND u.status='active' AND u.merged_into IS NULL AND u.realm_id=?
-                AND EXISTS(SELECT 1 FROM admins a WHERE a.realm_id=u.realm_id AND a.email=u.email AND (a.role='platform' OR ?=0))) THEN 1 ELSE 0 END`)
-                .bind(session.hash, session.user_id, now, now, destructive ? Math.floor((now - 600000) / 1000) + 1 : 0, now - ADMIN_MFA_MS, realmId(env), session.role === 'platform' ? 1 : 0);
+            const { sql, args } = adminWriteGuard(env, session, destructive, Date.now());
+            const guard = env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT CASE WHEN ${sql} THEN 1 ELSE 0 END`).bind(...args);
             try { return (await env.DB.batch([guard, ...statements])).slice(1); }
             catch (error) {
                 if (String(error.message).includes('admin_assertions')) invariant(false, 'conflict', 'Authorization or account changed; reload and reauthenticate.', 409);

@@ -8,7 +8,7 @@ import { t, msg } from '../i18n/index.mjs';
 // Sign-out asks first: /logout shows a confirmation, and only its form ends the session.
 const SIGN_OUT = env => `<a class="fd-btn" data-variant="ghost" data-only="desktop" href="/logout">${icon('log-out')}<span>${e(t(env, 'Sign out'))}</span></a>`;
 const ADMIN = { id: 'admin', label: 'Admin console', home: '/admin', sections: [
-    { items: [['clients', 'Clients', 'blocks', '/admin/clients'], ['services', 'Services', 'server', '/admin/services'], ['users', 'Users', 'users', '/admin/users']] },
+    { items: [['clients', 'Clients', 'blocks', '/admin/clients'], ['services', 'Services', 'server', '/admin/services'], ['users', 'Users', 'users', '/admin/users'], ['workspaces', 'Workspaces', 'workflow', '/admin/workspaces']] },
     { label: 'Realm', items: [['branding', 'Branding', 'palette', '/admin/branding'], ['audit', 'Audit log', 'scroll-text', '/admin/audit'], ['settings', 'Settings', 'settings', '/admin/settings']] },
     { label: 'Platform', only: 'platform', items: [['keys', 'Signing keys', 'key-round', '/admin/keys'], ['realms', 'Realms', 'globe', '/admin/realms']] }],
     actions: env => `<a class="fd-btn" data-variant="ghost" data-only="desktop" href="/login">${icon('refresh-cw')}<span>Sign in again</span></a><a class="fd-btn" data-only="desktop" href="/account">${icon('user')}<span>Your account</span></a>${SIGN_OUT(env)}`,
