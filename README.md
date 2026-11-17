@@ -69,6 +69,7 @@ npm run check
 | `apps/server/public/` | Static assets: the vendored Fire design system (`fire/`), the branding editor (`imprim/`) and `_headers` |
 | `apps/server/migrations/` | D1 schema, `0001` to `0019` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
+| `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
 | `scripts/` | Offline SQL generators for realms, clients and user imports; checks; client build |
 | `tests/` | `node:test` suites on a real SQLite harness, including negative tests at every trust boundary |
 | `docs/` | Guides, protocol, security and operations ([index](docs/README.md)) |

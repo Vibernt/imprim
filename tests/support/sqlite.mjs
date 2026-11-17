@@ -1,10 +1,10 @@
 // A D1-shaped API over real SQLite (node:sqlite), with atomic batch rollback.
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
-export function d1Database() {
+// `root` defaults to Imprim's migrations; the MCP probe example passes its own.
+export function d1Database(root = new URL('../../apps/server/migrations/', import.meta.url)) {
     const db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys=ON');
-    const root = new URL('../../apps/server/migrations/', import.meta.url);
     // D1 applies each migration file in one transaction; deferred foreign keys are checked at its commit.
     for (const name of readdirSync(root).filter(x => x.endsWith('.sql')).sort()) {
         db.exec('BEGIN');

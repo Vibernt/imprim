@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  // imprim-probe: the reference deployment's live-test MCP server, accepting agents through Imprim staging.
+  // To run your own, change ORIGIN, the route, ISSUER and CLIENT_ID, and create your own D1 database.
+  "name": "imprim-probe",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-11-04",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "imprim-probe.vibernt.ai", "custom_domain": true }],
+  // No credentials ever appear in this Worker's URLs, but invocation records stay off to match the identity Worker.
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+  "vars": {
+    "ORIGIN": "https://imprim-probe.vibernt.ai",
+    "ISSUER": "https://id-staging.vibernt.ai",
+    "CLIENT_ID": "probe",
+    "WORKSPACES": "team-one,team-two",
+    "SCOPE": "probe.read"
+  },
+  // Replace database_id with the id `wrangler d1 create imprim-probe` prints.
+  "d1_databases": [{ "binding": "DB", "database_name": "imprim-probe", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }]
+}

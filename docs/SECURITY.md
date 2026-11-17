@@ -62,6 +62,10 @@ Worker's deployments in Cloudflare before relying on a behaviour described here.
   the account and two-factor pages, and the console's Branding page with Tweaks and logo upload have not been tried
   there by a person yet.
 
+The [MCP probe](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe) is built for the agent checks below:
+a test MCP server to deploy beside staging, and a scripted agent. Its checks pass against the test harness; it has not
+been deployed yet.
+
 Node tests use a real SQLite adapter and controlled provider, mail, rate and queue responses. They do not prove:
 
 - native Safari, Chrome and Firefox cookie flows, or the Fire pages and Tweaks panel in real browsers;

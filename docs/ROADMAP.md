@@ -21,4 +21,7 @@ Planned, roughly in order. Each item is an issue to discuss before code:
 
 Still to verify live: Claude Code, Cursor and Codex against a real MCP resource; device flow from a CLI; Workers
 egress and DNS-rebinding behaviour; Safari and Chrome cookie flows; Queue delivery against a real app; the Fire
-interface on a deployed Worker ([Security](SECURITY.md#not-yet-verified-live)).
+interface on a deployed Worker ([Security](SECURITY.md#not-yet-verified-live)). The
+[MCP probe](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe) is the target for the agent and device
+checks: a test MCP server for staging, and a scripted agent that runs the device flow, refresh, reuse detection and
+revocation delivery end to end.

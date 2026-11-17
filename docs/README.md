@@ -11,6 +11,7 @@ Identity for people and the agents that act for them: OpenID Connect and OAuth 2
 | [Branding](BRANDING.md) | A Fire look, name, copy, links and logos per realm and per app |
 | [Fire](fire/README.md) | The design system every page is built with, and how Imprim uses it |
 | [Integrating](INTEGRATE.md) | Adding sign-in to an app, accepting agents on an MCP server, building an agent |
+| [MCP probe example](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe) | A complete MCP server that accepts agents through Imprim, with a scripted agent that tests it |
 | [Clients](CLIENTS.md) | Client registration settings and the `imprim-client` package |
 | [Agent access](AGENT_ACCESS.md) | How agents connect for a person, and how apps protect resources |
 | [Protocol](PROTOCOL.md) | Exact routes, parameters, claims and errors |
