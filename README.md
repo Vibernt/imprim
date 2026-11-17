@@ -23,6 +23,25 @@ step.
 
 Docs: **https://vibernt.github.io/imprim/**. Start with [Getting started](docs/GETTING_STARTED.md).
 
+## In one view
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/overview-dark.svg">
+  <img alt="Imprim in one view. A person gives their agent an app's address. The agent asks Imprim for one workspace, the person signs in and approves, and Imprim issues a 60-second token that names the person, the agent and the grant. The agent calls the app's MCP server, which checks the workspace and the person's current role. When the person revokes, refresh stops and a signed event tells the app." src="docs/assets/diagrams/overview-light.svg">
+</picture>
+
+## How it compares
+
+Most identity systems can be made to do much of this with enough configuration. The difference is what they are
+built for. Imprim's defaults are set for agents acting for people: the token keeps the person, the agent and the
+grant apart, it is valid for one workspace for 60 seconds, and revocation reaches the app. It does not yet offer the
+enterprise directory features that workforce identity providers have.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/comparison-dark.svg">
+  <img alt="Imprim compared with workforce identity providers, developer authentication platforms, self-hosted identity providers and API keys. Imprim has agent delegation, per-workspace tokens, 60-second agent tokens, signed revocation events and per-agent revocation built in; the others make these possible with configuration or add-ons. All have refresh rotation. Imprim plans SAML and SCIM, is open source and runs in your own account, and is not a managed service." src="docs/assets/diagrams/comparison-light.svg">
+</picture>
+
 ## How it fits together
 
 ```text

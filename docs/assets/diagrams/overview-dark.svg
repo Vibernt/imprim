@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="overview-title overview-desc">
+<title id="overview-title">Imprim in one view</title><desc id="overview-desc">A person gives their agent an app address. The agent asks Imprim for one workspace, the person signs in and approves, and Imprim issues a 60-second token naming the person, the agent and the grant. The agent calls the app, which checks the workspace and the person’s current role. When the person revokes, refresh stops and a signed event tells the app.</desc>
+<defs><marker id="overview-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill:#8ea2ff"/></marker></defs>
+<rect x="0.5" y="0.5" width="1199" height="719" rx="16" style="fill:#0d1117;stroke:#30363d;stroke-width:1"/>
+<rect x="40" y="70" width="250" height="200" rx="10" style="fill:#161b22;stroke:#30363d;stroke-width:1"/>
+<text x="62" y="106.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:21px;font-weight:700;fill:#e6edf3">Person</text>
+<text x="62" y="138.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Signs in once per brand</text>
+<text x="62" y="159.8" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Approves one workspace</text>
+<text x="62" y="181.5" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">and named scopes</text>
+<text x="62" y="203.3" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Sees and revokes each</text>
+<text x="62" y="225.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">agent at any time</text>
+<rect x="440" y="40" width="320" height="330" rx="14" style="fill:#1a2040;stroke:#8ea2ff;stroke-width:2"/>
+<text x="462" y="80.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:26px;font-weight:800;fill:#e6edf3">Imprim</text>
+<text x="462" y="103.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">OpenID Connect and OAuth 2.1</text>
+<text x="462" y="138.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:11.5px;font-weight:700;fill:#8ea2ff;letter-spacing:0.08em">PEOPLE</text>
+<text x="462" y="158.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;fill:#e6edf3">Email link, password, passkeys,</text>
+<text x="462" y="176.2" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;fill:#e6edf3">Google, GitHub, any OIDC; MFA</text>
+<text x="462" y="196.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:11.5px;font-weight:700;fill:#8ea2ff;letter-spacing:0.08em">AGENTS</text>
+<text x="462" y="216.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;fill:#e6edf3">Any agent, 60-second tokens,</text>
+<text x="462" y="234.2" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;fill:#e6edf3">rotating refresh, DPoP</text>
+<text x="462" y="254.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:11.5px;font-weight:700;fill:#8ea2ff;letter-spacing:0.08em">MACHINES</text>
+<text x="462" y="274.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;fill:#e6edf3">Signed keys, never shared secrets;</text>
+<text x="462" y="292.2" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;fill:#e6edf3">token exchange between apps</text>
+<text x="462" y="312.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:11.5px;font-weight:700;fill:#8ea2ff;letter-spacing:0.08em">REALMS</text>
+<text x="462" y="332.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14px;font-weight:400;fill:#e6edf3">Many brands on one deployment</text>
+<rect x="910" y="70" width="250" height="200" rx="10" style="fill:#161b22;stroke:#30363d;stroke-width:1"/>
+<text x="932" y="106.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:21px;font-weight:700;fill:#e6edf3">Your MCP server</text>
+<text x="932" y="138.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Checks the token is for</text>
+<text x="932" y="159.8" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">this exact workspace</text>
+<text x="932" y="181.5" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Matches scopes to the</text>
+<text x="932" y="203.3" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">person’s current role</text>
+<text x="932" y="225.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Keeps its own sessions</text>
+<rect x="430" y="510" width="340" height="130" rx="10" style="fill:#161b22;stroke:#30363d;stroke-width:1"/>
+<text x="452" y="546.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:21px;font-weight:700;fill:#e6edf3">Agent</text>
+<text x="452" y="576.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Claude Code, Cursor, Codex, a CLI</text>
+<text x="452" y="597.8" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Acts for the person, never as them</text>
+<text x="452" y="619.5" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#9aa4b2">Holds no secret of its own</text>
+<rect x="40" y="420" width="250" height="262" rx="10" style="fill:#0d1117;stroke:#8ea2ff;stroke-width:1;stroke-dasharray:5 4"/>
+<text x="62" y="452.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:11.5px;font-weight:700;fill:#8ea2ff;letter-spacing:0.08em">THE ACCESS TOKEN</text>
+<text x="62" y="486.0" text-anchor="start" style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:14px;font-weight:400;fill:#e6edf3">sub</text>
+<text x="158" y="486.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#9aa4b2">the person</text>
+<text x="62" y="518.0" text-anchor="start" style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:14px;font-weight:400;fill:#e6edf3">client_id</text>
+<text x="158" y="518.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#9aa4b2">the agent</text>
+<text x="62" y="550.0" text-anchor="start" style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:14px;font-weight:400;fill:#e6edf3">grant_id</text>
+<text x="158" y="550.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#9aa4b2">the consent</text>
+<text x="62" y="582.0" text-anchor="start" style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:14px;font-weight:400;fill:#e6edf3">aud</text>
+<text x="158" y="582.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#9aa4b2">one workspace</text>
+<text x="62" y="614.0" text-anchor="start" style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:14px;font-weight:400;fill:#e6edf3">scope</text>
+<text x="158" y="614.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#9aa4b2">the ceiling</text>
+<text x="62" y="646.0" text-anchor="start" style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:14px;font-weight:400;fill:#e6edf3">exp</text>
+<text x="158" y="646.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#9aa4b2">60 seconds</text>
+<rect x="910" y="420" width="250" height="262" rx="10" style="fill:#0d1117;stroke:#30363d;stroke-width:1"/>
+<text x="932" y="452.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:11.5px;font-weight:700;fill:#8ea2ff;letter-spacing:0.08em">WHEN THE PERSON REVOKES</text>
+<circle cx="942" cy="485" r="10" style="fill:none;stroke:#8ea2ff;stroke-width:1.5"/>
+<text x="942" y="489.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:700;fill:#8ea2ff">1</text>
+<text x="962" y="490.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#e6edf3">Refresh stops at once</text>
+<circle cx="942" cy="531" r="10" style="fill:none;stroke:#8ea2ff;stroke-width:1.5"/>
+<text x="942" y="535.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:700;fill:#8ea2ff">2</text>
+<text x="962" y="536.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#e6edf3">A signed event reaches</text>
+<circle cx="942" cy="577" r="10" style="fill:none;stroke:#8ea2ff;stroke-width:1.5"/>
+<text x="942" y="581.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:700;fill:#8ea2ff">3</text>
+<text x="962" y="582.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#e6edf3">App refuses the grant</text>
+<circle cx="942" cy="623" r="10" style="fill:none;stroke:#8ea2ff;stroke-width:1.5"/>
+<text x="942" y="627.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:700;fill:#8ea2ff">4</text>
+<text x="962" y="628.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#e6edf3">The last token ends</text>
+<text x="962" y="555.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#e6edf3">the app</text>
+<text x="962" y="647.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:14.5px;font-weight:400;fill:#e6edf3">within 60 seconds</text>
+<line x1="215" y1="272" x2="442" y2="508" style="stroke:#8ea2ff;stroke-width:2" marker-end="url(#overview-arrow)"/>
+<circle cx="318" cy="375" r="12" style="fill:#8ea2ff"/>
+<text x="318" y="379.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13px;font-weight:700;fill:#0d1117">1</text>
+<text x="334" y="352.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">gives it the</text>
+<text x="334" y="369.6" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">app’s address</text>
+<line x1="560" y1="508" x2="560" y2="374" style="stroke:#8ea2ff;stroke-width:2" marker-end="url(#overview-arrow)"/>
+<circle cx="560" cy="440" r="12" style="fill:#8ea2ff"/>
+<text x="560" y="444.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13px;font-weight:700;fill:#0d1117">2</text>
+<text x="544" y="425.0" text-anchor="end" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">asks for one</text>
+<text x="544" y="442.6" text-anchor="end" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">workspace</text>
+<line x1="292" y1="170" x2="436" y2="170" style="stroke:#8ea2ff;stroke-width:2" marker-end="url(#overview-arrow)"/>
+<circle cx="364" cy="170" r="12" style="fill:#8ea2ff"/>
+<text x="364" y="174.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13px;font-weight:700;fill:#0d1117">3</text>
+<text x="364" y="146.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">signs in, approves</text>
+<line x1="640" y1="374" x2="640" y2="508" style="stroke:#8ea2ff;stroke-width:2" marker-end="url(#overview-arrow)"/>
+<circle cx="640" cy="440" r="12" style="fill:#8ea2ff"/>
+<text x="640" y="444.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13px;font-weight:700;fill:#0d1117">4</text>
+<text x="658" y="425.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">60-second token,</text>
+<text x="658" y="442.6" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">rotating refresh</text>
+<line x1="772" y1="556" x2="1030" y2="274" style="stroke:#8ea2ff;stroke-width:2" marker-end="url(#overview-arrow)"/>
+<circle cx="930" cy="381" r="12" style="fill:#8ea2ff"/>
+<text x="930" y="385.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13px;font-weight:700;fill:#0d1117">5</text>
+<text x="972" y="366.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">calls the app</text>
+<text x="972" y="383.6" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">with the token</text>
+<line x1="764" y1="170" x2="906" y2="170" style="stroke:#8ea2ff;stroke-width:2" marker-end="url(#overview-arrow)"/>
+<circle cx="835" cy="170" r="12" style="fill:#8ea2ff"/>
+<text x="835" y="174.5" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13px;font-weight:700;fill:#0d1117">6</text>
+<text x="835" y="146.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">signed events</text>
+<text x="835" y="200.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12.5px;font-weight:400;fill:#9aa4b2">revoke, sign-out,</text>
+<text x="835" y="216.3" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12.5px;font-weight:400;fill:#9aa4b2">account changes</text>
+</svg>

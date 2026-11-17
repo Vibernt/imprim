@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 690" role="img" aria-labelledby="comparison-title comparison-desc">
+<title id="comparison-title">How Imprim compares</title><desc id="comparison-desc">Imprim against workforce identity providers, developer authentication platforms, self-hosted identity providers and API keys, on agent delegation, audience, token lifetime, revocation, consent, refresh rotation, enterprise directory features, open source and managed hosting.</desc>
+<defs><marker id="comparison-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill:#8ea2ff"/></marker></defs>
+<rect x="0.5" y="0.5" width="1199" height="689" rx="16" style="fill:#0d1117;stroke:#30363d;stroke-width:1"/>
+<rect x="444" y="20" width="138" height="574" rx="12" style="fill:#1a2040;stroke:#8ea2ff;stroke-width:1.5"/>
+<text x="513" y="60.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:18px;font-weight:800;fill:#8ea2ff">Imprim</text>
+<text x="513" y="82.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:400;fill:#9aa4b2">people + agents</text>
+<text x="659" y="60.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:700;fill:#e6edf3">Workforce IdP</text>
+<text x="659" y="82.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:400;fill:#9aa4b2">e.g. Okta, Entra ID</text>
+<text x="805" y="60.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:700;fill:#e6edf3">Developer auth</text>
+<text x="805" y="82.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:400;fill:#9aa4b2">e.g. Auth0, Cognito</text>
+<text x="951" y="60.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:700;fill:#e6edf3">Self-hosted IdP</text>
+<text x="951" y="82.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:400;fill:#9aa4b2">e.g. Keycloak</text>
+<text x="1097" y="60.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:700;fill:#e6edf3">API keys</text>
+<text x="1097" y="82.0" text-anchor="middle" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:400;fill:#9aa4b2">and personal tokens</text>
+<line x1="30" y1="112" x2="1170" y2="112" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="141.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">Token names person, agent and grant</text>
+<circle cx="513" cy="136" r="8" style="fill:#3fb950"/>
+<circle cx="659" cy="136" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M659 129 A7 7 0 0 0 659 143 Z" style="fill:#d29922"/>
+<circle cx="805" cy="136" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M805 129 A7 7 0 0 0 805 143 Z" style="fill:#d29922"/>
+<circle cx="951" cy="136" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M951 129 A7 7 0 0 0 951 143 Z" style="fill:#d29922"/>
+<circle cx="1097" cy="136" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<line x1="30" y1="158" x2="1170" y2="158" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="187.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">Any agent connects, no pre-registration</text>
+<circle cx="513" cy="182" r="8" style="fill:#3fb950"/>
+<circle cx="659" cy="182" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M659 175 A7 7 0 0 0 659 189 Z" style="fill:#d29922"/>
+<circle cx="805" cy="182" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M805 175 A7 7 0 0 0 805 189 Z" style="fill:#d29922"/>
+<circle cx="951" cy="182" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M951 175 A7 7 0 0 0 951 189 Z" style="fill:#d29922"/>
+<line x1="1090" y1="182" x2="1104" y2="182" style="stroke:#6e7681;stroke-width:2"/>
+<line x1="30" y1="204" x2="1170" y2="204" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="233.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">One token per workspace (exact audience)</text>
+<circle cx="513" cy="228" r="8" style="fill:#3fb950"/>
+<circle cx="659" cy="228" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M659 221 A7 7 0 0 0 659 235 Z" style="fill:#d29922"/>
+<circle cx="805" cy="228" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M805 221 A7 7 0 0 0 805 235 Z" style="fill:#d29922"/>
+<circle cx="951" cy="228" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M951 221 A7 7 0 0 0 951 235 Z" style="fill:#d29922"/>
+<circle cx="1097" cy="228" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<line x1="30" y1="250" x2="1170" y2="250" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="279.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">Agent tokens last 60 seconds by default</text>
+<circle cx="513" cy="274" r="8" style="fill:#3fb950"/>
+<circle cx="659" cy="274" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M659 267 A7 7 0 0 0 659 281 Z" style="fill:#d29922"/>
+<circle cx="805" cy="274" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M805 267 A7 7 0 0 0 805 281 Z" style="fill:#d29922"/>
+<circle cx="951" cy="274" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M951 267 A7 7 0 0 0 951 281 Z" style="fill:#d29922"/>
+<circle cx="1097" cy="274" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<line x1="30" y1="296" x2="1170" y2="296" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="325.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">Revocation pushed to the app, signed</text>
+<circle cx="513" cy="320" r="8" style="fill:#3fb950"/>
+<circle cx="659" cy="320" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M659 313 A7 7 0 0 0 659 327 Z" style="fill:#d29922"/>
+<circle cx="805" cy="320" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M805 313 A7 7 0 0 0 805 327 Z" style="fill:#d29922"/>
+<circle cx="951" cy="320" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M951 313 A7 7 0 0 0 951 327 Z" style="fill:#d29922"/>
+<circle cx="1097" cy="320" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<line x1="30" y1="342" x2="1170" y2="342" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="371.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">The person sees and revokes each agent</text>
+<circle cx="513" cy="366" r="8" style="fill:#3fb950"/>
+<circle cx="659" cy="366" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M659 359 A7 7 0 0 0 659 373 Z" style="fill:#d29922"/>
+<circle cx="805" cy="366" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M805 359 A7 7 0 0 0 805 373 Z" style="fill:#d29922"/>
+<circle cx="951" cy="366" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M951 359 A7 7 0 0 0 951 373 Z" style="fill:#d29922"/>
+<circle cx="1097" cy="366" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M1097 359 A7 7 0 0 0 1097 373 Z" style="fill:#d29922"/>
+<line x1="30" y1="388" x2="1170" y2="388" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="417.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">Refresh rotation with reuse detection</text>
+<circle cx="513" cy="412" r="8" style="fill:#3fb950"/>
+<circle cx="659" cy="412" r="8" style="fill:#3fb950"/>
+<circle cx="805" cy="412" r="8" style="fill:#3fb950"/>
+<circle cx="951" cy="412" r="8" style="fill:#3fb950"/>
+<line x1="1090" y1="412" x2="1104" y2="412" style="stroke:#6e7681;stroke-width:2"/>
+<line x1="30" y1="434" x2="1170" y2="434" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="463.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">SAML, SCIM and directory sync</text>
+<circle cx="513" cy="458" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<circle cx="659" cy="458" r="8" style="fill:#3fb950"/>
+<circle cx="805" cy="458" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M805 451 A7 7 0 0 0 805 465 Z" style="fill:#d29922"/>
+<circle cx="951" cy="458" r="8" style="fill:#3fb950"/>
+<line x1="1090" y1="458" x2="1104" y2="458" style="stroke:#6e7681;stroke-width:2"/>
+<text x="527" y="462.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:11.5px;font-weight:400;fill:#9aa4b2">planned</text>
+<line x1="30" y1="480" x2="1170" y2="480" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="509.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">Open source, runs in your own account</text>
+<circle cx="513" cy="504" r="8" style="fill:#3fb950"/>
+<circle cx="659" cy="504" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<circle cx="805" cy="504" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<circle cx="951" cy="504" r="8" style="fill:#3fb950"/>
+<line x1="1090" y1="504" x2="1104" y2="504" style="stroke:#6e7681;stroke-width:2"/>
+<line x1="30" y1="526" x2="1170" y2="526" style="stroke:#30363d;stroke-width:1"/>
+<text x="40" y="555.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:15px;font-weight:400;fill:#e6edf3">Fully managed, nothing to run</text>
+<circle cx="513" cy="550" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<circle cx="659" cy="550" r="8" style="fill:#3fb950"/>
+<circle cx="805" cy="550" r="8" style="fill:#3fb950"/>
+<circle cx="951" cy="550" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<line x1="1090" y1="550" x2="1104" y2="550" style="stroke:#6e7681;stroke-width:2"/>
+<line x1="30" y1="572" x2="1170" y2="572" style="stroke:#30363d;stroke-width:1"/>
+<circle cx="48" cy="607" r="8" style="fill:#3fb950"/>
+<text x="66" y="612.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">Built in and on by default</text>
+<circle cx="290" cy="607" r="7" style="fill:none;stroke:#d29922;stroke-width:2"/><path d="M290 600 A7 7 0 0 0 290 614 Z" style="fill:#d29922"/>
+<text x="308" y="612.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">Possible with configuration, add-ons or code</text>
+<circle cx="668" cy="607" r="7" style="fill:none;stroke:#6e7681;stroke-width:2"/>
+<text x="686" y="612.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">Not provided</text>
+<line x1="843" y1="607" x2="857" y2="607" style="stroke:#6e7681;stroke-width:2"/>
+<text x="868" y="612.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13.5px;font-weight:400;fill:#9aa4b2">Not applicable</text>
+<text x="40" y="648.0" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:400;fill:#9aa4b2">Kinds of system, not single products: each cell is the usual default in public documentation as of November 2026.</text>
+<text x="40" y="664.8" text-anchor="start" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;font-weight:400;fill:#9aa4b2">Many products do more with configuration or paid add-ons.</text>
+</svg>

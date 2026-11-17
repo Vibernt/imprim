@@ -4,6 +4,11 @@ Identity for people and the agents that act for them: OpenID Connect and OAuth 2
 
 **Start here: [Getting started](GETTING_STARTED.md)**, including prompts you can hand to a coding agent.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagrams/overview-dark.svg">
+  <img alt="Imprim in one view. A person gives their agent an app's address. The agent asks Imprim for one workspace, the person signs in and approves, and Imprim issues a 60-second token that names the person, the agent and the grant. The agent calls the app's MCP server, which checks the workspace and the person's current role. When the person revokes, refresh stops and a signed event tells the app." src="assets/diagrams/overview-light.svg">
+</picture>
+
 | Guide | For |
 |---|---|
 | [Deploying](DEPLOY.md) | Running Imprim on Cloudflare, staging releases and upgrades |
