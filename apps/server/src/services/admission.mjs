@@ -62,23 +62,25 @@ function sharedSessionProof(session) {
 }
 const liveAdmission = `a.source='app' OR (${workspaceClientSql('c')}
     AND ${reachesProductSql('c.realm_id', 'c.product', 'a.user_id')})`;
-const currentAdmission = (env, client, userId) => env.DB.prepare(`SELECT (${liveAdmission}) AS allowed
+const currentAdmission = (env, client, userId) => env.DB.prepare(`SELECT a.source,(${liveAdmission}) AS allowed
     FROM client_admissions a JOIN clients c ON c.id=a.client_id WHERE a.user_id=? AND a.client_id=?`)
     .bind(userId, client.id).first();
 
 async function writeAdmission(env, client, subject, proof, shared) {
     const existing = await currentAdmission(env, client, subject.user_id);
-    // The source is fixed when the admission is first recorded. Workspace access must still be live.
-    if (existing) return existing.allowed === 1;
-    if (shared) return writeSharedAdmission(env, client, subject, proof);
+    // Keep the original source. A live workspace admission can also accept invitations to new workspaces.
+    if (existing && (!shared || existing.source === 'app' || existing.allowed !== 1)) return existing.allowed === 1;
+    if (shared) return writeSharedAdmission(env, client, subject, proof, Boolean(existing));
     if (!await policyAdmits(env, client, subject.email, proof)) return false;
     const result = await env.DB.prepare(`INSERT INTO client_admissions(user_id,client_id,created) VALUES(?,?,?)
         ON CONFLICT(user_id,client_id) DO NOTHING`).bind(subject.user_id, client.id, Date.now()).run();
     return result.meta.changes === 1 || (await currentAdmission(env, client, subject.user_id))?.allowed === 1;
 }
 
-async function writeSharedAdmission(env, client, subject, proof) {
-    const invitations = await invitationStatements(env, client, subject, proof), realm = realmId(env);
+async function writeSharedAdmission(env, client, subject, proof, hasWorkspaceAdmission) {
+    const invitations = await invitationStatements(env, client, subject, proof, { newMembershipsOnly: hasWorkspaceAdmission });
+    if (hasWorkspaceAdmission && invitations.length === 0) return true;
+    const realm = realmId(env);
     const now = Date.now(), guard = admissionGuard('u.id', client.id);
     // Recheck both paths at the write. An app policy admission outranks workspace access.
     const record = env.DB.prepare(`WITH eligible AS (

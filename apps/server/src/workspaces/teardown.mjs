@@ -11,9 +11,10 @@ export function accessEndStatements(env, workspaceId, userId) {
     const membership = `SELECT w.id,w.realm_id FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id
         WHERE w.id=? AND w.realm_id=? AND w.status='active' AND m.user_id=?`;
     const lostClients = {
-        sql: `SELECT c.id FROM (${membership}) ending JOIN workspace_products p ON p.workspace_id=ending.id
-              JOIN clients c ON c.realm_id=ending.realm_id AND c.product=p.product AND c.workspaces='shared'
-              WHERE NOT ${reachesProductSql('ending.realm_id', 'p.product', '?', 'w.id<>ending.id')}`,
+        sql: `SELECT c.id FROM (${membership}) ending
+              JOIN workspace_products ending_product ON ending_product.workspace_id=ending.id
+              JOIN clients c ON c.realm_id=ending.realm_id AND c.product=ending_product.product AND c.workspaces='shared'
+              WHERE NOT ${reachesProductSql('ending.realm_id', 'ending_product.product', '?', 'w.id<>ending.id')}`,
         args: [workspaceId, realm, userId, userId]
     };
     const liveGrant = `user_id=? AND revoked_at IS NULL AND expires_at>? AND resource IN (

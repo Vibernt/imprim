@@ -32,12 +32,13 @@ const hasMember = `EXISTS(SELECT 1 FROM workspace_members m WHERE m.workspace_id
 const clientForInvitation = `EXISTS(SELECT 1 FROM clients c WHERE c.id=? AND c.realm_id=?
     AND ${workspaceClientSql('c')} AND ${invitationProduct})`;
 
-export async function invitationStatements(env, client, session, proof) {
+export async function invitationStatements(env, client, session, proof, { newMembershipsOnly = false } = {}) {
     if (!invitationProof(proof)) return [];
     const realm = realmId(env);
     const { results } = await env.DB.prepare(`SELECT i.id, i.workspace_id, i.role, ${hasMember} AS member
-        FROM workspace_invitations i WHERE ${openInvitation} AND ${clientForInvitation} ORDER BY i.id`)
-        .bind(session.user_id, session.email, Date.now(), client.id, realm).all();
+        FROM workspace_invitations i WHERE ${openInvitation} AND ${clientForInvitation}
+          AND (?=0 OR NOT ${hasMember}) ORDER BY i.id`)
+        .bind(session.user_id, session.email, Date.now(), client.id, realm, Number(newMembershipsOnly), session.user_id).all();
     const now = Date.now();
     return results.flatMap(invitation => acceptInvitation(env, client, session, invitation, now, realm));
 }
