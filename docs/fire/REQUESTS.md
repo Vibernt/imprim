@@ -8,14 +8,11 @@ only. Delete the stopgap when Fire ships the request.
 
 None. `localCss` is empty, so no page links the stopgap stylesheet.
 
-One thing to know, though Imprim does not use it: Fire's skeleton presets, file-upload list, chat, charts and agent
-blocks still write inline `style` attributes, which Imprim's Content Security Policy blocks. Use them here only
-after Fire converts them.
-
 ## Shipped
 
 | Request | Fire | What Imprim uses now |
 |---|---|---|
+| No component writes a `style` attribute (skeletons, file list, chat, charts, agent blocks did) | 0.5.0 | Any Fire component can be used under Imprim's Content Security Policy |
 | A list and a name-and-value editor that post in a plain form; a long-form pattern; a JSON code field | 0.4.0 | `fd-tag-input`, `fd-pairs`, `fd-codefield`, `fd-form-section` and radio `fd-segmented` in the client editor (`admin/client-editor.mjs`, `pages/forms.mjs`) |
 | A button that lines up with a labelled field; a card title above setting rows; a value in a field's shape | 0.4.0 | `fd-row[data-align="end"]` on the search rows; `fd-title` card titles; the sample email on Branding |
 | A one-time code field that posts in a plain form | 0.3.1 | `fd-otp` holding one named input; `/imprim/forms.js` loads Fire's forms module |

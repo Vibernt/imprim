@@ -1,7 +1,7 @@
 # Fire in Imprim
 
 Every Imprim page is built with **Fire**, a design system of plain CSS and ES modules with no build step. Fire
-v0.4.0 is vendored at `apps/server/public/fire/` and served as static files (Workers Static Assets, see
+v0.5.0 is vendored at `apps/server/public/fire/` and served as static files (Workers Static Assets, see
 `apps/server/wrangler.jsonc`). It is MIT licensed (`apps/server/public/fire/LICENSE`); its fonts are SIL OFL 1.1 and
 its icons are Lucide (ISC).
 
@@ -35,6 +35,17 @@ How Imprim uses it:
   `style` attribute. A stopgap for something Fire lacks goes in `/assets/local.css` (`localCss` in
   `apps/server/src/pages/layout.mjs`); there are none now, so no page links it.
 
-**Upgrading Fire.** Replace `apps/server/public/fire/` with the new release's `fire/` folder (keep `LICENSE`), copy
-its `GUIDE.md`, `WRITING.md` and `docs/_ref/VOCABULARY.md` here, then run the tests: `tests/branding.test.mjs`
-checks looks against Fire's palettes and type sets. Never edit files inside `public/fire/`.
+- The README's graphics (`docs/assets/diagrams/`) are drawn in Fire too, by `scripts/diagrams.mjs`: Fire's
+  neutrals and ember accent, hairlines, mono eyebrows, the dot grid and corner marks, Geist embedded so GitHub
+  shows it, and Imprim's dot-matrix wordmark and numerals (`dotMatrix` in `pages/dots.mjs`). Run
+  `node scripts/diagrams.mjs` after changing them, or after a Fire release changes those tokens.
+
+**Upgrading Fire.** Take the release from its tag, not a working tree: replace `apps/server/public/fire/` with the
+tag's `fire/` folder (keep `LICENSE`), and copy its `GUIDE.md`, `WRITING.md`, `AGENT-RULES.md` and
+`docs/_ref/VOCABULARY.md` here. Then run the tests (`tests/branding.test.mjs` checks looks against Fire's palettes
+and type sets) and look at the sign-in, account and console pages. Never edit files inside `public/fire/`.
+
+| Fire | In Imprim since | What changed for Imprim |
+|---|---|---|
+| 0.5.0 | 2026-11-17 | No Fire module writes a `style` attribute any more, so every component works under Imprim's policy. Tweaks starts from the page's own palette and type set. Also new, not used yet: a pipeline graph, a day strip, a secret entry field. |
+| 0.4.0 | 2026-11-15 | The form controls the console uses: lists, names with values, code fields, form sections, radio choices. |
