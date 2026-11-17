@@ -141,3 +141,26 @@ test('backchannel revocation delivery signs an event, retries failures, and keep
     await queue({ messages: [{ ...message, body: { type: 'other' } }] }, w.env); assert.equal(retry, 2);
     await error(await w.refresh(tokens.refresh_token), 'invalid_grant');
 });
+test('two grants from the same agent: revoking one leaves the other working, and the event names only that grant', async t => {
+    const w = await agentWorld(t), first = await w.grant(), second = await w.grant();
+    const [revoked, kept] = w.env.DB.db.prepare('SELECT id FROM agent_grants ORDER BY rowid').all().map(row => row.id);
+    assert.notEqual(revoked, kept);
+    w.env.DB.db.exec("UPDATE clients SET backchannel_uri='https://app.example/backchannel' WHERE id='app'");
+    assert.equal((await w.form('/account/revoke', { grant_id: revoked, csrf: w.csrf }, w.cookie)).status, 303);
+    // Only the revoked grant stops: its refresh is refused and its access token is inactive; the other carries on.
+    await error(await w.refresh(first.tokens.refresh_token), 'invalid_grant');
+    assert.equal((await w.refresh(second.tokens.refresh_token)).status, 200);
+    const app = createClient({ issuer: w.env.ISSUER, clientId: 'app', clientSecret: 'secret', fetch: (url, init = {}) => { const u = new URL(url); return w.call(u.pathname + u.search, init); } });
+    assert.deepEqual(await app.introspect(first.tokens.access_token), { active: false });
+    assert.equal((await app.introspect(second.tokens.access_token)).grant_id, kept);
+    assert.deepEqual((await app.listGrants({ resource })).grants.map(g => g.grant_id), [kept]);
+    // One event, naming the revoked grant only.
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM agent_revocation_outbox').get().n, 1);
+    const delivered = [];
+    t.mock.method(globalThis, 'fetch', async (url, init) => {
+        delivered.push(JSON.parse(Buffer.from(new URLSearchParams(init.body).get('revocation_token').split('.')[1], 'base64url')));
+        return new Response(null, { status: 204 });
+    });
+    await queue({ messages: w.events.map(body => ({ body, ack() {}, retry() {} })) }, w.env);
+    assert.deepEqual(delivered.map(claims => claims.grant_id), [revoked]);
+});
