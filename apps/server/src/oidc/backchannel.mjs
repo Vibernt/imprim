@@ -1,7 +1,7 @@
 import { outboxDestination } from '../services/outbox-destination.mjs';
 import { dispatchOutbox } from '../services/outbox.mjs';
 import { assertDelivered, invariant } from '../lib/errors.mjs';
-import { signAgentJwt } from '../agents/grants.mjs';
+import { signJwt } from './jwt.mjs';
 import { expireEvent } from '../services/outbox-expiry.mjs';
 import { appSessionLifetimeMs } from './app-sessions.mjs';
 import { realmEnvForClient } from '../realms/realm.mjs';
@@ -29,9 +29,11 @@ export async function deliverLogout(base, message) {
     const uri = await outboxDestination(env, 'logout_outbox', row.client_id, row.id);
     env = await realmEnvForClient(base, row.client_id);
     const now = Math.floor(Date.now() / 1000);
-    const jwt = await signAgentJwt(env, { iss: env.ISSUER, aud: row.client_id, sub: row.user_id,
+    // Logout tokens use the same keys as the app's ID tokens (OpenID Connect Back-Channel Logout 1.0, section 2.6).
+    const app = await env.DB.prepare('SELECT id_token_signed_response_alg FROM clients WHERE id=?').bind(row.client_id).first();
+    const jwt = await signJwt(env, { iss: env.ISSUER, aud: row.client_id, sub: row.user_id,
         ...(row.sid ? { sid: row.sid } : {}), jti: row.id, iat: now, exp: now + 120,
-        events: { 'http://schemas.openid.net/event/backchannel-logout': {} } }, 'logout+jwt');
+        events: { 'http://schemas.openid.net/event/backchannel-logout': {} } }, { typ: 'logout+jwt', alg: app?.id_token_signed_response_alg ?? 'ES256' });
     if (await expireEvent(env, 'logout_outbox', row)) return;
     const response = await fetch(uri, { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(10000),
         headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ logout_token: jwt }) });

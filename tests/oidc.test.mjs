@@ -24,7 +24,8 @@ test('authorization code round trip signs ES256 and authenticates userinfo', asy
     assert.equal(claims.email_verified, true);
     assert.ok(claims.sid && claims.auth_time);
     const jwks = await (await w.call('/.well-known/jwks.json')).json();
-    assert.ok(jwks.keys.every(key => key.alg === 'ES256' && !key.d));
+    // No private members in either ring.
+    assert.ok(jwks.keys.every(key => ['ES256', 'RS256'].includes(key.alg) && !key.d && !key.p && !key.q));
     const key = await crypto.subtle.importKey('jwk', jwks.keys.find(k => k.kid === header.kid), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
     assert.equal(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, Buffer.from(sig, 'base64url'), Buffer.from(`${head}.${body}`)), true);
     const info = await w.call('/userinfo', { headers: { authorization: `Bearer ${tokens.access_token}` } });

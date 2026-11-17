@@ -13,7 +13,8 @@ and other tweaks) with name, copy, links and sandboxed logo uploads, branded pag
 Tweaks panel in the console; pages and emails in English, Spanish, French, German and Portuguese (Brazil), chosen by
 `ui_locales`, the person's saved language, `Accept-Language` and the brand, with per-language brand words
 ([Languages](TRANSLATING.md)); a branded HTML part, light and dark, beside the plain text of every email;
-`id_token_hint`, `POST /authorize`, `client_secret_post`, UserInfo body tokens and per-app classic OpenID Connect,
+`id_token_hint`, `POST /authorize`, `client_secret_post`, UserInfo body tokens, per-app classic OpenID Connect and
+RS256 ID tokens,
 for the OpenID conformance suite ([OpenID certification](CERTIFICATION.md)).
 
 Planned, roughly in order. Each item is an issue to discuss before code:
@@ -23,7 +24,7 @@ Planned, roughly in order. Each item is an issue to discuss before code:
    native speakers have read them. Then more languages, and the admin console.
 
 Certification: run the conformance suite's Basic, Config, RP-Initiated Logout and Back-Channel Logout plans on
-staging, then self-certify ([OpenID certification](CERTIFICATION.md)). Dynamic OP would need RS256 ID tokens.
+staging, then self-certify ([OpenID certification](CERTIFICATION.md)). Dynamic OP would need open registration for web apps.
 
 Still to verify live: Claude Code, Cursor and Codex against a real MCP resource; device flow from a CLI; Workers
 egress and DNS-rebinding behaviour; Safari and Chrome cookie flows; Queue delivery against a real app; the Fire

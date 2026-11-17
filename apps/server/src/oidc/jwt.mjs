@@ -1,8 +1,15 @@
-// ES256 compact JWS signing.
+// Compact JWS signing with the realm's ES256 or RS256 ring.
 import { signingKey } from './keys.mjs';
 import { b64url } from '../lib/crypto.mjs';
-export async function signIdToken(env, session, code) {
-    const { kid, key } = await signingKey(env), now = Math.floor(Date.now() / 1000);
+const encode = value => b64url(new TextEncoder().encode(JSON.stringify(value)));
+export async function signJwt(env, claims, { typ = 'JWT', alg = 'ES256' } = {}) {
+    const { kid, key, params } = await signingKey(env, Date.now(), alg);
+    const input = `${encode({ alg, typ, kid })}.${encode(claims)}`;
+    return `${input}.${b64url(await crypto.subtle.sign(params, key, new TextEncoder().encode(input)))}`;
+}
+// alg is the app's id_token_signed_response_alg.
+export async function signIdToken(env, session, code, alg = 'ES256') {
+    const now = Math.floor(Date.now() / 1000);
     const claims = {
         iss: env.ISSUER, aud: code.client_id, azp: code.client_id, sub: session.user_id,
         // Email claims only with the email scope (OIDC Core 5.4).
@@ -12,8 +19,5 @@ export async function signIdToken(env, session, code) {
         // A classic app may send no nonce; then the ID token carries none (OIDC Core 3.1.3.6).
         ...(code.nonce ? { nonce: code.nonce } : {}), iat: now, exp: now + 600
     };
-    const encode = value => b64url(new TextEncoder().encode(JSON.stringify(value)));
-    const input = `${encode({ alg: 'ES256', typ: 'JWT', kid })}.${encode(claims)}`;
-    const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(input));
-    return `${input}.${b64url(signature)}`;
+    return signJwt(env, claims, { alg });
 }

@@ -12,8 +12,8 @@ OpenID providers. This page says which profiles apply, how to set up a deploymen
 | RP-Initiated Logout OP | `oidcc-rp-initiated-logout-certification-test-plan` | Signing out from an app. |
 | Back-Channel Logout OP | `oidcc-backchannel-rp-initiated-logout-certification-test-plan` | Signed `logout_token` to the app. |
 
-Dynamic OP is not in scope. It needs RS256 ID tokens and open client registration for web apps; Imprim signs with
-ES256 and registers web apps through the console.
+Dynamic OP is not in scope. It needs open client registration for web apps, which Imprim registers through the
+console. Config OP needs RS256 listed for ID tokens: Imprim offers it per app (`id_token_signed_response_alg`).
 
 Some Basic OP tests are skipped by design: the `address` and `phone` scopes (not offered), request objects and
 `request_uri` (refused with `request_not_supported` and `request_uri_not_supported`, which the suite accepts) and

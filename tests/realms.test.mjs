@@ -31,8 +31,9 @@ test('each realm has its own issuer, discovery and signing keys', async t => {
     assert.equal(theirs.token_endpoint, ACME + '/token');
     const a = (await (await w.call('/.well-known/jwks.json')).json()).keys.map(k => k.kid);
     const b = (await (await acme('/.well-known/jwks.json')).json()).keys.map(k => k.kid);
-    assert.equal(a.length, 1); assert.equal(b.length, 1); assert.notEqual(a[0], b[0]);
-    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM signing_keys WHERE realm_id='acme'").get().n, 1);
+    // One ES256 and one RS256 key each, none shared.
+    assert.equal(a.length, 2); assert.equal(b.length, 2); assert.ok(!a.some(kid => b.includes(kid)));
+    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM signing_keys WHERE realm_id='acme'").get().n, 2);
 });
 test('a client exists only in its own realm', async t => {
     const { w, acme } = await twoRealms(t);
@@ -106,7 +107,7 @@ test('the scheduled sweep keeps one ring per realm; queue delivery signs as the 
     const { w, acme } = await twoRealms(t);
     await acme('/.well-known/jwks.json'); await w.call('/.well-known/jwks.json');
     await scheduled(w.env);
-    assert.deepEqual(w.env.DB.db.prepare('SELECT realm_id,count(*) n FROM signing_keys GROUP BY realm_id ORDER BY realm_id').all().map(r => [r.realm_id, r.n]), [['acme', 1], ['default', 1]]);
+    assert.deepEqual(w.env.DB.db.prepare('SELECT realm_id,count(*) n FROM signing_keys GROUP BY realm_id ORDER BY realm_id').all().map(r => [r.realm_id, r.n]), [['acme', 2], ['default', 2]]);
     const { deliverLogout } = await import('../apps/server/src/oidc/backchannel.mjs');
     w.env.DB.db.exec("UPDATE clients SET backchannel_uri='https://acme-app.test/backchannel' WHERE id='acme-app'");
     w.env.DB.db.prepare("INSERT INTO logout_outbox(id,client_id,user_id,sid,uri,created) VALUES('e1','acme-app','u','s','x',?)").run(Date.now());
@@ -122,7 +123,8 @@ test('an admin key revocation clears the JWKS memo the public endpoint serves', 
     assert.equal((await admin.post(`keys/${before[0]}/revoke`)).status, 200);
     const after = (await (await w.call('/.well-known/jwks.json')).json()).keys.map(k => k.kid);
     assert.ok(!after.includes(before[0]));
-    assert.equal(after.length, 1);
+    assert.equal(after.length, 2); // the ES256 replacement and the untouched RS256 key
+    assert.ok(after.includes(before[1]));
 });
 test('scripts/realm.mjs generates SQL that creates a working realm, and refuses literal secrets', async t => {
     const { spawnSync } = await import('node:child_process');

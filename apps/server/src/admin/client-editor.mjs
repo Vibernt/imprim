@@ -6,7 +6,7 @@ import { hidden, button, linkButton, actions } from '../pages/ui.mjs';
 import { text, shown, list, pairs, json, choice, checks, toggle, amount, cols, formSection, advanced } from '../pages/forms.mjs';
 import { SWITCHES } from './client-form.mjs';
 const NEW = { id: '', redirect_uris: [], post_logout_uris: [], backchannel_uri: '', signup_policy: 'invited', sign_in_methods: ['email'], google_hosted_domains: [],
-    allowed_domains: [], branding: { name: '' }, dev: 0, mfa: 'off', mfa_trusted_device_days: 0, agent_consent_mfa: 'off', agent_dpop: 'optional', classic_oidc: 'off', token_exchange_from: {},
+    allowed_domains: [], branding: { name: '' }, dev: 0, mfa: 'off', mfa_trusted_device_days: 0, agent_consent_mfa: 'off', agent_dpop: 'optional', classic_oidc: 'off', id_token_signed_response_alg: 'ES256', token_exchange_from: {},
     user_events: 'off', agent_access: 'off', agent_registration_methods: ['metadata_document'], agent_allowlist: [], agent_scope_catalogue: {}, agent_resource_prefixes: [], agent_max_grant_days: 90 };
 export const METHODS = { email: 'Email link', password: 'Password', passkey: 'Passkey', github: 'GitHub', google: 'Google' };
 const HOST = '^[a-z0-9-]+(\\.[a-z0-9-]+)+$';
@@ -33,7 +33,8 @@ export function clientForm(client, csrf, { providers = {} } = {}) {
         list({ id: 'f-google_hosted_domains', label: 'Google Workspace domains', name: 'google_hosted_domains', values: value.google_hosted_domains, pattern: HOST, placeholder: 'example.com', hint: 'Only these Workspace domains may sign in with Google. Leave empty to allow any Google account.' }) +
         cols(choice({ id: 'f-mfa', label: 'Two-factor', name: 'mfa', value: value.mfa, options: [['off', 'Off'], ['optional', 'Optional'], ['required', 'Required']] }),
             amount({ id: 'f-mfa_trusted_device_days', label: 'Remember browsers for', name: 'mfa_trusted_device_days', value: value.mfa_trusted_device_days, unit: 'days', min: 0, max: 90, hint: '0 asks every time.' })) +
-        toggle({ id: 'f-classic_oidc', label: 'Classic OpenID Connect', desc: 'Lets this app leave out PKCE and the nonce, as OpenID Connect libraries written before OAuth 2.1 do. Keep it off unless the app’s library needs it.', name: 'classic_oidc', on: SWITCHES.classic_oidc[0], checked: on(value, 'classic_oidc') }));
+        toggle({ id: 'f-classic_oidc', label: 'Classic OpenID Connect', desc: 'Lets this app leave out PKCE and the nonce, as OpenID Connect libraries written before OAuth 2.1 do. Keep it off unless the app’s library needs it.', name: 'classic_oidc', on: SWITCHES.classic_oidc[0], checked: on(value, 'classic_oidc') }) +
+        choice({ id: 'f-id_token_signed_response_alg', label: 'ID token signature', name: 'id_token_signed_response_alg', value: value.id_token_signed_response_alg ?? 'ES256', options: [['ES256', 'ES256 (recommended)'], ['RS256', 'RS256, for libraries that need it']] }));
     const agents = formSection('agents', 'Agents', 'AI agents acting for a person in this app.',
         toggle({ id: 'f-agent_access', label: 'Agent access', desc: 'Turning it off revokes every agent grant for this app.', name: 'agent_access', on: SWITCHES.agent_access[0], checked: on(value, 'agent_access') }) +
         checks({ id: 'f-agent_registration_methods', label: 'How agents register', name: 'agent_registration_methods', options: ordered(value.agent_registration_methods, { metadata_document: 'Metadata document', dynamic: 'Dynamic registration' }),

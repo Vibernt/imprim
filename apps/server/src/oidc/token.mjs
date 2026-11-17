@@ -61,7 +61,7 @@ export async function token(request, env, ctx) {
     const session = await sessionByHash(env, code.session_hash);
     invariant(session, 'invalid_grant', 'Session or account unavailable.');
     requireMethod(client, session.method, session.google_hd, true);
-    const idToken = await signIdToken(env, session, code), accessToken = randomToken();
+    const idToken = await signIdToken(env, session, code, client.id_token_signed_response_alg ?? 'ES256'), accessToken = randomToken();
     const accessHash = await sha256(accessToken), admission = admissionGuard('s.user_id', client.id);
     const issued = await env.DB.batch([
         env.DB.prepare(`INSERT INTO access_tokens(hash,session_hash,client_id,scope,expires_at)

@@ -1,6 +1,6 @@
 import { invariant } from '../lib/errors.mjs';
 import { from64 } from '../lib/crypto.mjs';
-import { jwksDocument } from './keys.mjs';
+import { jwksDocument, ALGORITHMS } from './keys.mjs';
 // Verify one of our own ID tokens, given back as a hint, against the fixed local ring; never trust token-selected
 // algorithms or key URLs. Expiry is the caller's decision: a hint may name a session after its ID token expired.
 export async function ownIdToken(env, token, what = 'ID token hint') {
@@ -12,13 +12,16 @@ export async function ownIdToken(env, token, what = 'ID token hint') {
         header = JSON.parse(new TextDecoder().decode(from64(parts[0])));
         claims = JSON.parse(new TextDecoder().decode(from64(parts[1])));
     } catch { invariant(false, 'invalid_request', `Invalid ${what}.`); }
-    invariant(header?.alg === 'ES256' && header.typ === 'JWT' && typeof header.kid === 'string' && !header.jku && !header.jwk && !header.x5u && !header.crit,
+    invariant(Object.hasOwn(ALGORITHMS, header?.alg) && header.typ === 'JWT' && typeof header.kid === 'string' && !header.jku && !header.jwk && !header.x5u && !header.crit,
         'invalid_request', `Unsupported ${what} header.`);
+    // The key decides the algorithm: a header naming another one than its key's is refused, never reinterpreted.
     const jwk = (await jwksDocument(env)).keys.find(key => key.kid === header.kid);
     invariant(jwk, 'invalid_request', `Unknown ${what} signing key.`);
-    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    invariant(jwk.alg === header.alg, 'invalid_request', `Unsupported ${what} header.`);
+    const { key: keyAlgorithm, sign } = ALGORITHMS[jwk.alg];
+    const key = await crypto.subtle.importKey('jwk', jwk, keyAlgorithm, false, ['verify']);
     let valid = false;
-    try { valid = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, from64(parts[2]), new TextEncoder().encode(parts.slice(0,2).join('.'))); }
+    try { valid = await crypto.subtle.verify(sign, key, from64(parts[2]), new TextEncoder().encode(parts.slice(0,2).join('.'))); }
     catch { invariant(false, 'invalid_request', `Malformed ${what} signature.`); }
     invariant(valid, 'invalid_request', `Invalid ${what} signature.`);
     const now = Math.floor(Date.now() / 1000);

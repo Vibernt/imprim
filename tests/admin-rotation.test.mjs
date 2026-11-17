@@ -15,10 +15,12 @@ async function signature(jwt, jwks) {
 test('rotate publishes before signing; before/after JWKS verify overlap, unknown kid refresh succeeds, retirement waits', async t => {
     const w = await world(t); turnstile(t); const a = await adminLogin(w);
     let now = Date.now(); t.mock.method(Date, 'now', () => now);
-    const beforeRotation = await jwksDocument(w.env), oldKid = beforeRotation.keys[0].kid;
+    const beforeRotation = await jwksDocument(w.env), es = doc => doc.keys.filter(k => k.alg === 'ES256'), oldKid = es(beforeRotation)[0].kid;
     const rotated = await a.post('keys/rotate'); assert.equal(rotated.status, 200, await rotated.clone().text());
     const next = await rotated.json(); assert.equal(next.activates_at, now + PUBLISH_AHEAD_MS);
-    const beforeActivation = await jwksDocument(w.env); assert.equal(beforeActivation.keys.length, 2);
+    const beforeActivation = await jwksDocument(w.env); assert.equal(es(beforeActivation).length, 2);
+    // The RS256 ring rotates alongside, published on the same schedule.
+    assert.equal(beforeActivation.keys.filter(k => k.alg === 'RS256').length, 2);
     assert.ok(beforeActivation.keys.some(k => k.kid === next.kid));
     assert.equal((await a.post('keys/rotate')).status, 409);
     let fetched = 0;
@@ -43,16 +45,18 @@ test('rotate publishes before signing; before/after JWKS verify overlap, unknown
     now += 600000; await keySweep(w.env, now); assert.ok((await jwksDocument(w.env)).keys.some(k => k.kid === oldKid));
     now = next.activates_at + RETIRED_KEEP_MS;
     await keySweep(w.env, now); assert.ok(!(await jwksDocument(w.env)).keys.some(k => k.kid === oldKid));
-    const audits = w.env.DB.db.prepare("SELECT * FROM audit WHERE event='admin_key_rotate'").all(); assert.equal(audits.length, 1);
-    assert.equal(audits[0].target, next.kid); assert.ok(audits[0].actor);
+    const audits = w.env.DB.db.prepare("SELECT * FROM audit WHERE event='admin_key_rotate' ORDER BY id").all();
+    assert.deepEqual(audits.map(row => JSON.parse(row.detail).alg), ['ES256', 'RS256']);
+    assert.equal(audits[0].target, next.kid); assert.ok(audits.every(row => row.actor));
 });
 
 test('concurrent Rotate now has one winner and one audit row', async t => {
     const w = await world(t); turnstile(t); const a = await adminLogin(w); await jwksDocument(w.env);
     const responses = await Promise.all([a.post('keys/rotate'), a.post('keys/rotate')]);
     assert.deepEqual(responses.map(r => r.status).sort(), [200,409]);
-    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM signing_keys').get().n, 2);
-    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_key_rotate'").get().n, 1);
+    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM signing_keys WHERE alg='ES256'").get().n, 2);
+    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM signing_keys WHERE alg='RS256'").get().n, 2);
+    assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_key_rotate'").get().n, 2);
 });
 
 test('logout verifier refuses invalid event bodies, missing subject/sid, nonce, types and cross-protocol tokens', async t => {

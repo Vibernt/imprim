@@ -60,6 +60,7 @@ and never writes D1. JSON columns are shown decoded.
 | `token_exchange_from` | `{}` | Other client ids that may exchange tokens into this app, each with the scopes it may obtain. |
 | `user_events` | `off` | `on` sends signed user lifecycle events to `backchannel_uri`. |
 | `classic_oidc` | `off` | `on` lets a confidential app leave out PKCE and the nonce and ignores its `claims` requests, for OpenID Connect libraries written before OAuth 2.1 ([Protocol](PROTOCOL.md#authorization)). Refused for public clients. |
+| `id_token_signed_response_alg` | `ES256` | `RS256` signs this app's ID tokens and logout tokens with the realm's RSA ring, for libraries that need it. `imprim-client` verifies ES256 only. |
 | `version` | `0` | Incremented on every edit; an edit must send the current version. |
 
 The seed script accepts every setting in this table except `version`, with the console's rules. It never overwrites

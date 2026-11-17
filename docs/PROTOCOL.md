@@ -9,8 +9,8 @@ identity; apps keep workspace admission, memberships, roles, local sessions and 
 
 | Endpoint | Behavior |
 |---|---|
-| `GET /.well-known/openid-configuration` | Supported endpoints, code flow, ES256, S256, basic/post/public-client authentication. |
-| `GET /.well-known/jwks.json` | Public EC P-256 signing keys only, `alg=ES256`, `use=sig`; five-minute HTTP cache. |
+| `GET /.well-known/openid-configuration` | Supported endpoints, code flow, ES256 and RS256 ID tokens, S256, basic/post/public-client authentication. |
+| `GET /.well-known/jwks.json` | Public signing keys only, `use=sig`: EC P-256 with `alg=ES256`, and RSA 2048 with `alg=RS256`; five-minute HTTP cache. |
 | `GET /authorize` or `POST /authorize` | Exact registered client/redirect validation, then SSO or sign-in. POST takes a form body. |
 | `POST /token` | Form-encoded authorization-code exchange; confidential clients use HTTP Basic or `client_secret_post`. |
 | `GET /userinfo` or `POST /userinfo` | Bearer opaque access token in the header, or as `access_token` in a POST form body (RFC 6750 §2.2), never both and never in the query; `sub`, and email claims if `email` was authorized. |
@@ -110,7 +110,7 @@ The signed ID token lasts 600 seconds and has `iss`, `aud` (client id), `azp` (s
 a second factor adds `otp` and `mfa`), `acr`, `auth_time` (Unix seconds), `sid`, and `nonce` when the request had one. `name` appears with the
 `profile` scope when the person has set one. `email` and boolean
 `email_verified` appear only when the request asked for the `email` scope (OIDC Core 5.4).
-Only ES256 is emitted/advertised; private key material is never in JWKS. Human app grants have no refresh tokens; neither flow supports implicit grants. Agent refresh grants are described below.
+ID tokens are ES256 unless the app's `id_token_signed_response_alg` is `RS256`; discovery advertises both, and every other JWT Imprim signs is ES256. Private key material is never in JWKS. Human app grants have no refresh tokens; neither flow supports implicit grants. Agent refresh grants are described below.
 
 ## Sign-in and sessions
 
@@ -287,7 +287,7 @@ magic request remains neutral and does not claim delivery.
 
 RP logout uses `client_id` and/or a verified `id_token_hint`, optional exact `post_logout_redirect_uri`, optional `state`, and optional `ui_locales` for the confirmation page. With a session, GET
 renders a confirmation form carrying CSRF; POST checks Origin + double submit and deletes the identity session.
-The registered URI is checked again at POST. Without a session GET may redirect to the registered URI. An `id_token_hint` must have an ES256 signature from this issuer's local ring, matching issuer/client claims and
+The registered URI is checked again at POST. Without a session GET may redirect to the registered URI. An `id_token_hint` must have an ES256 or RS256 signature from this issuer's local ring, the header's `alg` matching its key's, matching issuer/client claims and
 (current browser, if present) subject/sid. An expired hint is accepted only for its still-active browser session. No third-party logout URL is accepted without a registered client. The console and the account pages link to `/logout` with no client; a request that names no client and still carries a return URI or state is refused.
 Human logout captures durable app-session associations and sends signed OIDC back-channel logout through the queue.
 An association expires 30 days after it was created, matching the identity-session lifetime. Token exchange records
@@ -296,7 +296,7 @@ maintenance deletes at most 500 expired associations per run. Block, delete, log
 associations, even if maintenance has not removed expired rows yet. Apps must end any session minted from an Imprim
 sign-in within 30 days of that sign-in. An app that needs a longer session must obtain a new sign-in, which creates
 a new association.
-The form field is `logout_token`, with ES256 header `typ=logout+jwt` and claims `iss`, scalar app `aud`, `sub`, `sid`
+The form field is `logout_token`, signed with the app's ID-token algorithm (ES256 unless it chose RS256), header `typ=logout+jwt` and claims `iss`, scalar app `aud`, `sub`, `sid`
 when scoped to one session, integer `iat`, `exp=iat+120`, stable event `jti`, and exactly
 `events:{"http://schemas.openid.net/event/backchannel-logout":{}}`; never `nonce`. One event is sent per affected client.
 Account-wide actions covering multiple sessions of one client omit `sid` to end all sessions for that subject.

@@ -24,7 +24,8 @@ rate limits, Worker egress, Queue delivery or OpenID conformance: those are [rel
 
 ## Keys and rotation
 
-Each realm has its own ring of ES256 (P-256) signing keys. Private JWKs are sealed with AES-256-GCM under
+Each realm has two rings of signing keys: ES256 (P-256), which signs everything by default, and RS256 (RSA 2048), which
+signs the ID and logout tokens of apps that choose it. Both rotate on the same schedule and share one JWKS. Private JWKs are sealed with AES-256-GCM under
 `SEALING_KEY`, with a fresh IV and the `kid` as authenticated data. JWKS publishes public keys only.
 
 - **Scheduled rotation.** The every-minute handler publishes a successor one hour before the current key's 90-day

@@ -76,7 +76,7 @@ export function auditPage(rows, query) {
         { description: 'Every sign-in, grant and admin change, newest first. Rows cannot be edited.', active: 'audit' });
 }
 export function keysPage(keys, csrf) {
-    const rows = table('Signing keys', ['Key ID', 'Status', 'Signs from', 'Retires'], keys.map(k => [code(k.kid), status(cap(k.status), STATUS_TONE[k.status] || 'success'), e(when(k.activates_at ?? k.activated_at ?? k.created)), e(when(k.retires_at ?? k.retired_at))]));
+    const rows = table('Signing keys', ['Key ID', 'Algorithm', 'Status', 'Signs from', 'Retires'], keys.map(k => [code(k.kid), code(k.alg), status(cap(k.status), STATUS_TONE[k.status] || 'success'), e(when(k.activates_at ?? k.activated_at ?? k.created)), e(when(k.retires_at ?? k.retired_at))]));
     const revoke = keys.filter(key => key.status !== 'retired').map(key => form('/admin/keys/' + encodeURIComponent(key.kid) + '/revoke', csrf, button(`Revoke ${key.kid}`, { variant: 'danger', size: 'sm' }))).join('');
     return adminPage('Signing keys', [rows, cards(
         card(form('/admin/keys/rotate', csrf, `<div class="fd-row">${button('Rotate now', { variant: 'outline', icon: 'refresh-cw' })}</div>`), 'Rotate', 'Publishes a new key now; it signs from 1 hour later. Old public keys stay for 24 hours.'),

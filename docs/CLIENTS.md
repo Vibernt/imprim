@@ -103,8 +103,9 @@ once, with no overlap, so switch the app in the same window.
    Use HTTP Basic with form-encoded client id and secret for confidential clients; public clients send `client_id`.
    Do not forward the browser's cookies. Codes expire after 60 seconds and are single-use. Retry by starting a new
    authorization if the exchange result is lost; code replay is never successful.
-5. Verify the ID token cryptographically using JWKS, allowing **only ES256** with an EC P-256 public signing key
-   matching `kid`. Do not trust unverified header algorithms or follow a token-supplied key URL. Check `iss`, `aud`,
+5. Verify the ID token cryptographically using JWKS, allowing **only the algorithm your app chose** (ES256, with an EC
+   P-256 key, unless the app's `id_token_signed_response_alg` is RS256) and a key matching `kid`. `imprim-client`
+   verifies ES256 only, so an app using it keeps the default. Do not trust unverified header algorithms or follow a token-supplied key URL. Check `iss`, `aud`,
    `azp`, `exp`, `iat` with bounded clock skew, and your exact stored `nonce`. Reject unknown/malformed claims.
    Cache keys, and refresh once on unknown kid against the fixed issuer JWKS URL; a long cache alone is insufficient
    for one-hour key prepublication. Validation failures do not create app sessions.

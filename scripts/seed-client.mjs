@@ -6,7 +6,7 @@ import { validateSignInSettings } from '../apps/server/src/oidc/sign-in-methods.
 import { validateAgentSettings, settingNames } from '../apps/server/src/agents/settings.mjs';
 import { registeredUri } from '../apps/server/src/oidc/clients.mjs';
 import { validatePolicySettings } from '../apps/server/src/admin/clients.mjs';
-const POLICY = ['mfa', 'mfa_trusted_device_days', 'agent_consent_mfa', 'agent_dpop', 'token_exchange_from', 'user_events', 'classic_oidc'];
+const POLICY = ['mfa', 'mfa_trusted_device_days', 'agent_consent_mfa', 'agent_dpop', 'token_exchange_from', 'user_events', 'classic_oidc', 'id_token_signed_response_alg'];
 const sql = value => value === null ? 'NULL' : typeof value === 'number' ? String(value) : `'${value.replaceAll("'", "''")}'`;
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 export function clientSeedSql(config) {

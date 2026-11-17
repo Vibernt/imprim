@@ -37,7 +37,7 @@ Migrations `0001` through `0021` create or extend these tables. Every realm-owne
 | `codes` | Single-use human OIDC code, redirect, challenge and session. |
 | `access_tokens` | Hashed opaque UserInfo bearer token. |
 | `consumed_codes`, `agent_consumed_codes` | Human and agent code replay tombstones. |
-| `signing_keys` | Public ES256 JWK and sealed private JWK by generation. |
+| `signing_keys` | Public JWK and sealed private JWK by realm, algorithm (ES256 or RS256) and generation. |
 | `invitations` | Client-scoped email admission with expiry. |
 | `audit` | Append-only event, actor, detail and creation time. |
 | `rate_limits` | Separate D1 budgets and Turnstile replay records. |
@@ -100,7 +100,7 @@ ends with "Powered by Imprim". Everything inserted is escaped or an asset id. Fi
 
 ## Keys and maintenance
 
-Private ES256 JWKs are AES-256-GCM sealed with `SEALING_KEY` and `kid` as authenticated data. A successor is published one hour before its 90-day activation; old keys are retained for 24 hours after retirement. An unreadable key is retired and audited; treat that event as an incident. The client refetches JWKS after 10 minutes, refreshes once on an unknown `kid`, and falls back to keys up to 24 hours old only while the issuer is unreachable. Replacing `SEALING_KEY` requires an offline reseal of every sealed value. The every-minute trigger also removes expired short-lived rows, retains expired device rows for one day, deletes unused dynamic registrations after 30 days, and re-queues pending outbox rows ([Operations](OPERATIONS.md#retention-and-the-scheduled-handler)).
+Private ES256 and RS256 JWKs are AES-256-GCM sealed with `SEALING_KEY` and `kid` as authenticated data. A successor is published one hour before its 90-day activation; old keys are retained for 24 hours after retirement. An unreadable key is retired and audited; treat that event as an incident. The client refetches JWKS after 10 minutes, refreshes once on an unknown `kid`, and falls back to keys up to 24 hours old only while the issuer is unreachable. Replacing `SEALING_KEY` requires an offline reseal of every sealed value. The every-minute trigger also removes expired short-lived rows, retains expired device rows for one day, deletes unused dynamic registrations after 30 days, and re-queues pending outbox rows ([Operations](OPERATIONS.md#retention-and-the-scheduled-handler)).
 
 ## Limits, challenge and records
 

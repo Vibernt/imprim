@@ -140,7 +140,7 @@ keep replay IDs for at least 24 hours plus the token lifetime and permitted cloc
 logout, 300 seconds for agent revocation and user events.
 
 Human requests carry `logout_token` with `iss`, app `aud`, `sub`, `sid` where known, stable `jti`, `iat`, `exp` and
-`events:{"http://schemas.openid.net/event/backchannel-logout":{}}`. The JWT is ES256, `typ=logout+jwt`, valid for
+`events:{"http://schemas.openid.net/event/backchannel-logout":{}}`. The JWT uses the app's ID-token algorithm (ES256 unless it chose RS256), `typ=logout+jwt`, valid for
 120 seconds, without `nonce`, following [OIDC Back-Channel
 Logout](https://openid.net/specs/openid-connect-backchannel-1_0.html). Agent events use `revocation_token` and user
 events `event_token` ([Protocol](PROTOCOL.md)). `imprim-client` provides `verifyLogoutToken`,
@@ -169,7 +169,7 @@ retries and receiver behaviour, not a production latency guarantee.
 
 ## Rotation and audit
 
-Rotate now commits a new sealed ES256 key and its audit event. JWKS shows the public key at once and signing starts
+Rotate now commits a new sealed key in each ring (ES256 and RS256) and an audit event for each. JWKS shows the public key at once and signing starts
 **one hour later**; another pending rotation is refused. The previous healthy key stays public for at least
 24 hours after replacement, longer than the longest token (ten minutes). `verification_until` tells healthy retired
 keys from unreadable-key recovery. Clients cache keys and refresh once on an unknown `kid`; no stale verification is
