@@ -129,7 +129,8 @@ fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (IS
 ## Status
 
 Vibernt runs Imprim in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`.
-Both run the same release, deployed on 2026-11-17 (migrations `0001`–`0022`; see [Deploying](docs/DEPLOY.md)). It adds
+Both run the same release, deployed on 2026-11-17 (migrations `0001`–`0023`; see [Deploying](docs/DEPLOY.md)). It adds
+agents at scale (token budgets that suit hosted agents, grants API paging, `agent_assurance`, client 0.7.0's grant calls),
 pages and emails in five languages with branded HTML email, the changes the OpenID conformance suite needed
 (classic OpenID Connect per app, `id_token_hint`, `POST /authorize`, `client_secret_post`, RS256 ID tokens) and the
 fixes it found, to the 2026-11-15 release: the security pass, realms, passwords, two-factor, the account pages,

@@ -42,7 +42,9 @@ This repository does not record which commit a deployment runs or which clients 
 Worker's deployments in Cloudflare before relying on a behaviour described here. The reference deployment's state
 (see the README's Status) is:
 
-- **Production** runs every migration, `0001`–`0022`. Migrations `0020`–`0022` (classic OpenID Connect, languages
+- **Production** runs every migration, `0001`–`0023`. Migration `0023` (agents at scale) and the `AGENT_LIMITER` binding
+  were applied and deployed on 2026-11-17 after a backup; an agent token request then got an OAuth error rather than a
+  missing-binding failure, and the sign-in page and JWKS were unchanged. Migrations `0020`–`0022` (classic OpenID Connect, languages
   and HTML email, RS256) were applied and deployed on 2026-11-17, after a backup and after the same release passed the
   OpenID conformance suite on staging. That day discovery listed ES256 and RS256, JWKS kept the existing ES256 key
   beside the new RS256 one, every app's sign-in page rendered, and an app without the classic switch was still
