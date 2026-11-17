@@ -34,9 +34,11 @@ import { result, linkButton, escapeHtml } from './pages/ui.mjs';
 import { themeResponse } from './branding/theme.mjs';
 import { startLocale, t, tError, brandCopy } from './i18n/index.mjs';
 import { serveAsset } from './branding/assets.mjs';
+import { workspaceApi, workspaceApiPath } from './workspaces/api.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
 async function route(request, env, ctx, url) {
     if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return admin(request, env, ctx);
+    if (workspaceApiPath(request.method, url.pathname)) return workspaceApi(request, env, ctx, url);
     const brandAsset = request.method === 'GET' && /^\/assets\/brand\/([0-9a-f]{64})$/.exec(url.pathname);
     if (brandAsset) return serveAsset(env, brandAsset[1]);
     const start = request.method === 'GET' && PROVIDER_START.exec(url.pathname);
@@ -102,7 +104,7 @@ const unlimited = new Set(['GET /.well-known/openid-configuration', 'GET /.well-
     'GET /assets/local.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'GET /assets/theme.css', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations',
     'POST /introspect', 'POST /revoke', 'GET /v1/grants', 'POST /v1/grants/revoke']);
 export function limiterFor(method, path) {
-    if (unlimited.has(`${method} ${path}`)) return null;
+    if (unlimited.has(`${method} ${path}`) || workspaceApiPath(method, path)) return null;
     return path.startsWith('/v1/auth/') || path.startsWith('/login/provider/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';
 }
 // Browser endpoints whose errors a person reads (sign-in.js, passkey.js and the account forms show them).
@@ -132,10 +134,12 @@ export async function handleRequest(request, base, ctx) {
         if (!known) console.error(JSON.stringify({ type: 'request_failed', path: url.pathname, code: 'internal_error' }));
         const code = known ? error.code : 'server_error', status = known ? error.status : 500;
         // A person's browser may POST an authorization request (OIDC Core 3.1.2.1); refusals before the redirect is trusted are pages.
-        const html = (request.method === 'GET' || url.pathname === '/authorize') && request.headers.get('accept')?.includes('text/html');
+        const workspaceRequest = workspaceApiPath(request.method, url.pathname);
+        const html = !workspaceRequest && (request.method === 'GET' || url.pathname === '/authorize') && request.headers.get('accept')?.includes('text/html');
         // People read the message on an error page, or in the sign-in and account scripts, so it is translated there.
         // Protocol endpoints keep English: RFC 6749 limits error_description to ASCII, and developers read it.
-        const message = known ? (html || PEOPLE_PATHS.test(url.pathname) ? tError(env, error) : error.message) : t(env, 'The request could not be completed.');
+        const message = known ? (html || PEOPLE_PATHS.test(url.pathname) ? tError(env, error) : error.message)
+            : workspaceRequest ? 'The request could not be completed.' : t(env, 'The request could not be completed.');
         // A person who opens their account page while signed out gets a page that says how to sign in, whatever
         // the request's Accept header; API clients of the same paths use POST and still get JSON.
         const signedOut = code === 'login_required' && request.method === 'GET' && /^\/(account(\/|$)|mfa$)/.test(url.pathname);
