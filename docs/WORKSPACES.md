@@ -19,9 +19,9 @@ for all the products the workspace uses. Products keep everything product-specif
 - **Workspace.** `id` is `ws_` plus 32 lowercase hex characters, permanent and never reused. An import may keep an
   existing product id if it matches `^[A-Za-z0-9_-]{1,64}$` and is unused. `kind` is `team` or `personal`. `status`
   is `active` or `closed`; closing never deletes the row.
-- **Base roles:** `owner`, `admin`, `member`, `viewer`, in that order of power. A team workspace always has at least
-  one owner. Only an owner can grant or remove `owner`. A personal workspace has exactly one member, its owner, and
-  takes no invitations.
+- **Base roles:** `owner`, `admin`, `member`, `viewer`, in that order of power. A team workspace keeps at least one
+  owner once its first owner joins. Only an owner can grant or remove a member's `owner` role. A personal workspace
+  has exactly one member, its owner, and takes no invitations.
 - **Version.** Every workspace has an integer `version`, raised by one in the same batch as every change to its
   name, members, roles, products or status. Each event carries the version after the change.
 
@@ -113,8 +113,13 @@ join an active workspace in its realm by adding its own product. Bodies are JSON
 | `PUT` / `DELETE /v1/workspaces/{id}/holds` | app | `{ reason }`; one hold per app per workspace |
 | `PUT` / `DELETE /v1/workspaces/{id}/resources` | app | `{ resource }`; the resource must sit under the app's own `agent_resource_prefixes`. Re-registering the same resource to the same workspace by the same app returns `200` with the current workspace snapshot and changes nothing. A registration held by another workspace or app returns `409`. |
 
+An app with `workspace_admin='on'` and a valid `actor_token` can send or resend an `owner` invitation, revoke an
+invitation, or close an active team workspace that uses its product and has zero members. Any hold still blocks
+close. The write checks that the roster is still empty and records `unjoined: true` in the audit detail. Once anyone
+joins, the usual owner and admin permissions apply.
+
 Rules every change enforces in one `DB.batch`, guarded so concurrent writes cannot break them: the workspace is
-active; `version` rises by one; a team workspace keeps at least one owner (`409 last_owner`); a personal workspace
+active; `version` rises by one; a joined team workspace keeps at least one owner (`409 last_owner`); a personal workspace
 never gains a second member; the matching events go into the outbox; an `audit` row records actor and change.
 
 ## Signing in to a shared app

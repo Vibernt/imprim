@@ -5,6 +5,7 @@ describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
 ## Unreleased
 
+- Apps with workspace administration enabled can invite owners, revoke invitations, and close team workspaces using their product before the first member joins.
 - Re-registering a workspace resource to the same workspace by the same app returns the current snapshot without changing it.
 - Apps can manage only their own workspace product and may add it to an active workspace when acting for an owner or realm admin.
 - Client `0.8.1` lets `handleCallback` return the verified ID token for use as `actor_token`.

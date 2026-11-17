@@ -117,7 +117,7 @@ function writeChecks(env, client, actor, id, now, creating, joinGuard) {
 // The conditional write claims the next version. The assertion aborts the batch if no version was claimed,
 // unless all guards passed and the requested state already exists.
 async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, create, joinGuard,
-    effects = [], afterEvent = [], event, eventOptions, audit, detail = {}, writeIf, finalEffect }) {
+    effects = [], afterEvent = [], event, eventOptions, audit, detail = {}, unjoined, writeIf, finalEffect }) {
     const guards = [...writeChecks(env, client, actor, id, now, Boolean(create), joinGuard), ...checks];
     const where = guards.map(guard => `(${guard.sql})`).join(' AND '), args = guards.flatMap(guard => guard.args);
     const condition = writeIf ? ` AND (${writeIf.sql})` : '', conditionArgs = writeIf?.args ?? [];
@@ -129,9 +129,11 @@ async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, 
         ? env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT 0 WHERE changes()<>1 AND NOT (${where} AND NOT (${writeIf.sql}))`)
             .bind(...args, ...conditionArgs)
         : env.DB.prepare('INSERT INTO admin_assertions(ok) SELECT CASE WHEN changes()=1 THEN 1 ELSE 0 END');
+    const auditDetail = unjoined ? `json_patch(?, CASE WHEN (${unjoined.sql}) THEN '{"unjoined":true}' ELSE '{}' END)` : '?';
     const record = env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id)
-        SELECT ?,?,?,json_set(?,'$.version',version),?,realm_id FROM workspaces WHERE id=?${condition}`)
-        .bind(audit ?? event, actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, ...(client ? { client_id: client.id } : { source: 'admin_console' }) }), now, id, ...conditionArgs);
+        SELECT ?,?,?,json_set(${auditDetail},'$.version',version),?,realm_id FROM workspaces WHERE id=?${condition}`)
+        .bind(audit ?? event, actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, ...(client ? { client_id: client.id } : { source: 'admin_console' }) }),
+            ...(unjoined?.args ?? []), now, id, ...conditionArgs);
     let result;
     try {
         result = await env.DB.batch([write, assertion, ...effects, ...workspaceEventStatements(env, id, event, { ...eventOptions, writeIf }),
@@ -155,9 +157,20 @@ async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, 
 const membership = (rolesSql = '') => `EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id=? ${rolesSql})`;
 const adminMember = membership("AND role IN ('owner','admin')");
 const ownerMember = membership("AND role='owner'");
-const actorRole = (id, actor, sql = adminMember) => denied(sql, [id, actor.user.id]);
-const manage = (id, actor) => actor.admin ? [] : [actorRole(id, actor)];
+const actorRole = (id, actor, sql = adminMember, unjoined) => unjoined
+    ? denied(`(${sql} OR (${unjoined.sql}))`, [id, actor.user.id, ...unjoined.args])
+    : denied(sql, [id, actor.user.id]);
+const manage = (id, actor, unjoined) => actor.admin ? [] : [actorRole(id, actor, adminMember, unjoined)];
 const flag = (client, name) => denied(`EXISTS(SELECT 1 FROM clients WHERE id=? AND ${name}='on')`, [client.id], 'App is not enabled for this workspace operation.');
+
+// Product visibility and the live actor are checked by writeChecks. These writes leave the roster intact,
+// so the audit can use the same predicate as the permission guard.
+const unjoinedAppRule = (client, id) => client && {
+    sql: `EXISTS(SELECT 1 FROM workspaces w WHERE w.id=? AND w.kind='team'
+        AND NOT EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=w.id))
+        AND EXISTS(SELECT 1 FROM clients WHERE id=? AND workspace_admin='on')`,
+    args: [id, client.id]
+};
 
 function addProducts(env, id, products, now) {
     return env.DB.prepare(`INSERT INTO workspace_products(workspace_id,product,created)
@@ -234,10 +247,11 @@ export function setWorkspaceProducts(env, client, actor, id, body) {
 export async function inviteToWorkspace(env, client, actor, id, body) {
     const email = normalizeEmail(body.email), role = validRole(body.role), now = Date.now();
     const invitation = newInvitation(env, client, actor, id, email, role, now);
-    const checks = [...(role === 'owner' ? [actorRole(id, actor, ownerMember)] : manage(id, actor)),
+    const unjoined = role === 'owner' ? unjoinedAppRule(client, id) : null;
+    const checks = [...(role === 'owner' ? [actorRole(id, actor, ownerMember, unjoined)] : manage(id, actor)),
         conflict("EXISTS(SELECT 1 FROM workspaces WHERE id=? AND kind='team')", [id],
             'personal_workspace', 'A personal workspace does not take invitations.')];
-    await guardedWrite(env, { client, actor, id, now, checks,
+    await guardedWrite(env, { client, actor, id, now, checks, unjoined,
         effects: [env.DB.prepare(`UPDATE workspace_invitations SET revoked_at=? WHERE workspace_id=? AND email=?
             AND accepted_at IS NULL AND revoked_at IS NULL`).bind(now, id, email), invitation.statement],
         event: 'workspace-updated', audit: 'workspace-invited', detail: { invitation_id: invitation.message.invitationId, role } });
@@ -246,7 +260,8 @@ export async function inviteToWorkspace(env, client, actor, id, body) {
 
 export function revokeWorkspaceInvitation(env, client, actor, id, invitationId) {
     const open = 'id=? AND workspace_id=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>?', now = Date.now();
-    return guardedWrite(env, { client, actor, id, now, checks: [...manage(id, actor),
+    const unjoined = unjoinedAppRule(client, id);
+    return guardedWrite(env, { client, actor, id, now, unjoined, checks: [...manage(id, actor, unjoined),
         missing(`EXISTS(SELECT 1 FROM workspace_invitations WHERE ${open})`, [invitationId, id, now], 'Invitation not found.')],
         effects: [env.DB.prepare(`UPDATE workspace_invitations SET revoked_at=? WHERE ${open}`).bind(now, invitationId, id, now)],
         event: 'workspace-updated', audit: 'workspace-invitation-revoked', detail: { invitation_id: invitationId } });
@@ -290,11 +305,12 @@ export async function closeWorkspace(env, client, actor, id) {
         const { results: holds } = await env.DB.prepare('SELECT reason FROM workspace_holds WHERE workspace_id=? ORDER BY client_id').bind(id).all();
         return 'Workspace is held. Reasons include ' + holds.map(hold => hold.reason).join(', ');
     });
-    const checks = [...(actor.admin ? [] : [actorRole(id, actor, ownerMember)]), held,
+    const unjoined = unjoinedAppRule(client, id);
+    const checks = [...(actor.admin ? [] : [actorRole(id, actor, ownerMember, unjoined)]), held,
         conflict(`NOT EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id NOT IN (SELECT value FROM json_each(?)))
             AND (SELECT count(*) FROM workspace_members WHERE workspace_id=?)=?`,
         [id, JSON.stringify(members), id, members.length], 'conflict', 'Workspace membership changed. Reload and try again.')];
-    return guardedWrite(env, { client, actor, id, now, checks,
+    return guardedWrite(env, { client, actor, id, now, checks, unjoined,
         effects: [...members.flatMap(sub => accessEndStatements(env, id, sub)),
             env.DB.prepare("UPDATE workspaces SET status='closed',closed_at=? WHERE id=?").bind(now, id)],
         event: 'workspace-closed' });
