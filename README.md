@@ -12,8 +12,10 @@ step.
 - **Agents connect for a person, never as one.** A person gives their agent (Claude Code, Cursor, Codex, a CLI) an
   app's MCP address. The agent discovers Imprim, the person approves one workspace and named scopes, and the agent
   gets 60-second, audience-bound tokens that the person can revoke at any time.
-- **Apps keep authorisation.** Imprim proves who someone is and what they consented to. Your app keeps workspaces,
-  memberships, roles and its own sessions, and checks them on every request.
+- **Apps keep authorisation.** Imprim proves who someone is and what they consented to. Your app owns its sessions
+  and checks permissions on every request.
+- **Shared and personal workspaces.** Products can opt in to share team memberships, base roles and invitations
+  through Imprim, and give each person a workspace of their own. [Shared workspaces](docs/WORKSPACES.md)
 - **Many brands, one deployment.** Each realm has its own issuer host, signing keys, users, provider credentials,
   email sender, admins and branding. Branding is a look (palette, tone, type set and other tweaks) plus a name,
   copy, links and logos, and each app can override it.

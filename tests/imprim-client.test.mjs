@@ -169,6 +169,6 @@ test('client invitation and missing ID token', async t => {
 test('vendored body hash matches header', async () => {
     const file = await readFile(new URL('../dist/imprim-client.mjs', import.meta.url), 'utf8');
     const [header, ...body] = file.split('\n');
-    assert.match(header, /^\/\/ imprim-client 0\.7\.0 body-sha256 [a-f0-9]{64}/);
+    assert.match(header, /^\/\/ imprim-client 0\.8\.0 body-sha256 [a-f0-9]{64}/);
     assert.equal(header.split(' ').at(-1), createHash('sha256').update(body.join('\n')).digest('hex'));
 });

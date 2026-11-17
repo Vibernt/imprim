@@ -10,7 +10,7 @@ const footer = '\n\n--\nAcme accounts run on Imprim.\nHelp: help@acme.example\nÂ
 const branding = { name: 'Acme', legal_name: 'Acme Ltd', support_email: 'help@acme.example', copy: { footer: 'Acme accounts run on Imprim.' } };
 const realm = { name: 'Vibernt', copy: { footer: 'Acme accounts run on Imprim.' }, legal_name: 'Acme Ltd', support_email: 'help@acme.example' };
 const security = `\n\nIf this was not you, sign in with an email link at ${ISSUER}/login, then review your account at ${ISSUER}/account.`;
-// Every kind's English text and subject, exactly as Imprim sent them before HTML email and translations.
+// Exact English text and subjects for every kind, including the original copy for established messages.
 const ENGLISH = {
     sign_in_link: [{ links: { link: `${ISSUER}/login#token=abc` }, branding }, 'Sign in to Acme',
         `Open this link in the browser where you started, then choose Sign in. It expires in 15 minutes.\n\n${ISSUER}/login#token=abc\n\nIgnore this email if you did not request it.${footer}`],
@@ -18,6 +18,8 @@ const ENGLISH = {
         `Open this link in the browser where you started, then choose Continue, then set your password. It expires in 15 minutes.\n\n${ISSUER}/login#token=abc\n\nIgnore this email if you did not request it.${footer}`],
     email_change_link: [{ links: { link: `${ISSUER}/account/email/confirm?token=abc` } }, 'Vibernt: confirm your new email',
         `Open this link in the browser where you asked for the change, then choose Confirm. It expires in 15 minutes.\n\n${ISSUER}/account/email/confirm?token=abc\n\nIgnore this email if you did not ask for it.`],
+    workspace_invitation: [{ vars: { inviter: 'lee@example.com', workspace: 'team-one', products: 'notes' }, links: { invitation_url: 'https://app.example/start' } },
+        'Invitation to team-one', `lee@example.com invited you to join team-one.\n\nProducts in this workspace: notes.\n\nhttps://app.example/start${footer}`],
     new_sign_in: [{ vars: { device: 'Chrome on macOS', time: TIME } }, 'Vibernt: new sign-in', `Your account was signed in from Chrome on macOS on ${new Date(TIME).toUTCString()}.${security}${footer}`],
     new_sign_in_at: [{ vars: { device: 'Firefox', place: 'Berlin, DE', time: TIME } }, 'Vibernt: new sign-in', `Your account was signed in from Firefox in Berlin, DE on ${new Date(TIME).toUTCString()}.${security}${footer}`],
     password_changed: [{ vars: { time: TIME } }, 'Vibernt: your password was changed', `Your password was changed on ${new Date(TIME).toUTCString()}. Other signed-in sessions were signed out.${security}${footer}`],

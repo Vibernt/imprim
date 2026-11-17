@@ -13,6 +13,7 @@ Identity for people and the agents that act for them: OpenID Connect and OAuth 2
 |---|---|
 | [Deploying](DEPLOY.md) | Running Imprim on Cloudflare, staging releases and upgrades |
 | [Realms](REALMS.md) | Several brands on one deployment: hosts, keys, users, providers, admins |
+| [Shared workspaces](WORKSPACES.md) | Team and personal workspaces, shared memberships, invitations and product access |
 | [Branding](BRANDING.md) | A Fire look, name, copy, links, logos and languages per realm and per app, and the HTML email |
 | [Fire](fire/README.md) | The design system every page is built with, and how Imprim uses it |
 | [Languages](TRANSLATING.md) | How a page's and an email's language is chosen, and how to add or fix a translation |

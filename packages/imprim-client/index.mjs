@@ -2,6 +2,7 @@ import { resourceMetadata, challengeHeader } from './resources.mjs';
 import { createVerifier } from './jwt.mjs';
 import { backchannelMethods, validateResourcePrefixes } from './backchannel.mjs';
 import { verifyDpopProof } from './dpop.mjs';
+import { workspaceMethods } from './workspaces.mjs';
 // Zero-dependency OIDC relying-party client for Workers and Node 20+.
 // `message` is always this package's own text. Server-supplied `error_description` is kept apart in `description`:
 // it is untrusted input, so escape it before showing it.
@@ -71,6 +72,7 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
     const verify = createVerifier({ keys, issuerText, clientId, resourcePrefixes, fail });
     return {
         ...backchannelMethods(verify, fail),
+        ...workspaceMethods(workspaceRequest, fail),
         // acrValues / maxAge ask for a stronger or fresher sign-in (step-up); check claims.acr and auth_time after.
         async startLogin({ state, nonce, prompt, loginHint, method, acrValues, maxAge } = {}) {
             if (!redirectUri) fail('configuration', 'redirectUri is required for login.');
@@ -171,6 +173,15 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
     function appCredentials(what) {
         if (clientSecret === undefined) fail('configuration', `${what} requires a confidential client.`);
         return `Basic ${btoa(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`)}`;
+    }
+    async function workspaceRequest(method, path, body) {
+        const headers = { authorization: appCredentials('The workspace API') };
+        const init = { method, headers, redirect: 'error' };
+        if (body !== undefined) {
+            headers['content-type'] = 'application/json';
+            init.body = JSON.stringify(body);
+        }
+        return responseJson(await request(issuerText + path, init), 'workspaces');
     }
 }
 

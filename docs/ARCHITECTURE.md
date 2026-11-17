@@ -1,6 +1,6 @@
 # Architecture
 
-Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindings, a Queue, an every-minute trigger and static assets for the Fire design system. The client package runs in app Workers or Node. Apps keep authorization, workspace membership, API tokens and their own sessions. See [Protocol](PROTOCOL.md) for exact endpoint contracts, [Deploying](DEPLOY.md) for setup and [Operations](OPERATIONS.md) for running it.
+Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindings, a Queue, an every-minute trigger and static assets for the Fire design system. The client package runs in app Workers or Node. Apps keep authorization, API tokens and their own sessions. Apps own workspace membership by default and can opt in to share membership and base roles through Imprim. See [Shared workspaces](WORKSPACES.md), [Protocol](PROTOCOL.md), [Deploying](DEPLOY.md) and [Operations](OPERATIONS.md).
 
 ## Components
 
@@ -18,12 +18,12 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 | Have I Been Pwned | Range API (k-anonymity) for breached-password checks; only a 5-character hash prefix leaves. |
 | Turnstile | Checks email requests when both keys are configured. |
 | `AUTH_LIMITER`, `API_LIMITER`, `AGENT_LIMITER` | Per-IP Workers rate bindings; `AGENT_LIMITER` is the looser one for agent token requests. |
-| `LOGOUT_QUEUE` | Delivers back-channel logout, agent revocation and user lifecycle events; failures retry and reach the DLQ. |
+| `LOGOUT_QUEUE` | Delivers back-channel logout, agent revocation, user lifecycle and workspace events. Failed deliveries retry and can reach the dead-letter queue. |
 | Every-minute trigger | Rotates keys per realm, deletes expired state and re-queues pending back-channel events. |
 
 ## D1 schema
 
-Migrations `0001` through `0023` create or extend these tables. Every realm-owned row carries `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0024` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|
@@ -61,6 +61,8 @@ Migrations `0001` through `0023` create or extend these tables. Every realm-owne
 | `dpop_proofs` | DPoP proof `jti` replay records. |
 | `user_event_outbox` | Signed user lifecycle events pending delivery to apps that opted in. |
 | `brand_assets` | Realm-scoped, content-addressed logos and marks. |
+| `workspaces`, `workspace_members`, `workspace_products`, `workspace_invitations` | Realm workspaces, base roles, participating products and shared invitations. |
+| `workspace_resources`, `workspace_holds`, `workspace_event_outbox` | Registered agent resources, app holds on closing a workspace and durable workspace events. |
 
 `audit` rejects updates, and deletes of rows younger than 400 days, through triggers. App client IDs and agent client IDs use separate tables. Users imported with `scripts/import-users.mjs` keep their ids as `users.id`, which is the token `sub`.
 
@@ -76,7 +78,7 @@ Migrations `0001` through `0023` create or extend these tables. Every realm-owne
 
 **Logout.** `GET /logout` validates the app and optional registered return URI, then shows a confirmation if a session exists. The same-origin CSRF-protected POST deletes the identity session, associated codes and UserInfo tokens. App sessions remain the app's responsibility; each app with a session is sent a signed back-channel `logout_token` through the queue. Agent grant revocation sends a distinct signed `revocation_token`.
 
-**Invitations.** A confidential app calls `POST /v1/invitations` with Basic authentication. Imprim stores a normalized, client-scoped email for 30 days. Sign-in admission can use it, but app workspace membership stays local.
+**Invitations.** A confidential app calls `POST /v1/invitations` to admit an email address to that app for 30 days. Shared workspace invitations admit people to the workspace's products after mailbox or provider proof. Workspace writes commit state, audit and outbox rows together. The invitation email is sent after the commit. [Shared workspaces](WORKSPACES.md)
 
 **Agent flow.** A resource challenge leads to issuer discovery. The public agent uses an HTTPS metadata document or dynamic registration, then PKCE authorization or device code. The person signs in through the owning app and approves the resource and scopes. Imprim issues a short ES256 access JWT and rotating refresh token. See [Agent access](AGENT_ACCESS.md).
 

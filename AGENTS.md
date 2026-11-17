@@ -2,7 +2,7 @@
 
 Read README.md, docs/ARCHITECTURE.md and docs/ROADMAP.md first. Read docs/PROTOCOL.md before changing protocol behavior.
 - Native ESM, no runtime dependencies, no build step. Keep modules small and grouped by concern.
-- Preserve imported principal ids as subjects. Apps retain authorization, memberships and their own sessions.
+- Preserve imported principal ids as subjects. Apps retain authorization and their own sessions. Apps keep their own memberships unless they opt in to [shared workspaces](docs/WORKSPACES.md), where Imprim manages membership and base roles.
 - Never bypass client, browser, Origin, CSRF, admission or single-use boundaries. Add negative tests for each change.
 - No network calls inside database transactions. No mocked production success or automatic fallback.
 - Explain a failed dependency and any proposed fallback; the owner decides whether to use it.

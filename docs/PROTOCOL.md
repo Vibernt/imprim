@@ -1,7 +1,8 @@
 # Protocol
 
 Every route below is served on each realm's issuer, for example `https://id.example.com`. Imprim proves a person's
-identity; apps keep workspace admission, memberships, roles, local sessions and API tokens. Users imported with
+identity. Apps own local sessions and API tokens, and manage workspace membership and roles by default. Shared
+apps can opt in to membership and base roles managed by Imprim. Users imported with
 `scripts/import-users.mjs` keep their ids as `sub`. Imprim is not yet OpenID-certified; see the
 [release gates](OPERATIONS.md#release-gates).
 
@@ -347,7 +348,8 @@ query/fragment, encoded slash, backslash or dot, percent-encoded unreserved char
 segments or a trailing slash, so one route has exactly one audience (prefixes may end in `/`); one app must own its complete path prefix. A second resource is
 rejected, including duplicate parameters. The stored resource cannot change during code exchange or refresh. The
 workspace label is the decoded `/w/<workspace>` segment where present, otherwise the resource path is displayed.
-Apps remain responsible for workspace membership and current authorization.
+For registered resources in an active shared workspace, consent requires workspace membership and shows the
+workspace name. Apps check current authorization on every call. [Shared workspaces](WORKSPACES.md#agents)
 
 Agent redirect registration permits exact HTTPS or HTTP loopback on `127.0.0.1`, `[::1]`, and `localhost`. Only the
 loopback port may vary at authorization; token redemption requires the exact requested URI. Codes are 256-bit random,
@@ -497,6 +499,15 @@ five-minute lifetime, `toe` = when the change happened) per change. Apply events
 Delivery uses the same durable outbox, queue, retry, 24-hour window and dead-letter queue as logout. Verify the event
 with `imprim-client` 0.6.0 (`handleUserEvent(request)` or `verifyBackchannel(form)` → `kind: 'user'`) and
 deduplicate `jti`.
+
+**Shared workspace API.** `GET /v1/memberships?sub=` and the routes under `/v1/workspaces` use confidential client
+credentials. A participating app can access workspaces that use its product. Writes on someone's behalf include
+`actor_token` in the JSON body, an ID token issued to that app for a live Imprim session. See the full [App API](WORKSPACES.md#app-api).
+
+**Workspace events.** The back channel receives a form-encoded `workspace_token`: an ES256 `secevent+jwt` with
+an issuer-relative event type, the app as `aud`, a stable `jti`, a five-minute lifetime and the workspace id and
+version in the payload. Member events also identify the affected `sub`. Deduplicate `jti`, apply newer workspace
+versions, and catch up with the members API. The outbox retries for 24 hours. [Workspace event types and payloads](WORKSPACES.md#events)
 
 **Audit export.** `GET /admin/api/audit/export?after=<id>` returns the realm's audit rows as NDJSON, oldest first,
 1,000 a page, with `x-next-after` while more remain. Audit is kept for 400 days.

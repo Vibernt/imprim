@@ -20,7 +20,30 @@ export interface RevocationClaims { sub: string; jti: string; grantId: string; r
 // User lifecycle events (0.6.0). `toe` is when the change happened: apply the latest for each person.
 export type UserEventName = 'user-updated' | 'user-blocked' | 'user-unblocked' | 'user-deleted' | 'user-merged' | 'mfa-reset';
 export interface UserEventClaims { sub: string; jti: string; event: UserEventName; data: { fields?: ('name' | 'email')[]; into?: string }; toe: number; iat: number; exp: number; }
-export type BackchannelEvent = { kind: 'logout'; claims: LogoutClaims } | { kind: 'revocation'; claims: RevocationClaims } | { kind: 'user'; claims: UserEventClaims };
+export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
+export type WorkspaceKind = 'team' | 'personal';
+export type WorkspaceEventName = 'workspace-member-added' | 'workspace-member-removed' | 'workspace-role-changed' |
+    'workspace-updated' | 'workspace-products-changed' | 'workspace-closed';
+export interface WorkspaceEventClaims {
+    event: WorkspaceEventName;
+    workspaceId: string;
+    sub: string | undefined;
+    version: number;
+    payload: { workspace_id: string; version: number; role?: WorkspaceRole; name?: string; products?: string[] };
+    jti: string;
+}
+export type BackchannelEvent = { kind: 'logout'; claims: LogoutClaims } | { kind: 'revocation'; claims: RevocationClaims } |
+    { kind: 'user'; claims: UserEventClaims } | { kind: 'workspace'; claims: WorkspaceEventClaims };
+export interface WorkspaceSummary { workspace_id: string; name: string; kind: WorkspaceKind; products: string[]; version: number; }
+export interface WorkspaceDetails extends WorkspaceSummary { status: 'active' | 'closed'; }
+export interface WorkspaceMembership extends WorkspaceSummary { role: WorkspaceRole; }
+export interface WorkspaceMember { sub: string; email: string; role: WorkspaceRole; }
+export interface WorkspaceInvitationReceipt { invitation_id: string; expires_at: number; }
+export interface WorkspaceInvitation extends WorkspaceInvitationReceipt { email: string; role: WorkspaceRole; }
+export interface WorkspaceActor { actorToken: string; }
+export type CreateWorkspaceOptions = WorkspaceActor & (
+    { kind?: 'team'; name: string; products: string[]; firstOwnerEmail: string } | { kind: 'personal'; name: string }
+);
 export function verifyLogoutToken(token: string, options: EventClientOptions): Promise<LogoutClaims>;
 export function verifyRevocationToken(token: string, options: EventClientOptions): Promise<RevocationClaims>;
 export function verifyBackchannel(form: FormData | URLSearchParams, options: EventClientOptions): Promise<BackchannelEvent>;
@@ -45,6 +68,22 @@ export interface IdentityClient {
     listGrants(options: { resource: string; sub?: string; limit?: number; cursor?: string | null }): Promise<{ grants: AgentGrant[]; next_cursor: string | null }>;
     revokeGrant(grantId: string): Promise<{ grant_id: string; revoked: true }>;
     introspect(token: string, options?: { tokenTypeHint?: 'access_token' | 'refresh_token' }): Promise<Introspection>;
+    memberships(sub: string): Promise<{ memberships: WorkspaceMembership[] }>;
+    workspace(id: string): Promise<WorkspaceDetails>;
+    workspaceMembers(id: string, options?: { limit?: number; cursor?: string | null }): Promise<{ members: WorkspaceMember[]; next_cursor: string | null; version: number }>;
+    createWorkspace(options: CreateWorkspaceOptions): Promise<unknown>;
+    renameWorkspace(id: string, options: WorkspaceActor & { name: string }): Promise<unknown>;
+    setWorkspaceProducts(id: string, options: WorkspaceActor & { add: string[]; remove: string[] }): Promise<unknown>;
+    inviteToWorkspace(id: string, options: WorkspaceActor & { email: string; role: WorkspaceRole }): Promise<WorkspaceInvitationReceipt>;
+    workspaceInvitations(id: string): Promise<{ invitations: WorkspaceInvitation[] }>;
+    revokeWorkspaceInvitation(id: string, invitationId: string, options: WorkspaceActor): Promise<unknown>;
+    setMemberRole(id: string, sub: string, options: WorkspaceActor & { role: WorkspaceRole }): Promise<unknown>;
+    removeMember(id: string, sub: string, options: WorkspaceActor): Promise<unknown>;
+    closeWorkspace(id: string, options: WorkspaceActor): Promise<unknown>;
+    holdWorkspace(id: string, reason: string): Promise<unknown>;
+    releaseWorkspace(id: string, reason?: string): Promise<unknown>;
+    registerWorkspaceResource(id: string, resource: string): Promise<unknown>;
+    unregisterWorkspaceResource(id: string, resource: string): Promise<unknown>;
 }
 export type AgentAssurance = 'key' | 'redirect' | 'claimed' | 'none';
 export interface AgentGrant {

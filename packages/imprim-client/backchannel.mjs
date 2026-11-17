@@ -32,21 +32,42 @@ export function validateResourcePrefixes(prefixes, fail) {
 }
 // User lifecycle events (0.6.0): one `${issuer}/events/<event>` with a small payload object.
 export const USER_EVENTS = ['user-updated', 'user-blocked', 'user-unblocked', 'user-deleted', 'user-merged', 'mfa-reset'];
-function userEventClaims(header, claims, { issuer, clientId, clockSkewSeconds = 60 }, fail) {
+const workspaceMemberEvents = ['workspace-member-added', 'workspace-member-removed', 'workspace-role-changed'];
+const workspaceEvents = [...workspaceMemberEvents, 'workspace-updated', 'workspace-products-changed', 'workspace-closed'];
+function lifecycleEvent(header, claims, { issuer, clientId, clockSkewSeconds = 60 }, events, fail) {
     if (!Number.isInteger(clockSkewSeconds) || clockSkewSeconds < 0 || clockSkewSeconds > 60) fail('configuration', 'Clock skew must be an integer from 0 to 60 seconds.');
     const now = Math.floor(Date.now() / 1000), keys = claims.events && typeof claims.events === 'object' && !Array.isArray(claims.events) ? Object.keys(claims.events) : [];
     const name = keys.length === 1 && keys[0].startsWith(`${issuer}/events/`) ? keys[0].slice(issuer.length + 8) : null, payload = name && claims.events[keys[0]];
-    if (header.typ !== 'secevent+jwt' || claims.iss !== issuer || claims.aud !== clientId || !nonempty(claims.sub) || !nonempty(claims.jti) || claims.nonce !== undefined ||
-        !USER_EVENTS.includes(name) || !payload || typeof payload !== 'object' || Array.isArray(payload) ||
+    if (header.typ !== 'secevent+jwt' || claims.iss !== issuer || claims.aud !== clientId || !nonempty(claims.jti) || claims.nonce !== undefined ||
+        !events.includes(name) || !payload || typeof payload !== 'object' || Array.isArray(payload) ||
         !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp) || claims.exp <= claims.iat || claims.exp - claims.iat > 900 || claims.exp <= now || claims.iat > now + clockSkewSeconds ||
-        (claims.nbf !== undefined && (!Number.isInteger(claims.nbf) || claims.nbf > now + clockSkewSeconds)) || !Number.isInteger(claims.toe) || claims.toe > claims.iat + clockSkewSeconds ||
+        (claims.nbf !== undefined && (!Number.isInteger(claims.nbf) || claims.nbf > now + clockSkewSeconds)) || !Number.isInteger(claims.toe) || claims.toe > claims.iat + clockSkewSeconds)
+        fail('invalid_token', events === USER_EVENTS ? 'Invalid user event token.' : 'Invalid workspace event token.');
+    return { name, payload };
+}
+function userEventClaims(header, claims, options, fail) {
+    const { name, payload } = lifecycleEvent(header, claims, options, USER_EVENTS, fail);
+    if (!nonempty(claims.sub) ||
         (payload.fields !== undefined && !(Array.isArray(payload.fields) && payload.fields.every(f => ['name', 'email'].includes(f)))) || (payload.into !== undefined && !nonempty(payload.into)))
         fail('invalid_token', 'Invalid user event token.');
     // toe orders events: apply the one with the latest toe for each person.
     return { sub: claims.sub, jti: claims.jti, event: name, data: payload, toe: claims.toe, iat: claims.iat, exp: claims.exp };
 }
+function workspaceEventClaims(header, claims, options, fail) {
+    const { name, payload } = lifecycleEvent(header, claims, options, workspaceEvents, fail);
+    const { workspace_id, version, role, products } = payload;
+    if (typeof workspace_id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(workspace_id) ||
+        !Number.isSafeInteger(version) || version < 1 ||
+        (workspaceMemberEvents.includes(name) ? !nonempty(claims.sub) : claims.sub !== undefined) ||
+        ((name === 'workspace-member-added' || name === 'workspace-role-changed') && !['owner', 'admin', 'member', 'viewer'].includes(role)) ||
+        (name === 'workspace-updated' && !nonempty(payload.name)) ||
+        (name === 'workspace-products-changed' && !(Array.isArray(products) && products.every(product => typeof product === 'string' && /^[a-z][a-z0-9-]{1,39}$/.test(product)))))
+        fail('invalid_token', 'Invalid workspace event token.');
+    return { event: name, workspaceId: workspace_id, sub: claims.sub, version, payload, jti: claims.jti };
+}
 export function validateBackchannelClaims(header, claims, options, kind, fail) {
     if (kind === 'user') return userEventClaims(header, claims, options, fail);
+    if (kind === 'workspace') return workspaceEventClaims(header, claims, options, fail);
     eventClaims(header, claims, options, kind, fail);
     if (kind === 'logout') {
         if ((claims.sub !== undefined && !nonempty(claims.sub)) || (claims.sid !== undefined && !nonempty(claims.sid)) ||
@@ -66,15 +87,19 @@ export function backchannelMethods(verify, fail) {
     const verifyLogoutToken = (token, options = {}) => verify(token, { logout: true, clockSkewSeconds: options.clockSkewSeconds });
     const verifyRevocationToken = (token, options = {}) => verify(token, { revocation: true, clockSkewSeconds: options.clockSkewSeconds });
     const verifyUserEventToken = (token, options = {}) => verify(token, { userEvent: true, clockSkewSeconds: options.clockSkewSeconds });
+    const formFields = [
+        ['logout_token', 'logout', verifyLogoutToken],
+        ['revocation_token', 'revocation', verifyRevocationToken],
+        ['event_token', 'user', verifyUserEventToken],
+        ['workspace_token', 'workspace', (token, options = {}) => verify(token, { workspaceEvent: true, clockSkewSeconds: options.clockSkewSeconds })]
+    ];
     async function verifyBackchannel(form, options) {
         if (!form || typeof form.getAll !== 'function') fail('invalid_response', 'FormData or URLSearchParams required.');
-        const logout = form.getAll('logout_token'), revocation = form.getAll('revocation_token'), user = form.getAll('event_token');
-        if (logout.length + revocation.length + user.length !== 1) fail('invalid_response', 'Exactly one back-channel token required.');
-        const token = (logout.length ? logout : revocation.length ? revocation : user)[0];
+        const tokens = formFields.flatMap(([field, kind, verifyToken]) => form.getAll(field).map(token => ({ kind, verifyToken, token })));
+        if (tokens.length !== 1) fail('invalid_response', 'Exactly one back-channel token required.');
+        const [{ kind, verifyToken, token }] = tokens;
         if (!nonempty(token)) fail('invalid_response', 'A nonempty token string is required.');
-        return logout.length ? { kind: 'logout', claims: await verifyLogoutToken(token, options) } :
-            revocation.length ? { kind: 'revocation', claims: await verifyRevocationToken(token, options) } :
-            { kind: 'user', claims: await verifyUserEventToken(token, options) };
+        return { kind, claims: await verifyToken(token, options) };
     }
     async function readEvent(request, kind) {
         if (request.method !== 'POST' || request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/x-www-form-urlencoded')

@@ -39,7 +39,7 @@ test('resource metadata and challenge helpers reject unsafe inputs', async t => 
 
 test('vendored artifact matches modular sources and verifies a real server access token', async t => {
     const w = await agentWorld(t), vendor = await import('../dist/imprim-client.mjs');
-    const modules = ['resources', 'backchannel', 'jwt', 'dpop', 'index'];
+    const modules = ['resources', 'backchannel', 'jwt', 'dpop', 'workspaces', 'index'];
     const sources = await Promise.all(modules.map(name => readFile(new URL(`../packages/imprim-client/${name}.mjs`, import.meta.url), 'utf8')));
     const body = sources.map((source, index) => {
         const stripped = source.replace(/^import .*from '\.\/[^']+';\n/gm, '');
