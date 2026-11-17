@@ -6,7 +6,7 @@ import { invariant, AppError } from '../lib/errors.mjs';
 import { audit } from '../services/audit.mjs';
 import { realmId, memoKey } from '../realms/realm.mjs';
 // Every query names the realm: each realm has its own ring, generations and JWKS.
-export const ROTATION_MS = 90 * 86400000, PUBLISH_AHEAD_MS = 3600000, RETIRED_KEEP_MS = 86400000;
+export const ROTATION_MS = 90 * 86400000, PUBLISH_AHEAD_MS = 3600000, RETIRED_KEEP_MS = 86400000, IMMEDIATE_SKEW_MS = 60000;
 // The algorithms, their Web Crypto parameters and the public members each JWK publishes.
 export const ALGORITHMS = Object.freeze({
     ES256: { generate: { name: 'ECDSA', namedCurve: 'P-256' }, key: { name: 'ECDSA', namedCurve: 'P-256' }, sign: { name: 'ECDSA', hash: 'SHA-256' },
@@ -17,7 +17,7 @@ export const ALGORITHMS = Object.freeze({
 const ALGS = Object.keys(ALGORITHMS);
 const spec = alg => { invariant(Object.hasOwn(ALGORITHMS, alg), 'key_unavailable', 'Unsupported signing algorithm.', 500); return ALGORITHMS[alg]; };
 const publicJwk = (alg, jwk) => spec(alg).publicJwk(jwk);
-const rows = async (env, alg) => (await env.DB.prepare('SELECT alg,generation,kid,public_jwk,activates_at,retired_at,verification_until FROM signing_keys WHERE realm_id=? AND alg=? ORDER BY generation')
+const rows = async (env, alg) => (await env.DB.prepare('SELECT alg,generation,kid,public_jwk,created_at,activates_at,retired_at,verification_until FROM signing_keys WHERE realm_id=? AND alg=? ORDER BY generation')
     .bind(realmId(env), alg).all()).results;
 async function createKey(env, alg, generation, now, activates, actor = null) {
     const pair = await crypto.subtle.generateKey(spec(alg).generate, true, ['sign', 'verify']);
@@ -104,7 +104,11 @@ export async function signingKey(env, now = Date.now(), alg = 'ES256') {
     const { key: keyAlgorithm, sign } = spec(alg);
     for (let attempt = 0; attempt < 2; attempt++) {
         const keys = await publishedKeys(env, alg, now);
-        const active = keys.filter(row => row.activates_at <= now && row.retired_at === null).at(-1);
+        // A key made to sign at once (created_at = activates_at) is active for every request: concurrent first uses
+        // read the clock a few milliseconds apart, and one whose clock is behind the winner's must not see it as
+        // future and make another. Keys published ahead of rotation keep their exact activation.
+        const active = keys.filter(row => row.retired_at === null &&
+            (row.activates_at <= now || (row.created_at === row.activates_at && row.activates_at <= now + IMMEDIATE_SKEW_MS))).at(-1);
         if (!active) {
             await createKey(env, alg, keys.at(-1).generation + 1, now, now);
             continue;

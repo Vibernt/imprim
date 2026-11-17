@@ -116,3 +116,14 @@ test('imprim-client keeps verifying ES256 with RSA keys in JWKS, and refuses RS2
     const rsToken = (await (await w.exchange(rs.code)).json()).id_token;
     await assert.rejects(client.verifyIdToken(rsToken, { nonce: 'rp-nonce' }), error => error.code === 'invalid_token');
 });
+
+test('concurrent first uses whose clocks differ by milliseconds all get the new key, in both rings', async t => {
+    for (const alg of ['RS256', 'ES256']) {
+        const { env } = await world(t), base = Date.now();
+        // Started together, with clocks a little apart and the latest first, as racing requests are.
+        const results = await Promise.allSettled(Array.from({ length: 6 }, (_, i) => signingKey(env, base + (5 - i) * 7, alg)));
+        assert.deepEqual(results.map(r => r.status), Array(6).fill('fulfilled'), alg);
+        assert.equal(new Set(results.map(r => r.value.kid)).size, 1, alg);
+        assert.equal(env.DB.db.prepare('SELECT count(*) n FROM signing_keys WHERE alg=?').get(alg).n, 1, alg);
+    }
+});
