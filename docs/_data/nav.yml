@@ -9,6 +9,7 @@
   items:
     - { title: Agent access, path: AGENT_ACCESS.md, url: AGENT_ACCESS.html, desc: "How an agent connects for a person, and how apps protect resources." }
     - { title: Realms, path: REALMS.md, url: REALMS.html, desc: "Several brands on one deployment, each with its own users and keys." }
+    - { title: Shared workspaces, path: WORKSPACES.md, url: WORKSPACES.html, desc: "Team and personal workspaces, shared memberships, invitations and product access." }
     - { title: Branding, path: BRANDING.md, url: BRANDING.html, desc: "Logos, looks, words and links, per realm and per app." }
     - { title: Architecture, path: ARCHITECTURE.md, url: ARCHITECTURE.html, desc: "Components, schema and request flows." }
 - label: Reference

@@ -51,8 +51,8 @@ test('every email kind, both parts', async t => {
     w.env.REALM.branding = { legal_name: 'Vibernt Ltd', support_email: 'help@vibernt.example', privacy_url: 'https://vibernt.example/privacy', terms_url: 'https://vibernt.example/terms' };
     for (const kind of Object.keys(EMAILS)) {
         const mail = await composeEmail(w.env, { kind, to: 'p@example.com', locale: PSEUDO,
-            vars: { device: 'Chrome on macOS', place: 'Berlin', time: Date.UTC(2026, 0, 1), reason: 'Lost phone', agent: 'Example Agent', app: 'Example App', workspace: 'team-one', scopes: 'read', name: 'Test phone', email: 'person@example.com', old: 'person@example.com', new: 'person@example.com' },
-            links: { link: 'https://id.example.com/login#token=abc', agents_url: 'https://id.example.com/account/agents' } });
-        assertTranslated(`${mail.subject}\n${mail.text}\n${visibleText(mail.html)}`, [...DATA, 'Vibernt Ltd', 'Lost phone', 'team-one', 'read', 'Berlin', 'macOS', 'Thu', 'Jan', 'abc'], kind);
+            vars: { device: 'Chrome on macOS', place: 'Berlin', time: Date.UTC(2026, 0, 1), reason: 'Lost phone', agent: 'Example Agent', app: 'Example App', workspace: 'team-one', scopes: 'read', name: 'Test phone', email: 'person@example.com', old: 'person@example.com', new: 'person@example.com', inviter: 'person@example.com', products: 'notes' },
+            links: { link: 'https://id.example.com/login#token=abc', agents_url: 'https://id.example.com/account/agents', invitation_url: 'https://app.example/start' } });
+        assertTranslated(`${mail.subject}\n${mail.text}\n${visibleText(mail.html)}`, [...DATA, 'Vibernt Ltd', 'Lost phone', 'team-one', 'read', 'Berlin', 'macOS', 'Thu', 'Jan', 'abc', 'notes'], kind);
     }
 });

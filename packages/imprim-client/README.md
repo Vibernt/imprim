@@ -1,4 +1,4 @@
-# imprim-client 0.7.0
+# imprim-client 0.8.0
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
 named `@vibernt/identity-client`. To move an app from that version, follow
@@ -23,11 +23,11 @@ The issuer retains each app-session association for 30 days after creation. Bloc
 send human logout events only to clients with an unexpired association. A local session renewal does not extend
 the association; use a new identity sign-in before creating a session beyond this limit.
 
-Imprim posts three kinds of event to an app's back-channel URI: `logout_token` (someone signed out, or was
-blocked, deleted or merged), `revocation_token` (an agent grant was revoked) and, when the app sets
-`user_events: on`, `event_token` (a person's account changed). All use ES256 signatures against the issuer's discovery JWKS. An unknown `kid` triggers one refresh,
+Imprim posts `logout_token` (a session ended), `revocation_token` (an agent grant was revoked), `event_token`
+(an account changed, with `user_events: on`) and `workspace_token` (a participating workspace changed).
+All use ES256 signatures against the issuer's discovery JWKS. An unknown `kid` triggers one refresh,
 rate-limited to once per minute per client instance. Verification requires exact issuer and scalar client-id audience,
-integer `iat`/`exp`, `0 < exp - iat <= 900`, and exactly one empty event object. Expired tokens are refused at `exp`
+integer `iat`/`exp`, `0 < exp - iat <= 900`, and exactly one event object. Expired tokens are refused at `exp`
 with no expiration leeway. `clockSkewSeconds` (integer 0–60, default 60) bounds future `iat`/`nbf` acceptance only.
 No kind accepts `nonce`, and no verifier accepts another kind's token.
 
@@ -43,18 +43,19 @@ No kind accepts `nonce`, and no verifier accepts another kind's token.
   `mfa-reset`, nonempty `sub` and `jti`, and an integer `toe` (when the change happened). Returns
   `{ sub, jti, event, data, toe, iat, exp }`; `data` is `{ fields }` for `user-updated` (which of `name` and `email`
   changed, never the value) and `{ into }` for `user-merged`. Apply the event with the latest `toe` for each person.
-- `client.verifyBackchannel(form, options?)` accepts `URLSearchParams` or `FormData`, requires exactly one string
-  `logout_token`, `revocation_token` **or** `event_token` (rejecting duplicates, two fields, missing tokens and
-  files), and returns `{ kind: 'logout' | 'revocation' | 'user', claims }` with the corresponding shape above. An app
-  that has not turned `user_events` on never receives `kind: 'user'`.
+- `client.verifyBackchannel(form, options?)` accepts `URLSearchParams` or `FormData` with exactly one string
+  token field. It returns `{ kind, claims }`, with `kind` set to `'logout'`, `'revocation'`, `'user'` or
+  `'workspace'`. For `workspace_token`, it verifies `typ: secevent+jwt` and an issuer-relative workspace event.
+  Its claims are `{ event, workspaceId, sub, version, payload, jti }`, with `sub` set on member events.
+  Deduplicate `jti`, apply higher versions and catch up through `workspaceMembers`.
 
-All three are also named exports taking client configuration plus optional `clockSkewSeconds` as their second
+`verifyBackchannel`, `verifyLogoutToken` and `verifyRevocationToken` are also named exports taking client configuration plus optional `clockSkewSeconds` as their second
 argument, for example `verifyRevocationToken(token, { issuer, clientId, resourcePrefixes, fetch })`. These one-shot
 calls create a new client; use the instance methods for shared caches. `handleBackchannelLogout(request)`,
 `handleAgentRevocation(request)` and `handleUserEvent(request)` take a form-encoded POST and accept only their own
 kind. They return `{ sub, sid, jti }`, `{ sub, grant_id, resource, jti }` and `{ sub, event, data, toe, jti }`.
 
-A single receiver URI can handle both kinds:
+A single receiver URI can handle all four kinds.
 
 ```js
 import { createClient, IdentityError } from 'imprim-client';
@@ -81,6 +82,7 @@ export async function backchannel(request, appStore) {
   // logout: end sessions for sub + sid, or ALL sessions for sub if sid is absent.
   // revocation: deny exactly (sub, resource, grantId), without ending human sessions.
   // user (only with user_events: on): refresh or remove what you hold about sub; keep the latest toe.
+  // workspace: apply higher versions only, and use workspaceMembers to catch up if needed.
   // Authenticated duplicate jti: no effect, successful return. Storage failures must throw.
   await appStore.applyBackchannelOnce(event);
   return new Response(null, { status: 204 });
@@ -110,6 +112,30 @@ For a confidential client, the calls a workspace admin screen needs:
 - `client.revokeGrant(grantId)` revokes one; the agent's refresh stops and a revocation event follows.
 - `client.introspect(token, { tokenTypeHint? })` returns `{ active: false }`, or the live token's claims, including
   `agent_assurance` (`key`, `redirect`, `claimed` or `none`).
+
+## Shared and personal workspaces (0.8.0)
+
+Create a client with `clientSecret` for a participating app. Pass the app's Imprim ID token as `actorToken`
+for actions on a person's behalf.
+
+| Method | Arguments |
+|---|---|
+| `memberships` | `sub` |
+| `workspace` | `id` |
+| `workspaceMembers` | `id, { limit?, cursor? }` |
+| `createWorkspace` | `{ name, products, firstOwnerEmail, actorToken }` for a team or `{ kind: 'personal', name, actorToken }` |
+| `renameWorkspace` | `id, { name, actorToken }` |
+| `setWorkspaceProducts` | `id, { add, remove, actorToken }` |
+| `inviteToWorkspace` | `id, { email, role, actorToken }` |
+| `workspaceInvitations` | `id` |
+| `revokeWorkspaceInvitation` | `id, invitationId, { actorToken }` |
+| `setMemberRole` | `id, sub, { role, actorToken }` |
+| `removeMember` | `id, sub, { actorToken }` |
+| `closeWorkspace` | `id, { actorToken }` |
+| `holdWorkspace`, `releaseWorkspace` | `id, reason` (optional for release) |
+| `registerWorkspaceResource`, `unregisterWorkspaceResource` | `id, resource` |
+
+Pass a page's `next_cursor` as `cursor` to fetch the next members page. See the [workspace specification](../../docs/WORKSPACES.md).
 
 ## Agent access and adoption
 

@@ -1,7 +1,7 @@
 # Integrating an app and connecting agents
 
-Imprim proves who a person is. Your app decides what they may do: it keeps its workspaces, memberships, roles,
-its own session and its own CSRF. The `sub` claim is the stable person id within one realm. Key your local user
+Imprim proves who a person is. Your app keeps its own session and CSRF protections, and checks permissions on
+every request. It keeps workspaces, memberships and roles by default. The `sub` claim is the stable person id within one realm. Key your local user
 record on `(issuer, sub)`, never on email.
 
 ## 1. Register the app
@@ -19,6 +19,18 @@ A realm admin registers the client in `<issuer>/admin` (or with `scripts/seed-cl
 | `mfa` | `off` (default), `optional` or `required` second factor for this app. |
 
 A confidential client gets its secret once, at creation. Store it as a secret in your app.
+
+### Opt in to shared workspaces
+
+1. Ask the realm admin to set the realm's `workspaces` to `on`, and the app's `workspaces` to `shared` with a
+   `product` such as `notes`. Apps for the same product use the same product name.
+2. Register the app's back-channel URL and set `initiate_login_uri` to its sign-in page for invitation emails.
+   Enable `personal_workspaces` for personal workspace creation and `workspace_admin` when the app needs team
+   creation or product management.
+3. Use client 0.8.0 on the server to read memberships and manage workspaces. For actions on a person's behalf,
+   pass the ID token issued to the app as `actorToken`. Keep app-specific permissions and check them on each request.
+4. Verify `workspace_token` on the back channel. Deduplicate `jti`, apply newer versions and use `workspaceMembers`
+   to catch up. [Shared workspace specification](WORKSPACES.md)
 
 ## 2. Sign people in
 

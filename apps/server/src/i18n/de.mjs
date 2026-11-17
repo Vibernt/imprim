@@ -521,4 +521,11 @@ export default Object.freeze({
     "This app asked for a different account. Sign in as that person.": "Diese App hat ein anderes Konto angefordert. Melden Sie sich als diese Person an.",
     "Too many token requests for this grant.": "Zu viele Token-Anfragen für diese Freigabe.",
     "Too many token requests from this agent at this app.": "Zu viele Token-Anfragen von diesem Agenten bei dieser App.",
+    // Workspaces: email
+    "Invitation to {workspace}": "Einladung zu {workspace}",
+    "{inviter} invited you to join {workspace}.": "{inviter} hat Sie eingeladen, {workspace} beizutreten.",
+    "Products in this workspace: {products}.": "Produkte in diesem Arbeitsbereich: {products}.",
+    "The workspace invitation is unavailable.": "Die Einladung zum Arbeitsbereich ist nicht verfügbar.",
+    "The workspace invitation sender is unavailable.": "Der Absender der Einladung zum Arbeitsbereich ist nicht verfügbar.",
+    "The workspace invitation sign-in URL is invalid.": "Die Anmelde-URL der Einladung zum Arbeitsbereich ist ungültig.",
 });

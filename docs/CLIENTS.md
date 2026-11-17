@@ -109,9 +109,9 @@ once, with no overlap, so switch the app in the same window.
    `azp`, `exp`, `iat` with bounded clock skew, and your exact stored `nonce`. Reject unknown/malformed claims.
    Cache keys, and refresh once on unknown kid against the fixed issuer JWKS URL; a long cache alone is insufficient
    for one-hour key prepublication. Validation failures do not create app sessions.
-6. Upsert the app's local user record keyed by `(iss, sub)` (an imported user keeps their old id as `sub`), apply
-   its own workspace admission and role policy, then create the app's host-only session and CSRF token. An Imprim
-   invitation means “may sign in to this app”, not “may create or access a workspace”.
+6. Upsert the app's local user record keyed by `(iss, sub)` (an imported user keeps their old id as `sub`). Apply
+   the app's authorization policy before creating a host-only session and CSRF token. Apps opted in to shared
+   workspaces can read membership and base roles from Imprim. [Shared workspaces](WORKSPACES.md)
 
 Access tokens last ten minutes and are only for `GET /userinfo` or `POST /userinfo`, via `Authorization: Bearer …`. ID tokens are not
 accepted as UserInfo credentials. Human app grants have no refresh tokens; apps retain local sessions and use top-level identity
@@ -215,8 +215,8 @@ also checks the validated policy snapshot and current user state. Agent SSO uses
 methods and Google hosted domains. Signup admission remains the app's existing invited/open policy.
 
 The resource must name one workspace, for example `https://app.example/w/team-one/mcp`. Imprim validates registered
-ownership, not membership in that workspace. The resource server must intersect scopes with the person's current
-membership and role **on every request**. Its expected audience comes from its own route/configuration, never a
+ownership and requires membership at consent for resources registered to active shared workspaces. The resource
+server must intersect scopes with the person's current membership and role **on every request**. Its expected audience comes from its own route/configuration, never a
 client-supplied query parameter or the token's unverified claims.
 
 A metadata-document agent serves `application/json` at its HTTPS client-ID URL:
@@ -338,11 +338,25 @@ What each version changed:
 | 0.3.0 | Wire change: agent revocation events are `secevent+jwt`. `iss` is required on the authorization response. Error text handling, JWKS refresh after 10 minutes, a failed discovery is not cached. Details below. |
 | 0.4.0 | Step-up: `startLogin({ acrValues, maxAge })`; ID tokens carry `acr`. |
 | 0.5.0 | `verifyAccessToken` checks a DPoP proof for a bound token (`dpop`, `requireDpop`) and returns `dpop_jti`. |
-| 0.7.0 | `listGrants` (paged, `sub` filter), `revokeGrant` and `introspect` for confidential clients. Nothing else changes. |
+| 0.8.0 | Shared and personal workspace methods for confidential clients. `verifyBackchannel` accepts `workspace_token` and returns `kind: 'workspace'`. |
+| 0.7.0 | `listGrants` (paged, `sub` filter), `revokeGrant` and `introspect` for confidential clients. |
 | 0.6.0 | User lifecycle events: `event_token`, `verifyUserEventToken`, `handleUserEvent`, and `kind: 'user'` from `verifyBackchannel`. The package is named `imprim-client`. |
 
 Nothing new is on until an app's client turns it on: second factor, passwords, passkeys, DPoP, token exchange and
-user events all default to off.
+user events all default to off. Shared workspaces require opt-in on the realm and the app.
+
+## Client 0.8.0 workspace methods
+
+| Operation | Methods |
+|---|---|
+| Read | `memberships(sub)`, `workspace(id)`, `workspaceMembers(id, { limit, cursor })`, `workspaceInvitations(id)` |
+| Manage workspaces | `createWorkspace(options)`, `renameWorkspace(id, options)`, `setWorkspaceProducts(id, options)`, `closeWorkspace(id, options)` |
+| Manage people | `inviteToWorkspace(id, options)`, `revokeWorkspaceInvitation(id, invitationId, options)`, `setMemberRole(id, sub, options)`, `removeMember(id, sub, options)` |
+| Manage app holds and resources | `holdWorkspace(id, reason)`, `releaseWorkspace(id, reason?)`, `registerWorkspaceResource(id, resource)`, `unregisterWorkspaceResource(id, resource)` |
+
+Pass `actorToken` in the options for actions on a person's behalf. The client sends it as `actor_token` in the
+JSON body and uses HTTP Basic app credentials for every request. For `kind: 'workspace'`, `verifyBackchannel`
+returns claims `{ event, workspaceId, sub, version, payload, jti }`. [App API and events](WORKSPACES.md#app-api)
 
 ## Client 0.3.0 changes (wire change)
 

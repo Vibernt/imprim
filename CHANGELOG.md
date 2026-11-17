@@ -5,6 +5,8 @@ describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
 ## Unreleased
 
+- Migration `0024_workspaces.sql` adds opt-in [shared and personal workspaces](docs/WORKSPACES.md), with base roles,
+  invitations in all five languages and signed workspace events. Client `0.8.0` adds the workspace API and event verification.
 - `apps/server/wrangler.jsonc` is now a template with placeholder hosts and ids. Keep your deployment's real values
   in `wrangler.local.jsonc`, which git ignores, and pass `--config wrangler.local.jsonc` to every `wrangler`
   command ([Deploying](docs/DEPLOY.md)).
