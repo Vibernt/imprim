@@ -1,4 +1,8 @@
-// Browser side of the passkey ceremonies (served as /assets/passkey.js; CSP script-src 'self').
+// Browser side of the passkey ceremonies (served as /assets/passkey.js; CSP script-src 'self'). Its messages are
+// translated per language (/assets/passkey.js?lang=de; i18n localizeScript).
+import { msg, localizeScript } from '../i18n/index.mjs';
+const MESSAGES = [msg('The passkey step didn’t finish. Try again.'), msg('Passkey added. Save these recovery codes now. Each works once, and they are not shown again: ')];
+export const passkeyScriptFor = locale => localizeScript(passkeyScript, locale, MESSAGES);
 export const passkeyScript = `
 const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
 const unb64=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));

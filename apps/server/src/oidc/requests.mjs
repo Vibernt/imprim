@@ -8,6 +8,7 @@ import { requireMethod } from './sign-in-methods.mjs';
 import { sessionByHash } from '../auth/session.mjs';
 import { admitSession, admissionGuard } from '../services/admission.mjs';
 import { mfaGate } from '../auth/mfa.mjs';
+import { useLocale } from '../i18n/index.mjs';
 // max_age is whole seconds since auth_time, which is itself whole seconds (OIDC Core 3.1.2.1). Comparing the rounded
 // auth_time with the clock in milliseconds would refuse a sign-in made late in a second, one second too soon.
 export const withinMaxAge = (authTime, maxAge, now = Date.now()) => Math.floor(now / 1000) - authTime <= maxAge;
@@ -17,6 +18,7 @@ export async function pendingRequest(env, request, id) {
     const browser = cookies(request)[BROWSER_COOKIE];
     invariant(row && browser && await safeEqual(await sha256(browser), row.browser_hash), 'browser_binding', 'Sign-in must finish in the browser that started it.', 403);
     const client = await getClient(env, row.client_id);
+    useLocale(env, { client, uiLocales: row.ui_locales });
     if (row.agent_client_id) await validateAgentRequest(env, row);
     else registeredUri(client, row.redirect_uri);
     return { row, client };

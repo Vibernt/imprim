@@ -4,6 +4,7 @@ import { isAdmin } from '../services/admission.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { notify } from '../services/notify.mjs';
+import { useLocale } from '../i18n/index.mjs';
 export const SESSION_COOKIE = '__Host-vi_session', CSRF_COOKIE = '__Host-vi_csrf', BROWSER_COOKIE = '__Host-vi_browser';
 // A duplicate is refused only for the names this server reads. A sibling host's cookies cannot break sign-in (S19).
 const READ = /^__Host-vi_/;
@@ -32,11 +33,12 @@ export async function getSession(request, env) {
         await env.DB.prepare('UPDATE sessions SET last_seen=? WHERE hash=?').bind(Date.now(), session.hash).run();
     // The page shell shows who is signed in (pages/layout.mjs).
     if (session && env.SEEN) env.SEEN.email = session.email;
+    if (session) useLocale(env, { user: session.locale });
     return session;
 }
 export async function sessionByHash(env, hash) {
     // A session belongs to the realm of its user; another realm's host never accepts it.
-    return env.DB.prepare(`SELECT s.*,u.email,u.email_verified,u.display_name FROM sessions s JOIN users u ON u.id=s.user_id
+    return env.DB.prepare(`SELECT s.*,u.email,u.email_verified,u.display_name,u.locale FROM sessions s JOIN users u ON u.id=s.user_id
         WHERE s.hash=? AND s.expires_at>? AND u.status='active' AND u.merged_into IS NULL AND u.realm_id=?`)
         .bind(hash, Date.now(), realmId(env)).first();
 }
@@ -74,6 +76,6 @@ async function noticeNewDevice(env, session) {
     const seen = known.results.find(row => row.device_hash === deviceHash && row.last_seen > now - 90 * 86400000);
     await env.DB.prepare('INSERT INTO seen_devices(user_id,device_hash,last_seen) VALUES(?,?,?) ON CONFLICT(user_id,device_hash) DO UPDATE SET last_seen=excluded.last_seen')
         .bind(session.user_id, deviceHash, now).run();
-    if (!seen && known.results.length) notify(env, env.CTX, session.email, 'new sign-in',
-        `Your account was signed in from ${env.REQUEST.device}${env.REQUEST.location ? ` in ${env.REQUEST.location}` : ''} on ${new Date(now).toUTCString()}.`);
+    if (!seen && known.results.length) notify(env, env.CTX, session.email, env.REQUEST.location ? 'new_sign_in_at' : 'new_sign_in',
+        { device: env.REQUEST.device, place: env.REQUEST.location, time: now });
 }

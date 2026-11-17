@@ -10,15 +10,17 @@ Microsoft/Entra ID, Sign in with Apple) with per-realm credentials and `trusted_
 introspection, revocation, an app grant API, DPoP-bound tokens and token exchange between apps; user lifecycle events to apps and audit export;
 every page built with the Fire design system; branding per realm and per app as a Fire look (palette, tone, type set
 and other tweaks) with name, copy, links and sandboxed logo uploads, branded pages and email footers, and Fire's
-Tweaks panel in the console; `id_token_hint`, `POST /authorize`, `client_secret_post`, UserInfo body tokens and
-per-app classic OpenID Connect, for the OpenID conformance suite ([OpenID certification](CERTIFICATION.md)).
+Tweaks panel in the console; pages and emails in English, Spanish, French, German and Portuguese (Brazil), chosen by
+`ui_locales`, the person's saved language, `Accept-Language` and the brand, with per-language brand words
+([Languages](TRANSLATING.md)); a branded HTML part, light and dark, beside the plain text of every email;
+`id_token_hint`, `POST /authorize`, `client_secret_post`, UserInfo body tokens and per-app classic OpenID Connect,
+for the OpenID conformance suite ([OpenID certification](CERTIFICATION.md)).
 
 Planned, roughly in order. Each item is an issue to discuss before code:
 
 1. **Enterprise.** Per-customer SSO routed by email domain (OIDC and SAML), and SCIM provisioning.
-2. **Languages.** Translated page and email strings selected by `branding.locale` and `Accept-Language`, with
-   copy overrides per language.
-3. **HTML email.** A fixed, branded HTML layout alongside the plain-text body.
+2. **Native review of the translations.** The Spanish, French, German and Portuguese catalogues are drafts until
+   native speakers have read them. Then more languages, and the admin console.
 
 Certification: run the conformance suite's Basic, Config, RP-Initiated Logout and Back-Channel Logout plans on
 staging, then self-certify ([OpenID certification](CERTIFICATION.md)). Dynamic OP would need RS256 ID tokens.

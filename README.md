@@ -19,6 +19,9 @@ step.
   copy, links and logos, and each app can override it.
 - **Machines too.** Service clients (`client_credentials` with `private_key_jwt`), introspection, revocation,
   DPoP-bound tokens, token exchange between apps, and signed user lifecycle events.
+- **Your people's language.** Pages and emails in English, Spanish, French, German and Portuguese (Brazil), chosen
+  by the app's `ui_locales`, the person's choice or the browser. Every email has a branded HTML part, light and dark,
+  beside its plain text.
 - **An admin console** for apps, users, sessions, service clients, branding, audit, keys and realms.
 
 Docs: **https://vibernt.github.io/imprim/**. Start with [Getting started](docs/GETTING_STARTED.md).
@@ -90,12 +93,12 @@ npm run check
 
 | Path | Contents |
 |---|---|
-| `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, maintenance |
+| `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, languages (`i18n/`), email, maintenance |
 | `apps/server/public/` | Static assets: the vendored Fire design system (`fire/`), the branding editor (`imprim/`) and `_headers` |
-| `apps/server/migrations/` | D1 schema, `0001` to `0019` |
+| `apps/server/migrations/` | D1 schema, `0001` to `0021` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
 | `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
-| `scripts/` | Offline SQL generators for realms, clients and user imports; checks; client build |
+| `scripts/` | Offline SQL generators for realms, clients and user imports; checks (including translations); email preview; client build |
 | `tests/` | `node:test` suites on a real SQLite harness, including negative tests at every trust boundary |
 | `docs/` | Guides, protocol, security and operations ([index](docs/README.md)) |
 | `docs/fire/` | Fire's guide, writing rules and class vocabulary, and how Imprim uses Fire |
@@ -110,7 +113,7 @@ fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (IS
 Vibernt runs Imprim in production at `https://id.vibernt.ai`, with staging at `https://id-staging.vibernt.ai`.
 Both run the same release, deployed on 2026-11-15: the security pass, realms, passwords, two-factor, the account
 pages, passkeys, the provider registry, machines, DPoP, user events, branding and the Fire interface (migrations
-`0001`–`0019`; see [Deploying](docs/DEPLOY.md)).
+`0001`–`0019`; see [Deploying](docs/DEPLOY.md)). Languages and HTML email (migration `0021`) are not released yet.
 What has not been verified against live Cloudflare is listed in [Security](docs/SECURITY.md#not-yet-verified-live).
 What comes next is in the [Roadmap](docs/ROADMAP.md).
 

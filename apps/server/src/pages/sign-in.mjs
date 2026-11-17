@@ -2,6 +2,7 @@ import { signInSettings } from '../oidc/sign-in-methods.mjs';
 import { page, escapeHtml } from './layout.mjs';
 import { field, button, orDivider as or } from './ui.mjs';
 import { brandingFor } from '../branding/tokens.mjs';
+import { t, msg, brandCopy, localizeScript, scriptPath, useLocale } from '../i18n/index.mjs';
 import { cookies, cookie, BROWSER_COOKIE } from '../auth/session.mjs';
 import { randomToken } from '../lib/crypto.mjs';
 import { tokenShape } from '../lib/http.mjs';
@@ -9,35 +10,38 @@ const challengeConfigured = env => Boolean(env.TURNSTILE_SITE_KEY && env.TURNSTI
 // One form serves email links and passwords: the button pressed chooses the action (see signInScript).
 function emailForm(env, requestId, { link, password }) {
     // The set-password action comes after Sign in, so Enter in a field signs in (the first submit button is the default).
-    const passwordField = password ? field({ id: 'password', label: 'Password', type: 'password', name: 'password', size: 'lg', autocomplete: 'current-password', maxlength: 1024 }) : '';
+    const passwordField = password ? field({ id: 'password', label: t(env, 'Password'), type: 'password', name: 'password', size: 'lg', autocomplete: 'current-password', maxlength: 1024 }) : '';
     return `<form class="fd-stack" data-gap="4" id="email-form"><input type="hidden" name="request_id" value="${escapeHtml(requestId)}">
-${field({ id: 'email', label: 'Email', type: 'email', name: 'email', size: 'lg', autocomplete: password ? 'username' : 'email', required: true, maxlength: 254, placeholder: 'you@example.com' })}
+${field({ id: 'email', label: t(env, 'Email'), type: 'email', name: 'email', size: 'lg', autocomplete: password ? 'username' : 'email', required: true, maxlength: 254, placeholder: t(env, 'you@example.com') })}
 ${passwordField}${challengeConfigured(env) ? `<div class="cf-turnstile" data-sitekey="${escapeHtml(env.TURNSTILE_SITE_KEY)}" data-action="sign_in"></div>` : ''}
-${password ? button('Sign in', { id: 'password-sign-in', value: 'password', variant: 'primary', size: 'lg', block: true }) : ''}
-${link ? button('Email me a link', { id: 'send-link', value: 'link', variant: password ? 'outline' : 'primary', size: 'lg', block: true, icon: 'mail' }) : ''}
-${password ? '<div class="fd-row" data-justify="center"><button class="fd-btn-text" id="set-password" type="submit" value="set">Set or reset password</button></div>' : ''}</form>`;
+${password ? button(t(env, 'Sign in'), { id: 'password-sign-in', value: 'password', variant: 'primary', size: 'lg', block: true }) : ''}
+${link ? button(t(env, 'Email me a link'), { id: 'send-link', value: 'link', variant: password ? 'outline' : 'primary', size: 'lg', block: true, icon: 'mail' }) : ''}
+${password ? `<div class="fd-row" data-justify="center"><button class="fd-btn-text" id="set-password" type="submit" value="set">${escapeHtml(t(env, 'Set or reset password'))}</button></div>` : ''}</form>`;
 }
 export function signInPage(env, requestId = '', responseCookies = [], client = null) {
+    useLocale(env, { client });
     const branding = brandingFor(env, client);
     const methods = client ? signInSettings(client).methods : ['email'];
     const email = methods.includes('email'), password = methods.includes('password');
     const providerLink = (href, label) => `<a class="fd-btn" data-variant="outline" data-size="lg" data-block href="${href}"><span>${escapeHtml(label)}</span></a>`;
     const controls = methods.filter(method => method !== 'password' || !email).map(method => ['email', 'password'].includes(method) ? emailForm(env, requestId, { link: email, password })
-        : method === 'passkey' ? button('Sign in with a passkey', { id: 'passkey-sign-in', type: 'button', 'data-request-id': requestId, variant: 'outline', size: 'lg', block: true, icon: 'key-round' })
-        : ['github', 'google'].includes(method) ? providerLink(`/v1/auth/${method}/start?request_id=${encodeURIComponent(requestId)}`, `Sign in with ${method === 'github' ? 'GitHub' : 'Google'}`)
-        : env.PROVIDERS?.[method] ? providerLink(`/v1/auth/provider/${method}/start?request_id=${encodeURIComponent(requestId)}`, `Sign in with ${env.PROVIDERS[method].name || method}`) : '').filter(Boolean);
+        : method === 'passkey' ? button(t(env, 'Sign in with a passkey'), { id: 'passkey-sign-in', type: 'button', 'data-request-id': requestId, variant: 'outline', size: 'lg', block: true, icon: 'key-round' })
+        : ['github', 'google'].includes(method) ? providerLink(`/v1/auth/${method}/start?request_id=${encodeURIComponent(requestId)}`, t(env, 'Sign in with {provider}', { provider: method === 'github' ? 'GitHub' : 'Google' }))
+        : env.PROVIDERS?.[method] ? providerLink(`/v1/auth/provider/${method}/start?request_id=${encodeURIComponent(requestId)}`, t(env, 'Sign in with {provider}', { provider: env.PROVIDERS[method].name || method })) : '').filter(Boolean);
     // In the app's order; "or" separates the email form from the buttons around it.
-    const ordered = controls.flatMap((c, i) => c.startsWith('<form') ? [...(i > 0 ? [or] : []), c, ...(i < controls.length - 1 ? [or] : [])] : [c]);
-    const heading = branding.copy.sign_in_heading || `Sign in to ${branding.name || env.REALM.display_name}`;
-    return page('Sign in', `<header class="fd-screen-head"><h1 class="fd-h1">${escapeHtml(heading)}</h1>${branding.copy.sign_in_help ? `<p class="fd-muted">${escapeHtml(branding.copy.sign_in_help)}</p>` : ''}</header>
-<section id="request" class="fd-stack" data-gap="3" data-request-id="${escapeHtml(requestId)}">${ordered.join('\n')}${client ? '' : '<p class="fd-screen-note">Administrators sign in by email.</p>'}</section>
-<section id="confirm" class="fd-stack" data-gap="4" hidden><header class="fd-screen-head"><p class="fd-muted">Finish signing in with the link you opened. Keep this browser.</p></header>${button('Sign in', { id: 'verify', type: 'button', variant: 'primary', size: 'lg', block: true })}</section>
-<p class="fd-small" id="message" role="status" aria-live="polite"></p>`, { client, cookies: responseCookies, script: methods.includes('passkey') ? ['/assets/sign-in.js', '/assets/passkey.js'] : '/assets/sign-in.js', turnstile: (email || password) && challengeConfigured(env) });
+    const divider = or(env), ordered = controls.flatMap((c, i) => c.startsWith('<form') ? [...(i > 0 ? [divider] : []), c, ...(i < controls.length - 1 ? [divider] : [])] : [c]);
+    const heading = brandCopy(env, branding, 'sign_in_heading') || t(env, 'Sign in to {name}', { name: branding.name || env.REALM.display_name }), help = brandCopy(env, branding, 'sign_in_help');
+    return page(t(env, 'Sign in'), `<header class="fd-screen-head"><h1 class="fd-h1">${escapeHtml(heading)}</h1>${help ? `<p class="fd-muted">${escapeHtml(help)}</p>` : ''}</header>
+<section id="request" class="fd-stack" data-gap="3" data-request-id="${escapeHtml(requestId)}">${ordered.join('\n')}${client ? '' : `<p class="fd-screen-note">${escapeHtml(t(env, 'Administrators sign in by email.'))}</p>`}</section>
+<section id="confirm" class="fd-stack" data-gap="4" hidden><header class="fd-screen-head"><p class="fd-muted">${escapeHtml(t(env, 'Finish signing in with the link you opened. Keep this browser.'))}</p></header>${button(t(env, 'Sign in'), { id: 'verify', type: 'button', variant: 'primary', size: 'lg', block: true })}</section>
+<p class="fd-small" id="message" role="status" aria-live="polite"></p>`, { client, cookies: responseCookies, script: methods.includes('passkey') ? [scriptPath(env, '/assets/sign-in.js'), scriptPath(env, '/assets/passkey.js')] : scriptPath(env, '/assets/sign-in.js'), turnstile: (email || password) && challengeConfigured(env) });
 }
 export function loginPage(request, env) {
     const existing = cookies(request)[BROWSER_COOKIE], browser = tokenShape(existing) ? existing : randomToken();
     return signInPage(env, '', [cookie(BROWSER_COOKIE, browser, 1800)]);
 }
+const MESSAGES = [msg('Sign-in failed.'), msg('Enter your password, or choose to get an email link.'), msg('Request failed.')];
+export const signInScriptFor = locale => localizeScript(signInScript, locale, MESSAGES);
 // Reading a fragment does not redeem it. Only the explicit click sends the token with a same-origin POST.
 export const signInScript = `
 const params = new URLSearchParams(location.hash.slice(1));

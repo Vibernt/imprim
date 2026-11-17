@@ -21,8 +21,9 @@ Open **Branding** in the admin console (`/admin/branding`).
 - **Logo:** upload a logo, an optional dark-mode logo and a square mark. The logo leads sign-in and consent
   screens. The mark is the browser-tab icon, sits beside the name when there is no logo, and leads the console and
   account sidebar. Until a mark is uploaded, pages draw the **first letter of the name in a dot matrix**.
-- **Name and links**, and **Words** (sign-in heading and line, agent consent line, signed-out line, footer line).
-  An empty field uses the default.
+- **Name and links**, **Languages** (the default language and the languages offered) and **Words** (sign-in heading
+  and line, agent consent line, signed-out line, footer line), in the default language and, under each language, in
+  that language. An empty field uses the built-in words, translated.
 - *Open the sign-in page* previews it with your apps' sign-in methods.
 
 Saving needs an admin session with a recent sign-in and second factor, the same CSRF and Origin checks as every
@@ -37,7 +38,9 @@ admin write, and the version the page loaded, so two admins cannot overwrite eac
 | `legal_name` | Footer `© <legal_name>` on pages and emails. |
 | `support_url`, `privacy_url`, `terms_url` | `https://` links in the footer. |
 | `support_email` | Footer "Help" link (when there is no `support_url`) and the email footer. |
-| `locale` | The page language tag, such as `en` or `en-GB` (`<html lang>`). |
+| `locale` | The default language, such as `de` or `en-GB`: used when the browser asks for none the brand offers, and as `<html lang>` for that language. |
+| `locales` | The languages offered, from `en`, `es`, `fr`, `de`, `pt-BR`. Default: all of them. `locale` must be one of them. |
+| `locale_copy` | The brand's words per language: `{ "de": { "sign_in_heading": "…" } }`, same keys and limits as `copy`. |
 | `logo_light`, `logo_dark`, `mark` | Uploaded asset ids. |
 | `copy` | Plain text, up to 300 characters each: `sign_in_heading`, `sign_in_help`, `consent_intro`, `signed_out`, `footer`. |
 
@@ -76,6 +79,19 @@ Values outside these are refused, not clamped. **Contrast** is Fire's job: its p
 An app sets its own `branding` in the console's client editor or the seed script ([Clients](CLIENTS.md)), for
 example `{"name": "My app", "look": {"palette": "iris"}}`.
 
+## Languages
+
+Pages and emails come in English, Spanish, French, German and Portuguese (Brazil) ([Languages](TRANSLATING.md)). A
+brand chooses which it offers (`locales`) and which to fall back to (`locale`); an app's values replace the realm's.
+`copy` is in the brand's default language; `locale_copy` holds the same words in other languages. On a page in
+language L, a copy key shows `locale_copy[L]`, then `copy` if L is the default language, then Imprim's built-in text
+in L. `locale_copy` merges per language and per key, app over realm.
+
+```json
+{ "locale": "de", "locales": ["de", "en"], "copy": { "sign_in_heading": "Willkommen bei Acme" },
+  "locale_copy": { "en": { "sign_in_heading": "Welcome to Acme" } } }
+```
+
 ## How it is applied
 
 The server renders the look the way Fire's Tweaks panel applies it in the browser: `data-palette`, `data-type`,
@@ -102,5 +118,23 @@ Upload in the console, or with `POST /admin/api/branding/assets` and
 
 ## Emails
 
-Sign-in links and security notices are plain text. Their subject and greeting use the app's or realm's `name`,
-and they end with the support contact and `© legal_name` when set.
+Every email has a plain-text part and a branded HTML part, in the recipient's language
+([Languages](TRANSLATING.md#how-a-language-is-chosen)). Sign-in and set-password links wear the app's brand; the
+email-change link and security notices wear the realm's.
+
+- **Text.** In English it is exactly what Imprim has always sent: the message, the link on its own line, and, under
+  `--`, the footer words, `Help:` and `© legal_name`.
+- **HTML.** One fixed layout in Fire's look: the brand at the top, a card with a heading, the message and a button
+  (the link is repeated below it as text), then the footer with Privacy and Terms links and "Powered by Imprim".
+  The colours come from the brand's look through Fire's palette engine, as on pages, in light and dark: clients that
+  support `prefers-color-scheme` switch, the rest keep the light version. A forced `theme` gives one scheme. The
+  type set names the font, with system fallbacks; no web font is loaded.
+- **Logo.** A PNG or JPEG `logo_light` travels inside the email as an inline (`cid:`) image, with `logo_dark` swapped
+  in dark mode where the client allows. Emails load no remote image, so nothing reports an open. An SVG or WebP logo,
+  which Gmail and Outlook do not show, or no logo, gives the brand's initial in dots, drawn with table cells, and the
+  name. Upload a PNG to have the logo in emails.
+- **Safety.** Every value is escaped, including an agent's self-chosen name. Links are the issuer's own URLs and the
+  brand's validated `https` links. Subjects are one line.
+
+`node scripts/email-preview.mjs [out-dir] [branding.json]` writes every email in every language as HTML and text, to
+check a brand before saving it.

@@ -56,7 +56,10 @@ Supported scopes: `openid email profile` (`profile` adds `name`). Only the `quer
 `prompt=login` forces a new sign-in; `prompt=none` returns `login_required` to the trusted client if no valid session.
 `max_age` (whole seconds) and `acr_values` are accepted (see Two-factor authentication). Request objects are refused
 with `request_not_supported` and `request_uri` with `request_uri_not_supported`; `claims` is refused with
-`invalid_request` unless the app uses classic OpenID Connect (below).
+`invalid_request` unless the app uses classic OpenID Connect (below). `ui_locales` (space-separated BCP 47 tags)
+sets the language of the pages that follow and of the sign-in email; malformed or unknown tags are ignored, never an
+error, and at most 10 are kept with the request. Discovery lists the realm's languages as `ui_locales_supported`
+([Languages](TRANSLATING.md)). Agent authorization accepts it too.
 
 `id_token_hint` is an ID token this issuer gave this app, verified against the local ring; it may have expired. It
 names the person the app expects: a session belonging to anyone else counts as no session (`prompt=none` returns
@@ -282,7 +285,7 @@ magic request remains neutral and does not claim delivery.
 
 ## Logout and errors
 
-RP logout uses `client_id` and/or a verified `id_token_hint`, optional exact `post_logout_redirect_uri`, and optional `state`. With a session, GET
+RP logout uses `client_id` and/or a verified `id_token_hint`, optional exact `post_logout_redirect_uri`, optional `state`, and optional `ui_locales` for the confirmation page. With a session, GET
 renders a confirmation form carrying CSRF; POST checks Origin + double submit and deletes the identity session.
 The registered URI is checked again at POST. Without a session GET may redirect to the registered URI. An `id_token_hint` must have an ES256 signature from this issuer's local ring, matching issuer/client claims and
 (current browser, if present) subject/sid. An expired hint is accepted only for its still-active browser session. No third-party logout URL is accepted without a registered client. The console and the account pages link to `/logout` with no client; a request that names no client and still carries a return URI or state is refused.
@@ -312,6 +315,10 @@ JSON errors have `error` and `error_description`; browser GET errors may render 
 401 with a Basic challenge; invalid UserInfo authentication is 401 with a Bearer challenge. Boundary errors include
 `origin`, `csrf`, `browser_binding`, `turnstile_*`, `rate_limit`, and configuration errors. Unexpected failures are
 500 `server_error` without internal details. Failed dependencies are not replaced by alternate providers.
+The `error` code never changes with language. `error_description` is translated for people: on HTML error pages and
+from the browser endpoints (`/v1/auth/*`, `/account/*`, `/mfa`, `/agent/consent`, `/device`, `/logout`, `/login`).
+Every other endpoint, including `/token`, `/register`, `/introspect`, `/revoke`, `/userinfo`, the app APIs and
+`/authorize` error redirects, keeps English ASCII (RFC 6749 section 5.2).
 
 ## Agent authorization
 

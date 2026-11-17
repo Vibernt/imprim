@@ -14,3 +14,4 @@ docs/_site/
 docs/.jekyll-cache/
 probe-client.sql
 conformance.sql
+email-preview/

@@ -1,5 +1,6 @@
 // Passkey ceremonies. Challenges are single-use and bound to the browser that asked; credentials are realm-scoped
 // (the RP ID is the realm's host) and user verification (PIN or biometric) is always required.
+import { t } from '../i18n/index.mjs';
 import { readBody, json, tokenShape, redirect } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { randomToken, sha256, b64url, from64 } from '../lib/crypto.mjs';
@@ -64,7 +65,7 @@ export async function register(request, env, ctx) {
     const { challenge, row } = await claimChallenge(env, request, 'register', body.clientDataJSON);
     invariant(row.user_id === session.user_id, 'invalid_grant', 'This passkey request belongs to another session.', 400);
     const party = rp(env), result = await verifyRegistration(body, { challenge, origin: party.origin, rpId: party.id });
-    const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 60) : 'Passkey';
+    const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 60) : t(env, 'Passkey');
     // Whatever the first factor is, the person gets recovery codes with it (shown once).
     const unused = (await env.DB.prepare('SELECT count(*) n FROM recovery_codes WHERE user_id=? AND used_at IS NULL').bind(session.user_id).first()).n;
     const recovery = unused ? { codes: [], statements: [] } : await recoveryStatements(env, session.user_id);
@@ -78,7 +79,7 @@ export async function register(request, env, ctx) {
         invariant(!String(error.message).includes('UNIQUE'), 'conflict', 'This passkey is already registered.', 409);
         throw error;
     }
-    notify(env, ctx, session.email, 'a passkey was added', `A passkey ("${name}") was added to your account.`);
+    notify(env, ctx, session.email, 'passkey_added', { name });
     return json({ added: true, name, recovery_codes: recovery.codes });
 }
 // Sign-in (purpose 'login', discoverable credentials, from an app that offers passkeys) or second factor ('mfa').
@@ -167,6 +168,6 @@ export async function removePasskey(request, env, ctx) {
     const remaining = (await confirmedFactors(env, session.user_id)).length;
     await env.DB.batch([forgetDevices(env, session.user_id), ...(remaining ? [] : [env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(session.user_id)]),
         env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES('passkey_removed',?,'{}',?,?)").bind(session.user_id, Date.now(), env.REALM.id)]);
-    notify(env, ctx, session.email, 'a passkey was removed', `The passkey "${gone.name}" was removed from your account.`);
+    notify(env, ctx, session.email, 'passkey_removed', { name: gone.name });
     return redirect(`${env.ISSUER}/account/mfa`);
 }

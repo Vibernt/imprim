@@ -7,6 +7,7 @@ import { page } from '../pages/layout.mjs';
 import { result, hidden, button, linkButton } from '../pages/ui.mjs';
 import { audit } from '../services/audit.mjs';
 import { logoutHint } from './logout-hint.mjs';
+import { t, useLocale } from '../i18n/index.mjs';
 async function parameters(env, values, session) {
     if (values.id_token_hint) {
         const hint = await logoutHint(env, values.id_token_hint, session);
@@ -20,6 +21,8 @@ async function parameters(env, values, session) {
         return values;
     }
     const client = await getClient(env, values.client_id);
+    // RP-Initiated Logout's ui_locales, like the authorization request's.
+    useLocale(env, { client, uiLocales: values.ui_locales });
     if (values.post_logout_redirect_uri) registeredUri(client, values.post_logout_redirect_uri, 'post_logout_uris');
     invariant(!values.state || values.state.length <= 512, 'invalid_request', 'State too long.');
     return values;
@@ -36,9 +39,9 @@ export async function logout(request, env, ctx) {
     if (request.method === 'GET') {
         if (!session) return redirect(destination(env, values));
         const fields = { client_id: values.client_id || '', post_logout_redirect_uri: values.post_logout_redirect_uri || '', state: values.state || '', id_token_hint: values.id_token_hint || '', csrf: cookies(request)[CSRF_COOKIE] || '' };
-        return page('Sign out', result('log-out', 'neutral', `Sign out of ${env.REALM.display_name}?`, 'This ends your session in this browser.') +
-            `<form method="post" action="/logout">${Object.entries(fields).map(([k, v]) => hidden(k, v)).join('')}${button('Sign out', { variant: 'primary', size: 'lg', block: true })}</form>` +
-            (values.client_id ? '' : linkButton('Stay signed in', '/account', { variant: 'ghost', size: 'lg', block: true })),
+        return page(t(env, 'Sign out'), result('log-out', 'neutral', t(env, 'Sign out of {name}?', { name: env.REALM.display_name }), t(env, 'This ends your session in this browser.')) +
+            `<form method="post" action="/logout">${Object.entries(fields).map(([k, v]) => hidden(k, v)).join('')}${button(t(env, 'Sign out'), { variant: 'primary', size: 'lg', block: true })}</form>` +
+            (values.client_id ? '' : linkButton(t(env, 'Stay signed in'), '/account', { variant: 'ghost', size: 'lg', block: true })),
             { formTargets: values.post_logout_redirect_uri ? [values.post_logout_redirect_uri] : [] });
     }
     await requireCsrf(request, env, session, values.csrf);

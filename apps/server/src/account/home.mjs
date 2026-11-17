@@ -16,20 +16,23 @@ import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { accountPage } from '../pages/shell.mjs';
 import { heading, button, linkButton, field, hidden, callout, setting, kv, badge, status, empty, actions, small } from '../pages/ui.mjs';
 import { notify } from '../services/notify.mjs';
+import { sendEmail } from '../services/email/send.mjs';
+import { deviceText } from '../lib/device.mjs';
 import { audit } from '../services/audit.mjs';
 import { userEventStatements } from '../services/user-events.mjs';
+import { t, tPlural, msg, formatDate, offeredBy, LANGUAGE_NAMES, useLocale } from '../i18n/index.mjs';
 const FRESH_MS = 600000;
 const csrfField = request => hidden('csrf', cookies(request)[CSRF_COOKIE] || '');
 // A one-button form for a row action; `options` go to button() (an aria-label names the row for screen readers).
 export const rowAction = (request, path, fields, label, options = {}) =>
     `<form method="post" action="${path}">${csrfField(request)}${fields}${button(label, { variant: 'outline', size: 'sm', ...options })}</form>`;
 // Short UTC dates ("Nov 15, 2026 4:29 PM"); the sessions section says once that times are UTC.
-const DAY = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
-const TIME = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' });
-export const when = value => value ? `${DAY.format(value)} ${TIME.format(value)}` : 'Never';
-export const day = value => value ? DAY.format(value) : 'Never';
-const METHODS = { email: 'an email link', password: 'a password', passkey: 'a passkey', github: 'GitHub', google: 'Google' };
-const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+// In English exactly as before; other languages use their own order and month names.
+const DAY = { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }, TIME = { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' };
+export const when = (env, value) => value ? `${formatDate(env, value, DAY)} ${formatDate(env, value, TIME)}` : t(env, 'Never');
+export const day = (env, value) => value ? formatDate(env, value, DAY) : t(env, 'Never');
+const METHODS = { email: msg('an email link'), password: msg('a password'), passkey: msg('a passkey'), github: 'GitHub', google: 'Google' };
+const method = (env, name) => METHODS[name] ? t(env, METHODS[name]) : name;
 // A titled section of an account page.
 const accountSection = (id, title, description, body) => `<section class="fd-stack" data-gap="3"><div class="fd-stack" data-gap="1"><h2 class="fd-h3" id="${id}">${e(title)}</h2>${description ? `<p class="fd-small fd-muted">${e(description)}</p>` : ''}</div>${body}</section>`;
 // A Fire list whose trail can hold a form (a div, so the form is not inside a span). title is text; the rest is safe markup.
@@ -38,6 +41,13 @@ const rowList = (label, rows) => `<ul class="fd-list" data-card aria-label="${e(
 const inlineForm = (request, path, { id, label, desc, input, submit }) => `<form method="post" action="${path}">${csrfField(request)}<div class="fd-form-row" data-layout="stack">
 <div class="fd-form-row-text"><label class="fd-form-row-label" for="${id}">${e(label)}</label>${desc ? `<span class="fd-form-row-desc" id="${id}-desc">${e(desc)}</span>` : ''}</div>
 <div class="fd-form-row-control"><div class="fd-field"><div class="fd-input-pair">${input}${submit}</div></div></div></div></form>`;
+// The person's language: Automatic (the browser's, then the brand's) or one the realm offers. Names are each language's own.
+function languageForm(request, env, current) {
+    const options = [['', t(env, 'Automatic')], ...offeredBy(env.REALM?.branding || {}).map(tag => [tag, LANGUAGE_NAMES[tag] || tag])];
+    const select = `<select class="fd-select" id="locale" name="locale" aria-describedby="locale-desc">${options.map(([value, label]) =>
+        `<option value="${e(value)}"${value ? ` lang="${e(value)}"` : ''}${(current || '') === value ? ' selected' : ''}>${e(label)}</option>`).join('')}</select>`;
+    return inlineForm(request, '/account/language', { id: 'locale', label: t(env, 'Language'), desc: t(env, 'For these pages and the emails we send you.'), input: select, submit: button(t(env, 'Save language')) });
+}
 // An email link within ten minutes proves the current mailbox.
 const freshMailbox = session => session.method === 'email' && session.auth_time * 1000 > Date.now() - FRESH_MS;
 const freshSignIn = session => session.auth_time * 1000 > Date.now() - FRESH_MS;
@@ -52,26 +62,27 @@ const VIEWS = { '/account': 'profile', '/account/profile': 'profile', '/account/
 // message: what is now true, as a string or { title, body }.
 export async function accountHome(request, env, session, message = '') {
     const url = new URL(request.url), view = VIEWS[url.pathname] || 'profile';
-    if (!message && url.searchParams.get('changed') === 'email') message = { title: 'Email changed', body: 'Sign in with your new address from now on.' };
+    if (!message && url.searchParams.get('changed') === 'email') message = { title: t(env, 'Email changed'), body: t(env, 'Sign in with your new address from now on.') };
     const note = message ? callout(message.title ?? message, message.body ?? '', { tone: 'success', role: 'status' }) : '';
     const { title, description, bands } = await { profile, security, sessions, agents }[view](request, env, session);
-    return accountPage(title, [note + bands[0], ...bands.slice(1)], { active: view, description });
+    return accountPage(title, [note + bands[0], ...bands.slice(1)], { env, active: view, description });
 }
 async function profile(request, env, session) {
-    const user = await env.DB.prepare('SELECT email,display_name,email_verified FROM users WHERE id=?').bind(session.user_id).first();
+    const user = await env.DB.prepare('SELECT email,display_name,email_verified,locale FROM users WHERE id=?').bind(session.user_id).first();
     const settings = `<div>
-${setting('Email', `<span class="fd-mono">${e(user.email)}</span>${user.email_verified ? '' : ` ${badge('Not confirmed', 'warning')} ${e('Sign in with an email link to confirm it.')}`}`)}
-${inlineForm(request, '/account/profile', { id: 'display_name', label: 'Name', desc: 'Apps that ask for your profile see this name.',
-        input: `<input class="fd-input" id="display_name" name="display_name" maxlength="100" autocomplete="name" aria-describedby="display_name-desc" value="${e(user.display_name || '')}">`, submit: button('Save name') })}
-${inlineForm(request, '/account/email', { id: 'new_email', label: 'New email', desc: 'Needs an email-link sign-in in the last 10 minutes. We confirm the new address and tell the old one.',
-        input: '<input class="fd-input" id="new_email" name="new_email" type="email" maxlength="254" autocomplete="email" placeholder="name@example.com" aria-describedby="new_email-desc" required>', submit: button('Change email') })}
+${setting(t(env, 'Email'), `<span class="fd-mono">${e(user.email)}</span>${user.email_verified ? '' : ` ${badge(t(env, 'Not confirmed'), 'warning')} ${e(t(env, 'Sign in with an email link to confirm it.'))}`}`)}
+${inlineForm(request, '/account/profile', { id: 'display_name', label: t(env, 'Name'), desc: t(env, 'Apps that ask for your profile see this name.'),
+        input: `<input class="fd-input" id="display_name" name="display_name" maxlength="100" autocomplete="name" aria-describedby="display_name-desc" value="${e(user.display_name || '')}">`, submit: button(t(env, 'Save name')) })}
+${languageForm(request, env, user.locale)}
+${inlineForm(request, '/account/email', { id: 'new_email', label: t(env, 'New email'), desc: t(env, 'Needs an email-link sign-in in the last 10 minutes. We confirm the new address and tell the old one.'),
+        input: `<input class="fd-input" id="new_email" name="new_email" type="email" maxlength="254" autocomplete="email" placeholder="${e(t(env, 'name@example.com'))}" aria-describedby="new_email-desc" required>`, submit: button(t(env, 'Change email')) })}
 </div>`;
-    const remove = accountSection('delete', 'Delete account', 'Signs you out of every app and agent and removes how you sign in. It can’t be undone.',
+    const remove = accountSection('delete', t(env, 'Delete account'), t(env, 'Signs you out of every app and agent and removes how you sign in. It can’t be undone.'),
         `<form class="fd-form" method="post" action="/account/delete">${csrfField(request)}
-${field({ id: 'confirm_email', name: 'confirm_email', label: 'Your email', hint: `Type ${user.email} to confirm.`, autocomplete: 'off', spellcheck: 'false', required: true })}
-${small('Apps keep their own records of you. Deleting needs a sign-in in the last 10 minutes.')}
-${actions(button('Delete account', { variant: 'danger' }))}</form>`);
-    return { title: 'Profile', description: 'Your name and email, as the apps you sign in to see them.', bands: [settings, remove] };
+${field({ id: 'confirm_email', name: 'confirm_email', label: t(env, 'Your email'), hint: t(env, 'Type {email} to confirm.', { email: user.email }), autocomplete: 'off', spellcheck: 'false', required: true })}
+${small(t(env, 'Apps keep their own records of you. Deleting needs a sign-in in the last 10 minutes.'))}
+${actions(button(t(env, 'Delete account'), { variant: 'danger' }))}</form>`);
+    return { title: t(env, 'Profile'), description: t(env, 'Your name and email, as the apps you sign in to see them.'), bands: [settings, remove] };
 }
 async function security(request, env, session) {
     const [password, factors, devices] = await Promise.all([
@@ -79,18 +90,18 @@ async function security(request, env, session) {
         confirmedFactors(env, session.user_id),
         env.DB.prepare('SELECT hash,name,created,last_used,expires_at FROM trusted_devices WHERE user_id=? AND expires_at>? ORDER BY last_used DESC').bind(session.user_id, Date.now()).all()
     ]);
-    const deviceRows = devices.results.map(d => ({ title: d.name, desc: e(`Remembered until ${day(d.expires_at)}`),
-        trail: rowAction(request, '/account/devices', hidden('device', d.hash), 'Forget', { 'aria-label': `Forget ${d.name}` }) }));
+    const deviceRows = devices.results.map(d => ({ title: d.name, desc: e(t(env, 'Remembered until {date}', { date: day(env, d.expires_at) })),
+        trail: rowAction(request, '/account/devices', hidden('device', d.hash), t(env, 'Forget'), { 'aria-label': t(env, 'Forget {name}', { name: d.name }) }) }));
     const apps2fa = factors.filter(f => f.type !== 'passkey').length, passkeys = factors.length - apps2fa;
-    const factorText = factors.length ? `${status('On', 'success')} ${e([apps2fa && plural(apps2fa, 'authenticator app'), passkeys && plural(passkeys, 'passkey')].filter(Boolean).join(' · '))}`
-        : `${status('Off')} ${e('Ask for a code or passkey when you sign in.')}`;
+    const factorText = factors.length ? `${status(t(env, 'On'), 'success')} ${e([apps2fa && tPlural(env, apps2fa, '{count} authenticator app', '{count} authenticator apps'), passkeys && tPlural(env, passkeys, '{count} passkey', '{count} passkeys')].filter(Boolean).join(' · '))}`
+        : `${status(t(env, 'Off'))} ${e(t(env, 'Ask for a code or passkey when you sign in.'))}`;
     const settings = `<div>
-${setting('Password', password ? e(`Set ${day(password.updated)}`) : e('None. Apps that offer passwords let you set one.'), password ? linkButton('Change password', '/account/password', { variant: 'outline' }) : '')}
-${setting('Two-factor authentication', factorText, linkButton(factors.length ? 'Manage' : 'Set up', '/account/mfa', { variant: factors.length ? 'outline' : 'primary' }))}
+${setting(t(env, 'Password'), password ? e(t(env, 'Set {date}', { date: day(env, password.updated) })) : e(t(env, 'None. Apps that offer passwords let you set one.')), password ? linkButton(t(env, 'Change password'), '/account/password', { variant: 'outline' }) : '')}
+${setting(t(env, 'Two-factor authentication'), factorText, linkButton(factors.length ? t(env, 'Manage') : t(env, 'Set up'), '/account/mfa', { variant: factors.length ? 'outline' : 'primary' }))}
 </div>`;
-    const browsers = accountSection('browsers', 'Remembered browsers', 'These skip the second-factor code until the date shown.',
-        deviceRows.length ? rowList('Remembered browsers', deviceRows) : empty('No remembered browsers', 'Browsers you choose to remember at a second-factor prompt appear here.'));
-    return { title: 'Security', description: 'How you sign in, and the browsers you trust.', bands: [settings, browsers] };
+    const browsers = accountSection('browsers', t(env, 'Remembered browsers'), t(env, 'These skip the second-factor code until the date shown.'),
+        deviceRows.length ? rowList(t(env, 'Remembered browsers'), deviceRows) : empty(t(env, 'No remembered browsers'), t(env, 'Browsers you choose to remember at a second-factor prompt appear here.')));
+    return { title: t(env, 'Security'), description: t(env, 'How you sign in, and the browsers you trust.'), bands: [settings, browsers] };
 }
 async function sessions(request, env, session) {
     const [rows, apps] = await Promise.all([
@@ -99,23 +110,23 @@ async function sessions(request, env, session) {
             WHERE a.user_id=? GROUP BY a.client_id ORDER BY signed_in DESC LIMIT 50`).bind(session.user_id).all()
     ]);
     const sessionRows = rows.results.map(s => {
-        const device = s.device || 'Unknown device', current = s.sid === session.sid;
-        return { title: device, desc: e([s.location, `Signed in ${when(s.auth_time * 1000)} with ${METHODS[s.method] || s.method}`].filter(Boolean).join(' · ')),
-            meta: e(`Active ${when(s.last_seen)}`),
-            trail: current ? badge('This browser', 'success') : rowAction(request, '/account/sessions', hidden('sid', s.sid), 'Sign out', { 'aria-label': `Sign out ${device}` }) };
+        const device = s.device ? deviceText(s.device, (id, vars) => t(env, id, vars)) : t(env, 'Unknown device'), current = s.sid === session.sid;
+        return { title: device, desc: e([s.location, t(env, 'Signed in {time} with {method}', { time: when(env, s.auth_time * 1000), method: method(env, s.method) })].filter(Boolean).join(' · ')),
+            meta: e(t(env, 'Active {time}', { time: when(env, s.last_seen) })),
+            trail: current ? badge(t(env, 'This browser'), 'success') : rowAction(request, '/account/sessions', hidden('sid', s.sid), t(env, 'Sign out'), { 'aria-label': t(env, 'Sign out {device}', { device }) }) };
     });
     const appRows = apps.results.map(a => {
         const name = JSON.parse(a.branding).name || a.client_id;
-        return { title: name, desc: e(`Signed in ${when(a.signed_in)}`),
-            trail: rowAction(request, '/account/apps', hidden('client_id', a.client_id), 'Sign out', { 'aria-label': `Sign out of ${name}` }) };
+        return { title: name, desc: e(t(env, 'Signed in {time}', { time: when(env, a.signed_in) })),
+            trail: rowAction(request, '/account/apps', hidden('client_id', a.client_id), t(env, 'Sign out'), { 'aria-label': t(env, 'Sign out of {name}', { name }) }) };
     });
-    const signedIn = accountSection('sessions', 'Signed-in sessions', 'Browsers signed in to your account.', rowList('Signed-in sessions', sessionRows) +
-        (rows.results.length > 1 ? actions(rowAction(request, '/account/sessions', hidden('sid', 'others'), 'Sign out other sessions', { size: undefined })) : ''));
-    const appList = accountSection('apps', 'Apps', 'Signing out of an app ends its session on every device.', appRows.length ? rowList('Apps', appRows)
-        : empty('No apps yet', 'Apps you sign in to with this account appear here.'));
-    return { title: 'Sessions and apps', description: 'Where you’re signed in. Times are UTC.', bands: [signedIn, appList] };
+    const signedIn = accountSection('sessions', t(env, 'Signed-in sessions'), t(env, 'Browsers signed in to your account.'), rowList(t(env, 'Signed-in sessions'), sessionRows) +
+        (rows.results.length > 1 ? actions(rowAction(request, '/account/sessions', hidden('sid', 'others'), t(env, 'Sign out other sessions'), { size: undefined })) : ''));
+    const appList = accountSection('apps', t(env, 'Apps'), t(env, 'Signing out of an app ends its session on every device.'), appRows.length ? rowList(t(env, 'Apps'), appRows)
+        : empty(t(env, 'No apps yet'), t(env, 'Apps you sign in to with this account appear here.')));
+    return { title: t(env, 'Sessions and apps'), description: t(env, 'Where you’re signed in. Times are UTC.'), bands: [signedIn, appList] };
 }
-const agents = async (request, env, session) => ({ title: 'Connected agents', description: 'Agents act for you in an app. Revoke one to end its access.', bands: [await agentsList(request, env, session)] });
+const agents = async (request, env, session) => ({ title: t(env, 'Connected agents'), description: t(env, 'Agents act for you in an app. Revoke one to end its access.'), bands: [await agentsList(request, env, session)] });
 export async function accountAction(request, env, ctx) {
     const session = await requireSession(request, env);
     const url = new URL(request.url), what = url.pathname.slice('/account/'.length);
@@ -132,7 +143,14 @@ export async function accountAction(request, env, ctx) {
                 ...userEventStatements(env, session.user_id, 'user-updated', { fields: ['name'] })]);
         ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'event_dispatch_failed', null, { pending: true })));
         await audit(env, 'profile_updated', session.user_id, { fields: ['display_name'] });
-        return accountHome(request, env, session, 'Name saved');
+        return accountHome(request, env, session, t(env, 'Name saved'));
+    }
+    if (what === 'language') {
+        const locale = body.locale === '' ? null : body.locale;
+        invariant(locale === null || (typeof locale === 'string' && offeredBy(env.REALM?.branding || {}).includes(locale)), 'invalid_request', 'Choose a language from the list.');
+        await env.DB.prepare('UPDATE users SET locale=? WHERE id=?').bind(locale, session.user_id).run();
+        useLocale(env, { user: locale });
+        return accountHome(request, env, session, t(env, 'Language saved'));
     }
     if (what === 'sessions') {
         invariant(typeof body.sid === 'string' && body.sid.length > 0 && body.sid.length <= 64, 'invalid_request', 'Choose a session to sign out.');
@@ -143,7 +161,7 @@ export async function accountAction(request, env, ctx) {
                 : env.DB.prepare('DELETE FROM sessions WHERE user_id=? AND sid=?').bind(session.user_id, body.sid)]);
         ctx.waitUntil(flushLogouts(env).catch(() => audit(env, 'logout_dispatch_failed', null, { pending: true })));
         await audit(env, 'sessions_revoked', session.user_id, { scope: others ? 'others' : 'one' });
-        return accountHome(request, env, session, others ? 'Signed out of other sessions' : 'Session signed out');
+        return accountHome(request, env, session, others ? t(env, 'Signed out of other sessions') : t(env, 'Session signed out'));
     }
     if (what === 'apps') {
         invariant(typeof body.client_id === 'string' && body.client_id.length <= 200, 'invalid_request', 'Choose an app to sign out of.');
@@ -153,12 +171,12 @@ export async function accountAction(request, env, ctx) {
             env.DB.prepare('DELETE FROM app_sessions WHERE user_id=? AND client_id=?').bind(session.user_id, body.client_id)]);
         ctx.waitUntil(flushLogouts(env).catch(() => audit(env, 'logout_dispatch_failed', null, { pending: true })));
         await audit(env, 'app_signed_out', session.user_id, { client_id: body.client_id });
-        return accountHome(request, env, session, 'Signed out of the app');
+        return accountHome(request, env, session, t(env, 'Signed out of the app'));
     }
     if (what === 'devices') {
         invariant(typeof body.device === 'string' && /^[0-9a-f]{64}$/.test(body.device), 'invalid_request', 'Choose a browser to forget.');
         await env.DB.prepare('DELETE FROM trusted_devices WHERE hash=? AND user_id=?').bind(body.device, session.user_id).run();
-        return accountHome(request, env, session, 'Browser forgotten');
+        return accountHome(request, env, session, t(env, 'Browser forgotten'));
     }
     if (what === 'email') return startEmailChange(request, env, ctx, session, body);
     if (what === 'email/confirm') return confirmEmailChange(request, env, ctx, session, body);
@@ -180,17 +198,16 @@ async function startEmailChange(request, env, ctx, session, body) {
     const browser = cookies(request)[BROWSER_COOKIE];
     invariant(tokenShape(browser), 'browser_binding', 'Reload the account page and try again.', 403);
     invariant(env.EMAIL?.send && env.EMAIL_FROM, 'email_config', 'Email isn’t set up on this server, so the change can’t be confirmed. Contact the administrator.', 503);
-    const message = { title: 'Confirmation link sent', body: `We sent a link to ${email}. Open it in this browser within 15 minutes.` };
+    const message = { title: t(env, 'Confirmation link sent'), body: t(env, 'We sent a link to {email}. Open it in this browser within 15 minutes.', { email }) };
     // An address another account holds gets no email, and the answer is the same, so this reveals nothing.
     const held = await env.DB.prepare('SELECT 1 FROM users WHERE realm_id=? AND email=?').bind(env.REALM.id, email).first();
     if (held || !await limitEmail(env, email, request)) return accountHome(request, env, session, message);
     const token = randomToken(), now = Date.now();
     await env.DB.batch([env.DB.prepare('DELETE FROM email_changes WHERE user_id=?').bind(session.user_id),
         env.DB.prepare('INSERT INTO email_changes(hash,user_id,new_email,browser_hash,expires_at) VALUES(?,?,?,?,?)').bind(await sha256(token), session.user_id, email, await sha256(browser), now + 900000)]);
-    ctx.waitUntil(env.EMAIL.send({ from: env.EMAIL_FROM, to: email, subject: `${env.REALM.display_name}: confirm your new email`,
-        text: `Open this link in the browser where you asked for the change, then choose Confirm. It expires in 15 minutes.\n\n${env.ISSUER}/account/email/confirm?token=${token}\n\nIgnore this email if you did not ask for it.` })
+    ctx.waitUntil(sendEmail(env, { kind: 'email_change_link', to: email, links: { link: `${env.ISSUER}/account/email/confirm?token=${token}` } })
         .catch(error => console.error(JSON.stringify({ type: 'email_change_failed', code: error?.code || 'send_failed' }))));
-    notify(env, ctx, session.email, 'email change requested', `Someone signed in to your account asked to change its email to ${email}. Nothing changes until that address is confirmed.`);
+    notify(env, ctx, session.email, 'email_change_requested', { email });
     return accountHome(request, env, session, message);
 }
 // GET shows a confirm button; only the POST changes anything, so link scanners cannot.
@@ -199,9 +216,9 @@ async function confirmEmailPage(request, env, session) {
     invariant(tokenShape(token), 'invalid_request', 'This confirmation link is incomplete. Open the link from the email again.');
     const row = await env.DB.prepare('SELECT new_email FROM email_changes WHERE hash=? AND user_id=? AND expires_at>?').bind(await sha256(token), session.user_id, Date.now()).first();
     invariant(row, 'invalid_grant', 'This link expired, was used, or belongs to another account.', 400);
-    return page('Confirm new email', `${heading('Confirm new email', 'Your account will use the new address from now on.')}
-${kv([['Current email', `<span class="fd-mono">${e(session.email)}</span>`], ['New email', `<strong class="fd-mono">${e(row.new_email)}</strong>`]], 1)}
-<form class="fd-stack" data-gap="3" method="post" action="/account/email/confirm">${csrfField(request)}${hidden('token', token)}${button('Change email', { variant: 'primary', block: true })}</form>`);
+    return page(t(env, 'Confirm new email'), `${heading(t(env, 'Confirm new email'), t(env, 'Your account will use the new address from now on.'))}
+${kv([[t(env, 'Current email'), `<span class="fd-mono">${e(session.email)}</span>`], [t(env, 'New email'), `<strong class="fd-mono">${e(row.new_email)}</strong>`]], 1)}
+<form class="fd-stack" data-gap="3" method="post" action="/account/email/confirm">${csrfField(request)}${hidden('token', token)}${button(t(env, 'Change email'), { variant: 'primary', block: true })}</form>`);
 }
 async function confirmEmailChange(request, env, ctx, session, body) {
     invariant(tokenShape(body.token) && tokenShape(cookies(request)[BROWSER_COOKIE]), 'invalid_grant', 'This confirmation link is incomplete. Open the link from the email again.', 400);
@@ -219,7 +236,7 @@ async function confirmEmailChange(request, env, ctx, session, body) {
         throw error;
     }
     ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'event_dispatch_failed', null, { pending: true })));
-    notify(env, ctx, old, 'your email was changed', `Your account's email changed from ${old} to ${row.new_email}. If you did not do this, contact the app you use.`);
+    notify(env, ctx, old, 'email_changed', { old, new: row.new_email });
     return redirect(`${env.ISSUER}/account?changed=email`);
 }
 async function deleteAccount(request, env, ctx, session, body) {
@@ -239,6 +256,6 @@ async function deleteAccount(request, env, ctx, session, body) {
         env.DB.prepare("UPDATE users SET status='deleted',display_name=NULL WHERE id=?").bind(id),
         env.DB.prepare("INSERT INTO audit(event,actor,target,detail,created,realm_id) VALUES('account_deleted',?,?,'{}',?,?)").bind(id, id, now, env.REALM.id)]);
     ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'delete_dispatch_failed', null, { pending: true })));
-    notify(env, ctx, session.email, 'your account was deleted', 'Your account was deleted and you were signed out everywhere.');
+    notify(env, ctx, session.email, 'account_deleted');
     return redirect(`${env.ISSUER}/signed-out`, [cookie(SESSION_COOKIE, '', 0), cookie(CSRF_COOKIE, '', 0, false)]);
 }

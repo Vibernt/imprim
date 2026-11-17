@@ -15,7 +15,7 @@ import { mfaChallenge } from './auth/mfa-challenge.mjs';
 import { mfaAccount } from './account/mfa.mjs';
 import { accountAction } from './account/home.mjs';
 import { registrationOptions, register, assertionOptions, assertionVerify, removePasskey } from './webauthn/ceremonies.mjs';
-import { passkeyScript } from './webauthn/script.mjs';
+import { passkeyScriptFor } from './webauthn/script.mjs';
 import { providerStart, providerCallback, UPSTREAM_COOKIE } from './providers/upstream.mjs';
 import { introspect, revoke, appGrants } from './machines/endpoints.mjs';
 import { githubStart, githubCallback, OAUTH_COOKIE } from './auth/github-sign-in.mjs';
@@ -28,10 +28,11 @@ import { cachedJwks } from './oidc/keys.mjs';
 import { logout } from './oidc/logout.mjs';
 import { invite } from './services/invitations.mjs';
 import { scheduled, queue } from './services/maintenance.mjs';
-import { loginPage, signInScript } from './pages/sign-in.mjs';
+import { loginPage, signInScriptFor } from './pages/sign-in.mjs';
 import { page, localCss, errorPage, signedOutPage, withBrand, only } from './pages/layout.mjs';
-import { result, linkButton } from './pages/ui.mjs';
+import { result, linkButton, escapeHtml } from './pages/ui.mjs';
 import { themeResponse } from './branding/theme.mjs';
+import { startLocale, t, tError, brandCopy } from './i18n/index.mjs';
 import { serveAsset } from './branding/assets.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
 async function route(request, env, ctx, url) {
@@ -45,13 +46,13 @@ async function route(request, env, ctx, url) {
     const key = `${request.method} ${url.pathname}`;
     switch (key) {
         case 'GET /assets/local.css': return new Response(localCss, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
-        case 'GET /assets/passkey.js': return new Response(passkeyScript, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+        case 'GET /assets/passkey.js': return new Response(passkeyScriptFor(url.searchParams.get('lang')), { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
         case 'POST /v1/auth/passkey/options': return assertionOptions(request, env);
         case 'POST /v1/auth/passkey/verify': return assertionVerify(request, env, ctx);
         case 'POST /account/passkeys/options': return registrationOptions(request, env);
         case 'POST /account/passkeys/register': return register(request, env, ctx);
         case 'POST /account/passkeys/remove': return removePasskey(request, env, ctx);
-        case 'GET /assets/sign-in.js': return new Response(signInScript, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+        case 'GET /assets/sign-in.js': return new Response(signInScriptFor(url.searchParams.get('lang')), { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
         case 'GET /.well-known/oauth-authorization-server':
         case 'GET /.well-known/openid-configuration': return json(discovery(env), 200, { 'access-control-allow-origin': '*' });
         case 'GET /.well-known/jwks.json': return json(await cachedJwks(env), 200, { 'cache-control': 'public, max-age=300', 'access-control-allow-origin': '*' });
@@ -75,23 +76,23 @@ async function route(request, env, ctx, url) {
         case 'GET /mfa': case 'POST /mfa': return mfaChallenge(request, env, ctx);
         case 'GET /account/mfa': case 'POST /account/mfa': return mfaAccount(request, env, ctx);
         case 'POST /account/profile': case 'POST /account/sessions': case 'POST /account/apps': case 'POST /account/devices':
-        case 'POST /account/email': case 'GET /account/email/confirm': case 'POST /account/email/confirm': case 'POST /account/delete':
+        case 'POST /account/email': case 'POST /account/language': case 'GET /account/email/confirm': case 'POST /account/email/confirm': case 'POST /account/delete':
             return accountAction(request, env, ctx);
         case 'GET /v1/auth/github/start': return githubStart(request, env);
         case 'GET /auth/github/callback': return githubCallback(request, env);
         case 'GET /v1/auth/google/start': return googleStart(request, env);
         case 'GET /login/google/callback': return googleCallback(request, env);
         case 'GET /login': return loginPage(request, env);
-        case 'GET /check-email': return page('Check your email', result('mail', 'accent', 'Check your email', 'If this address can sign in here, a link arrives within a minute.') +
-            '<p class="fd-screen-note">Open it in this browser. The link works once and expires in 15 minutes.</p>');
+        case 'GET /check-email': return page(t(env, 'Check your email'), result('mail', 'accent', t(env, 'Check your email'), t(env, 'If this address can sign in here, a link arrives within a minute.')) +
+            `<p class="fd-screen-note">${escapeHtml(t(env, 'Open it in this browser. The link works once and expires in 15 minutes.'))}</p>`);
         case 'GET /signed-in': {
             if (!await getSession(request, env)) throw new AppError(401, 'login_required', 'Sign in first.');
-            return page('Signed in', result('circle-check', 'success', 'You’re signed in', 'Go back to your app to continue.') +
-                `<div class="fd-stack" data-gap="2-5">${only('admin', linkButton('Open the admin console', '/admin', { variant: 'primary', size: 'lg', block: true }))}${linkButton('Your account', '/account', { size: 'lg', block: true })}</div>`);
+            return page(t(env, 'Signed in'), result('circle-check', 'success', t(env, 'You’re signed in'), t(env, 'Go back to your app to continue.')) +
+                `<div class="fd-stack" data-gap="2-5">${only('admin', linkButton(t(env, 'Open the admin console'), '/admin', { variant: 'primary', size: 'lg', block: true }))}${linkButton(t(env, 'Your account'), '/account', { size: 'lg', block: true })}</div>`);
         }
-        case 'GET /signed-out': return page('Signed out', result('log-out', 'neutral', 'You’re signed out', env.REALM.branding?.copy?.signed_out || 'Apps you used keep their own sessions until you sign out there.'));
+        case 'GET /signed-out': return page(t(env, 'Signed out'), result('log-out', 'neutral', t(env, 'You’re signed out'), brandCopy(env, env.REALM.branding || {}, 'signed_out') || t(env, 'Apps you used keep their own sessions until you sign out there.')));
         case 'GET /assets/theme.css': return themeResponse(env, url);
-        case 'GET /error': return errorPage('This sign-in request is missing or has expired.');
+        case 'GET /error': return errorPage(env, t(env, 'This sign-in request is missing or has expired.'));
         default: throw new AppError(404, 'not_found', 'Endpoint not found.');
     }
 }
@@ -104,6 +105,8 @@ export function limiterFor(method, path) {
     if (unlimited.has(`${method} ${path}`)) return null;
     return path.startsWith('/v1/auth/') || path.startsWith('/login/provider/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';
 }
+// Browser endpoints whose errors a person reads (sign-in.js, passkey.js and the account forms show them).
+const PEOPLE_PATHS = /^\/(?:v1\/auth\/|account(?:\/|$)|mfa$|agent\/consent$|device$|logout$|login$|signed-in$)/;
 export async function handleRequest(request, base, ctx) {
     const url = new URL(request.url);
     let env = base;
@@ -112,6 +115,8 @@ export async function handleRequest(request, base, ctx) {
         // REQUEST and CTX let sign-in record the device and send notices without threading them through every call;
         // SEEN is who the request's session belongs to, for the shell's account row (auth/session.mjs fills it).
         env = { ...realmEnv(base, await realmFor(base, url.origin)), REQUEST: describeDevice(request), CTX: ctx, SEEN: {} };
+        // The page language, from the realm and Accept-Language; handlers add the app, ui_locales and the person.
+        startLocale(env, request, url);
         const limiter = limiterFor(request.method, url.pathname);
         if (limiter) await limitAddress(env, request, limiter);
         const response = await route(request, env, ctx, url);
@@ -126,13 +131,15 @@ export async function handleRequest(request, base, ctx) {
         const known = error instanceof AppError;
         if (!known) console.error(JSON.stringify({ type: 'request_failed', path: url.pathname, code: 'internal_error' }));
         const code = known ? error.code : 'server_error', status = known ? error.status : 500;
-        const message = known ? error.message : 'The request could not be completed.';
         // A person's browser may POST an authorization request (OIDC Core 3.1.2.1); refusals before the redirect is trusted are pages.
         const html = (request.method === 'GET' || url.pathname === '/authorize') && request.headers.get('accept')?.includes('text/html');
+        // People read the message on an error page, or in the sign-in and account scripts, so it is translated there.
+        // Protocol endpoints keep English: RFC 6749 limits error_description to ASCII, and developers read it.
+        const message = known ? (html || PEOPLE_PATHS.test(url.pathname) ? tError(env, error) : error.message) : t(env, 'The request could not be completed.');
         // A person who opens their account page while signed out gets a page that says how to sign in, whatever
         // the request's Accept header; API clients of the same paths use POST and still get JSON.
         const signedOut = code === 'login_required' && request.method === 'GET' && /^\/(account(\/|$)|mfa$)/.test(url.pathname);
-        const response = signedOut ? signedOutPage() : html ? errorPage(message, status) : json({ error: code, error_description: message }, status);
+        const response = signedOut ? signedOutPage(env) : html ? errorPage(env, message, status) : json({ error: code, error_description: message }, status);
         if (code === 'invalid_client' && status === 401) response.headers.set('www-authenticate', `Basic realm="${(env.REALM?.display_name || 'identity').replace(/[^\x20-\x7e]|["\\]/g, '')}"`);
         if (code === 'invalid_token') response.headers.set('www-authenticate', 'Bearer error="invalid_token"');
         if (url.pathname === '/auth/github/callback') response.headers.append('set-cookie', cookie(OAUTH_COOKIE, '', 0));

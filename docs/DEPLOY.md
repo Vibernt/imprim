@@ -79,7 +79,7 @@ back automatically. Restore the backup only if a migration itself is wrong, and 
 
 ## Upgrading an existing deployment
 
-Migrations run in order, `0001` to `0019`, and each one is applied once. A Worker built from this repository expects
+Migrations run in order, `0001` to `0021`, and each one is applied once. A Worker built from this repository expects
 every migration in it, and an older Worker cannot always run against a newer schema, so apply, configure and deploy
 **back to back**, in a quiet minute. Rehearse the whole sequence on staging first.
 
@@ -155,6 +155,21 @@ Follow [Releases](#releases): staging first, then production with a backup. Thre
 - **Apps** can stay on client `0.3.0`. Upgrade to `0.6.0` to use step-up (`acrValues`, `maxAge`), DPoP
   verification or user events. An app still on `identity-client` `0.2.0` keeps signing people in, but refuses agent
   revocation events until it upgrades ([Clients](CLIENTS.md#upgrading-from-identity-client-020)).
+
+## Upgrading to migration 0021
+
+`0021` adds languages and HTML email: `auth_requests.ui_locales` and `users.locale`, both optional. It needs no new
+binding or secret. On the day:
+
+- **Pages follow the browser's language.** People whose browser asks for Spanish, French, German or Portuguese see
+  those languages straight away; everyone else sees English as before. A realm or app that should stay English sets
+  `"locales": ["en"]` in its branding first ([Branding](BRANDING.md#languages)).
+- **Emails gain an HTML part.** The English text part is unchanged. Upload a PNG logo to have it in emails
+  ([Branding](BRANDING.md#emails)).
+- **The translations are drafts** awaiting native review ([Languages](TRANSLATING.md)).
+
+Follow [Releases](#releases): staging first. On staging, send each email kind to Gmail, Outlook and Apple Mail and
+look at it in light and dark mode before production.
 
 ## Bindings reference
 

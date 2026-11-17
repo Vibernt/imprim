@@ -8,10 +8,12 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 |---|---|
 | Worker routes | OIDC and agent OAuth endpoints, sign-in pages, account page, admin console, machine endpoints. |
 | Pages | Server-rendered HTML built from [Fire](fire/README.md) components (`pages/ui.mjs`, `pages/layout.mjs`, `pages/shell.mjs`). Every text is escaped; sign-in and consent screens load no Fire JavaScript. |
+| Languages | `i18n/`: the request's language, chosen once per request from `ui_locales`, the person's saved language, `Accept-Language` and the brand, and the catalogues that translate English message ids ([Languages](TRANSLATING.md)). The admin console is English. |
+| Email | `services/email/`: every message as data, rendered as plain text and a branded HTML part in the recipient's language, with an inline logo; sent through the email binding. |
 | Static assets | Fire's CSS, modules, fonts and icons at `/fire/*`, and the branding editor at `/imprim/*`, from `apps/server/public/`. Served by Workers Static Assets before the Worker runs, with headers from `public/_headers`. |
 | Realms | The request host selects a realm; every query is scoped to it ([Realms](REALMS.md)). |
 | D1 | Users, client policy, short-lived requests, sessions, keys, grants, audit. |
-| Email binding | Sends sign-in links after neutral request acceptance, and security notices. |
+| Email binding | Sends sign-in links after neutral request acceptance, and security notices, each as text and HTML. |
 | Upstream providers | GitHub, Google, Microsoft, Apple and any OIDC issuer; their tokens are not stored. |
 | Have I Been Pwned | Range API (k-anonymity) for breached-password checks; only a 5-character hash prefix leaves. |
 | Turnstile | Checks email requests when both keys are configured. |
@@ -21,14 +23,14 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 
 ## D1 schema
 
-Migrations `0001` through `0019` create or extend these tables. Every realm-owned row carries `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0021` create or extend these tables. Every realm-owned row carries `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|
-| `users` | Stable subject, normalized email, verification and active/blocked/deleted status. |
+| `users` | Stable subject, normalized email, verification, active/blocked/deleted status and saved language. |
 | `user_identities` | A provider id and that provider's subject (GitHub numeric id, Google `sub`, or a registry provider's `sub`) linked to a user. |
 | `clients` | App credentials, URLs, admission, sign-in and agent policy. |
-| `auth_requests` | Browser-bound pending app or agent authorization request. |
+| `auth_requests` | Browser-bound pending app or agent authorization request, with its sanitized `ui_locales`. |
 | `magic_links` | Hashed, browser-bound email link and request reference. |
 | `oauth_states` | Hashed upstream state, PKCE verifier, provider and nonce. |
 | `sessions` | Hashed identity session and CSRF, `sid`, method, `amr`, second-factor time, admin scope, device, place and Google `hd`. |
@@ -92,7 +94,7 @@ are a centred card under the brand (`pages/layout.mjs`). The admin console and t
 shell: a sidebar, a top bar, a page hero and a phone menu (`pages/shell.mjs`). Both carry fixed markers that
 `withBrand` fills from the realm's and the app's branding: the name, the look's `<html>` attributes, the
 `/assets/theme.css` link, the favicon, the logo or mark (the brand's initial in a dot matrix until one is uploaded),
-the footer, and who is signed in. Navigation that only administrators use is dropped for everyone else. Every page
+the footer, who is signed in, and `<html lang>` for the request's language. Navigation that only administrators use is dropped for everyone else. Every page
 ends with "Powered by Imprim". Everything inserted is escaped or an asset id. Fire's own files come from static assets, and every class on a page is Fire's
 ([Branding](BRANDING.md), [Fire](fire/README.md)).
 

@@ -10,6 +10,7 @@ import { allowsMethod } from './sign-in-methods.mjs';
 import { ownIdToken } from './logout-hint.mjs';
 import { signInPage } from '../pages/sign-in.mjs';
 const bounded = value => typeof value === 'string' && value.length > 0 && value.length <= 512;
+import { parseUiLocales, useLocale } from '../i18n/index.mjs';
 export async function authorize(request, env) {
     // OIDC Core 3.1.2.1: the same parameters may arrive as a form POST. Like the GET, it only starts a sign-in, so it
     // needs no Origin check: nothing happens until the person signs in on Imprim's own pages.
@@ -20,6 +21,9 @@ export async function authorize(request, env) {
         return authorizeAgent(request, env, query);
     }
     const client = await getClient(env, query.client_id);
+    // ui_locales is a preference, never an error: malformed or unknown tags are dropped (OIDC Core 3.1.2.1).
+    const uiLocales = parseUiLocales(query.ui_locales);
+    useLocale(env, { client, uiLocales });
     registeredUri(client, query.redirect_uri); // Never redirect errors until this boundary is trusted.
     // Classic OpenID Connect (off by default, confidential apps only) accepts requests from libraries written before
     // OAuth 2.1: no PKCE, no nonce, and a claims request that is ignored. A request that starts PKCE must finish it.
@@ -28,12 +32,12 @@ export async function authorize(request, env) {
     try {
         // First: a request object may carry the parameters checked below, so refusing it must not depend on them.
         invariant(query.request === undefined, 'request_not_supported', 'Request objects are not supported.');
-        invariant(query.request_uri === undefined, 'request_uri_not_supported', 'request_uri is not supported.');
+        invariant(query.request_uri === undefined, 'request_uri_not_supported', '{name} is not supported.', 400, { name: 'request_uri' });
         invariant(query.response_type === 'code', 'unsupported_response_type', 'Only code is supported.');
         const pkce = query.code_challenge !== undefined || query.code_challenge_method !== undefined;
         invariant((classic && !pkce) || (query.code_challenge_method === 'S256' && tokenShape(query.code_challenge)), 'invalid_request', 'PKCE S256 required.');
-        invariant(bounded(query.state), 'invalid_request', 'state required.');
-        invariant((classic && query.nonce === undefined) || bounded(query.nonce), 'invalid_request', 'nonce required.');
+        invariant(bounded(query.state), 'invalid_request', '{name} required.', 400, { name: 'state' });
+        invariant((classic && query.nonce === undefined) || bounded(query.nonce), 'invalid_request', '{name} required.', 400, { name: 'nonce' });
         const scopes = (query.scope || '').split(' ');
         invariant(scopes.includes('openid') && scopes.every(s => ['openid', 'email', 'profile'].includes(s)), 'invalid_scope', 'Use openid, email and/or profile scopes.');
         invariant(query.prompt === undefined || ['none', 'login'].includes(query.prompt), 'invalid_request', 'Unsupported prompt.');
@@ -41,7 +45,7 @@ export async function authorize(request, env) {
         invariant(query.max_age === undefined || /^\d{1,9}$/.test(query.max_age), 'invalid_request', 'max_age must be whole seconds.');
         invariant(query.acr_values === undefined || (query.acr_values.length <= 512 && /^[\x21-\x7e]+( [\x21-\x7e]+)*$/.test(query.acr_values)), 'invalid_request', 'Invalid acr_values.');
         // OIDC Core 5.5 lets a provider that does not support claims requests ignore them; only classic apps send them.
-        invariant(classic || query.claims === undefined, 'invalid_request', 'claims is not supported.');
+        invariant(classic || query.claims === undefined, 'invalid_request', '{name} is not supported.', 400, { name: 'claims' });
         if (query.id_token_hint !== undefined) {
             // An ID token this issuer gave this app, possibly expired (OIDC Core 3.1.2.1). It names who the app expects.
             hint = await ownIdToken(env, query.id_token_hint);
@@ -62,10 +66,10 @@ export async function authorize(request, env) {
     const browser = tokenShape(existing) ? existing : randomToken(), id = randomToken();
     const responseCookies = [cookie(BROWSER_COOKIE, browser, 1800)];
     // An empty challenge or nonce records that a classic app did not send one.
-    await env.DB.prepare(`INSERT INTO auth_requests(id,client_id,redirect_uri,state,nonce,challenge,scope,browser_hash,expires_at,acr_values,max_age,prompt,hint_sub)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, client.id, query.redirect_uri, query.state, query.nonce ?? '',
+    await env.DB.prepare(`INSERT INTO auth_requests(id,client_id,redirect_uri,state,nonce,challenge,scope,browser_hash,expires_at,acr_values,max_age,prompt,hint_sub,ui_locales)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, client.id, query.redirect_uri, query.state, query.nonce ?? '',
             query.code_challenge ?? '', query.scope, await sha256(browser), Date.now() + 1800000, query.acr_values ?? null,
-            query.max_age === undefined ? null : Number(query.max_age), query.prompt ?? null, hint?.sub ?? null).run();
+            query.max_age === undefined ? null : Number(query.max_age), query.prompt ?? null, hint?.sub ?? null, uiLocales).run();
     if (session) {
         // Carry the just-created binding internally for immediate SSO; never trust a caller-supplied request id.
         // Built from the URL: a POSTed authorization request's body has already been read.

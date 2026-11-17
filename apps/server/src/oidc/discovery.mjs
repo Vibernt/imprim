@@ -1,3 +1,4 @@
+import { offeredBy } from '../i18n/index.mjs';
 export function discovery(env) {
     const issuer = env.ISSUER;
     return {
@@ -16,6 +17,8 @@ export function discovery(env) {
         acr_values_supported: ['urn:imprim:acr:sf', 'urn:imprim:acr:mfa'],
         authorization_response_iss_parameter_supported: true,
         request_parameter_supported: false, request_uri_parameter_supported: false,
-        claims_parameter_supported: false
+        claims_parameter_supported: false,
+        // The languages pages and emails are offered in (OIDC Discovery); ui_locales picks among them.
+        ui_locales_supported: offeredBy(env.REALM?.branding || {})
     };
 }

@@ -7,6 +7,7 @@ import { resolveBranding } from '../branding/tokens.mjs';
 import { lookAttributes } from '../branding/look.mjs';
 import { adminRole } from '../services/admission.mjs';
 import { escapeHtml, dotLogo, dotMark, icon, result } from './ui.mjs';
+import { t, tHtml, localeOf, htmlLang, brandCopy } from '../i18n/index.mjs';
 export { escapeHtml, icon };
 const marker = name => `<!--identity:${name}-->`;
 // BRAND: the name. HEADER: the centred brand row. SIDE_BRAND and MARK: the shell's brand. FOOTER and SHELL_FOOTER: legal
@@ -15,7 +16,8 @@ export const BRAND = marker('brand'), HEADER = marker('header'), HEAD = marker('
     MARK = marker('mark'), SHELL_FOOTER = marker('shell-footer'), VIEWER = marker('viewer'), INITIALS = marker('initials');
 // Markup only an administrator ("admin") or a platform administrator ("platform") gets; withBrand drops it for others.
 export const only = (who, html) => `${marker(`if:${who}`)}${html}${marker(`end:${who}`)}`;
-const poweredBy = `<p class="fd-screen-note"><span>Powered by</span>${dotLogo('sm')}</p>`;
+const POWERED_BY = marker('powered-by');
+const poweredBy = `<p class="fd-screen-note"><span>${POWERED_BY}</span>${dotLogo('sm')}</p>`;
 // Stopgaps for anything Fire lacks (docs/fire/GUIDE.md section 7; requests in docs/fire/REQUESTS.md): `x-` classes, Fire
 // tokens only. There are none now, so no page links the stylesheet.
 export const localCss = '/* Fire stopgaps for Imprim: none. See docs/fire/REQUESTS.md. */\n';
@@ -53,12 +55,12 @@ ${FOOTER}</div></main>`, options);
 }
 // A signed-out visit to the account or second-factor pages. Only administrators can start a sign-in here (/login);
 // everyone else signs in through an app, which leaves a session this page can use.
-export const signedOutPage = () => page('Sign in', `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="neutral">${icon('lock')}</span>
-<h1 class="fd-h1">Sign in to see your account</h1>
-<p class="fd-muted">Your ${BRAND} account opens from the apps that use it. Sign in to one of them in this browser, then come back here.</p></header>
-<p class="fd-screen-note"><span>Administrators can <a class="fd-link" href="/login">sign in here</a>.</span></p>`, { status: 401 });
-export const errorPage = (message, status = 400) => page('Sign-in stopped', result('circle-alert', 'danger', 'Sign-in stopped', message) +
-    '<p class="fd-screen-note">Go back to the app and start again.</p>', { status });
+export const signedOutPage = env => page(t(env, 'Sign in'), `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="neutral">${icon('lock')}</span>
+<h1 class="fd-h1">${escapeHtml(t(env, 'Sign in to see your account'))}</h1>
+<p class="fd-muted">${tHtml(env, 'Your {brand} account opens from the apps that use it. Sign in to one of them in this browser, then come back here.').replace('{brand}', BRAND)}</p></header>
+<p class="fd-screen-note"><span>${tHtml(env, 'Administrators can <0>sign in here</0>.', {}, [inner => `<a class="fd-link" href="/login">${inner}</a>`])}</span></p>`, { status: 401 });
+export const errorPage = (env, message, status = 400) => page(t(env, 'Sign-in stopped'), result('circle-alert', 'danger', t(env, 'Sign-in stopped'), message) +
+    `<p class="fd-screen-note">${escapeHtml(t(env, 'Go back to the app and start again.'))}</p>`, { status });
 // Fills the markers for the request's realm and, if the page names one, its app: look, name, logo (with a dark variant)
 // or the brand's initial in dots, favicon, brand stylesheet and footer; then the signed-in person, and the parts only
 // administrators see. Everything inserted is escaped or an asset id.
@@ -68,15 +70,16 @@ export async function withBrand(response, env) {
     const clientId = /<!--identity:client:([A-Za-z0-9_-]{1,200})-->/.exec(html)?.[1];
     const client = clientId && env.REALM ? await env.DB.prepare('SELECT id,branding FROM clients WHERE id=? AND realm_id=?').bind(clientId, env.REALM.id).first() : null;
     const b = resolveBranding(env.REALM?.branding || {}, client ? JSON.parse(client.branding || '{}') : {});
+    const footerCopy = brandCopy(env, b, 'footer');
     const plainName = b.name || env.REALM?.display_name || 'Identity', name = escapeHtml(plainName), asset = id => `/assets/brand/${id}`;
     const mark = b.mark ? `<img src="${asset(b.mark)}" alt="">` : dotMark(plainName);
     const markAndName = `<span class="fd-brand-mark">${mark}</span><span class="fd-brand-name">${name}</span>`;
     const header = `<div class="fd-brand">${b.logo_light
         ? `<picture>${b.logo_dark ? `<source srcset="${asset(b.logo_dark)}" media="(prefers-color-scheme: dark)">` : ''}<img class="fd-brand-logo" src="${asset(b.logo_light)}" alt="${name}"></picture>`
         : markAndName}</div>`;
-    const links = [b.privacy_url && `<a class="fd-link" href="${escapeHtml(b.privacy_url)}">Privacy</a>`, b.terms_url && `<a class="fd-link" href="${escapeHtml(b.terms_url)}">Terms</a>`,
-        b.support_url ? `<a class="fd-link" href="${escapeHtml(b.support_url)}">Help</a>` : b.support_email && `<a class="fd-link" href="mailto:${escapeHtml(b.support_email)}">Help</a>`].filter(Boolean);
-    const notes = [b.legal_name && `<span>© ${escapeHtml(b.legal_name)}</span>`, b.copy?.footer && `<span>${escapeHtml(b.copy.footer)}</span>`].filter(Boolean);
+    const links = [b.privacy_url && `<a class="fd-link" href="${escapeHtml(b.privacy_url)}">${escapeHtml(t(env, 'Privacy'))}</a>`, b.terms_url && `<a class="fd-link" href="${escapeHtml(b.terms_url)}">${escapeHtml(t(env, 'Terms'))}</a>`,
+        b.support_url ? `<a class="fd-link" href="${escapeHtml(b.support_url)}">${escapeHtml(t(env, 'Help'))}</a>` : b.support_email && `<a class="fd-link" href="mailto:${escapeHtml(b.support_email)}">${escapeHtml(t(env, 'Help'))}</a>`].filter(Boolean);
+    const notes = [b.legal_name && `<span>© ${escapeHtml(b.legal_name)}</span>`, footerCopy && `<span>${escapeHtml(footerCopy)}</span>`].filter(Boolean);
     const legal = [...notes, ...links].join('');
     const footer = legal ? `<footer class="fd-band" data-pad="sm"><div class="fd-row fd-small fd-muted" data-justify="center" data-wrap data-gap="4">${legal}</div></footer>` : '';
     const shellFooter = `<footer class="fd-band" data-pad="sm"><div class="fd-row fd-small fd-muted" data-justify="between" data-wrap data-gap="4"><div class="fd-row" data-wrap data-gap="4">${legal}</div>${poweredBy}</div></footer>`;
@@ -85,12 +88,12 @@ export async function withBrand(response, env) {
     // The role is looked up only for a page that has administrator-only parts.
     const role = html.includes('<!--identity:if:') && email ? env.SEEN.role ?? await adminRole(env, email) : null;
     const allowed = { admin: Boolean(role), platform: role === 'platform' };
-    const open = `<html lang="${b.locale || 'en'}"${lookAttributes(b.look)}>`;
+    const open = `<html lang="${htmlLang(localeOf(env), b.locale)}"${lookAttributes(b.look)}>`;
     // Replacements are functions, so `$&`, `$'` or `$\`` in a brand's text is inserted as text, never as a pattern.
     html = html.replace(/<!--identity:client:[A-Za-z0-9_-]{1,200}-->/, '').replace('<html lang="en">', () => open)
         .replace(/<!--identity:if:(admin|platform)-->([\s\S]*?)<!--identity:end:\1-->/g, (_, who, inner) => allowed[who] ? inner : '')
         .replaceAll(BRAND, () => name).replace(HEAD, () => head).replace(HEADER, () => header).replace(FOOTER, () => footer)
         .replaceAll(SIDE_BRAND, () => markAndName).replaceAll(MARK, () => mark).replace(SHELL_FOOTER, () => shellFooter)
-        .replaceAll(VIEWER, () => viewer).replaceAll(INITIALS, () => initials);
+        .replaceAll(VIEWER, () => viewer).replaceAll(INITIALS, () => initials).replaceAll(POWERED_BY, () => escapeHtml(t(env, 'Powered by')));
     return new Response(html, { status: response.status, headers: response.headers });
 }

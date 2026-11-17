@@ -31,3 +31,8 @@ export function dotMark(name) {
     const initial = String(name || '').trim().normalize('NFD')[0]?.toUpperCase() ?? '';
     return `<svg viewBox="-1 0 7 7" fill="currentColor" aria-hidden="true">${matrix([FONT[initial] || OTHER]).paths}</svg>`;
 }
+// A brand's initial as seven rows of five "0"/"1" cells, for drawings without SVG (the HTML email's dot mark).
+export function initialRows(name) {
+    const initial = String(name || '').trim().normalize('NFD')[0]?.toUpperCase() ?? '';
+    return rows(FONT[initial] || OTHER);
+}
