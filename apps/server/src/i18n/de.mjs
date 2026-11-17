@@ -528,4 +528,7 @@ export default Object.freeze({
     "The workspace invitation is unavailable.": "Die Einladung zum Arbeitsbereich ist nicht verfügbar.",
     "The workspace invitation sender is unavailable.": "Der Absender der Einladung zum Arbeitsbereich ist nicht verfügbar.",
     "The workspace invitation sign-in URL is invalid.": "Die Anmelde-URL der Einladung zum Arbeitsbereich ist ungültig.",
+    // Workspaces: admission
+    "A workspace invitation changed. Sign in again.": "Eine Einladung zum Arbeitsbereich wurde geändert. Melden Sie sich erneut an.",
+    "Join this workspace before connecting an agent.": "Treten Sie diesem Arbeitsbereich bei, bevor Sie einen Agenten verbinden.",
 });

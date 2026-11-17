@@ -7,16 +7,19 @@ import { appSessionLifetimeMs } from './app-sessions.mjs';
 import { realmEnvForClient } from '../realms/realm.mjs';
 // Capture destinations before deleting associations. RP sessions may outlive identity sessions, up to 30 days.
 // sid: one session; except: every session but that one; neither: all of the user's sessions.
-export function logoutStatements(env, userId, sid = null, except = null) {
+export function logoutStatements(env, userId, sid = null, except = null, clientFilter = null) {
     const where = sid !== null ? 'a.user_id=? AND a.sid=?' : except !== null ? 'a.user_id=? AND a.sid<>?' : 'a.user_id=?';
     const args = sid !== null ? [userId, sid] : except !== null ? [userId, except] : [userId];
+    // A trusted SQL subquery with bound arguments keeps the client selection inside the caller's transaction.
+    const filter = clientFilter ? ` AND a.client_id IN (${clientFilter.sql})` : '';
+    args.push(...(clientFilter?.args ?? []));
     const now = Date.now();
     return [
         env.DB.prepare(`INSERT INTO logout_outbox(id,client_id,user_id,sid,uri,created)
             SELECT lower(hex(randomblob(16))),a.client_id,a.user_id,CASE WHEN count(*)=1 THEN min(a.sid) ELSE NULL END,c.backchannel_uri,?
-            FROM app_sessions a JOIN clients c ON c.id=a.client_id WHERE ${where} AND a.created>? GROUP BY a.client_id,a.user_id,c.backchannel_uri`)
+            FROM app_sessions a JOIN clients c ON c.id=a.client_id WHERE ${where}${filter} AND a.created>? GROUP BY a.client_id,a.user_id,c.backchannel_uri`)
             .bind(now, ...args, now - appSessionLifetimeMs),
-        env.DB.prepare(`DELETE FROM app_sessions AS a WHERE ${where}`).bind(...args)
+        env.DB.prepare(`DELETE FROM app_sessions AS a WHERE ${where}${filter}`).bind(...args)
     ];
 }
 export const flushLogouts = env => dispatchOutbox(env, 'logout_outbox', 'human_logout');

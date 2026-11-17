@@ -528,4 +528,7 @@ export default Object.freeze({
     "The workspace invitation is unavailable.": "La invitación al espacio de trabajo no está disponible.",
     "The workspace invitation sender is unavailable.": "El remitente de la invitación al espacio de trabajo no está disponible.",
     "The workspace invitation sign-in URL is invalid.": "La URL de inicio de sesión de la invitación al espacio de trabajo no es válida.",
+    // Workspaces: admission
+    "A workspace invitation changed. Sign in again.": "Una invitación al espacio de trabajo cambió. Vuelve a iniciar sesión.",
+    "Join this workspace before connecting an agent.": "Únete a este espacio de trabajo antes de conectar un agente.",
 });

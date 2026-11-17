@@ -1,4 +1,4 @@
-import { admitted, ensureUser, isAdmin, mailboxProof } from '../services/admission.mjs';
+import { admitted, ensureUser, isAdmin, mailboxProof, recordAdmission } from '../services/admission.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { claimMailbox } from '../services/access.mjs';
 import { realmId } from '../realms/realm.mjs';
@@ -29,6 +29,6 @@ export async function providerIdentity(env, client, provider, profile, session =
     invariant(owner?.user_id === user.id, 'access_denied', 'Account unavailable.', 403);
     // Admission was just decided with this sign-in's proof; record it, because the session's method alone (a provider
     // id) does not carry that proof when the authorization completes.
-    if (client) await env.DB.prepare('INSERT OR IGNORE INTO client_admissions(user_id,client_id,created) VALUES(?,?,?)').bind(user.id, client.id, Date.now()).run();
+    if (client) await recordAdmission(env, client, user, email, proof);
     return user;
 }
