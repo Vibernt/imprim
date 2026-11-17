@@ -9,22 +9,22 @@ import { LANGUAGES, LANGUAGE_NAMES } from '../i18n/languages.mjs';
 import { clientForm, METHODS } from './client-editor.mjs';
 import { FORMS_MODULE, json as jsonField } from '../pages/forms.mjs';
 // The hero texture of each section.
-const ART = { clients: 'grid', services: 'waves', users: 'orbit', branding: 'halftone', audit: 'rain', settings: 'terrain', keys: 'spark', realms: 'terrain' };
-const link = (url, label) => `<a class="fd-link" href="${e(url)}">${e(label)}</a>`;
+const ART = { clients: 'grid', services: 'waves', users: 'orbit', workspaces: 'terrain', branding: 'halftone', audit: 'rain', settings: 'terrain', keys: 'spark', realms: 'terrain' };
+export const link = (url, label) => `<a class="fd-link" href="${e(url)}">${e(label)}</a>`;
 const json = value => `<pre class="fd-codeblock-body fd-code">${e(JSON.stringify(value, null, 2))}</pre>`;
-const when = ms => ms ? new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'Never';
-const cap = value => String(value ?? '').replace(/^./, c => c.toUpperCase());
+export const when = ms => ms ? new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'Never';
+export const cap = value => String(value ?? '').replace(/^./, c => c.toUpperCase());
 const STATUS_TONE = { active: 'success', blocked: 'danger', deleted: 'neutral', disabled: 'neutral', retired: 'neutral', pending: 'warning', published: 'warning' };
 // Scripts come only from this origin; the Branding page also calls the admin API.
-function adminPage(title, body, { description = '', active = '', modules = [], back = null, actions: heroActions = '' } = {}) {
+export function adminPage(title, body, { description = '', active = '', modules = [], back = null, actions: heroActions = '' } = {}) {
     const response = shellPage(title, body, { area: 'admin', active, description, back, actions: heroActions, art: ART[active], modules });
     response.headers.set('content-security-policy', `default-src 'none'; script-src 'self'; ${modules.length ? "connect-src 'self'; " : ''}style-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
     return response;
 }
-const form = (path, csrf, body, attrs = '') => `<form class="fd-stack" data-gap="4" method="post" action="${e(path)}"${attrs}>${hidden('csrf', csrf)}${body}</form>`;
+export const form = (path, csrf, body, attrs = '') => `<form class="fd-stack" data-gap="4" method="post" action="${e(path)}"${attrs}>${hidden('csrf', csrf)}${body}</form>`;
 // A card: its title is one step below a page section (fd-title), and setting rows inside it step down again.
-const card = (body, title = '', description = '') => `<article class="fd-card">${title ? `<div class="fd-card-head"><div class="fd-card-heading"><h2 class="fd-title">${e(title)}</h2>${description ? `<p class="fd-card-desc">${e(description)}</p>` : ''}</div></div>` : ''}${body}</article>`;
-const cards = (...items) => `<div class="fd-grid" data-min="lg" data-cols="2" data-gap="6">${items.filter(Boolean).join('')}</div>`;
+export const card = (body, title = '', description = '') => `<article class="fd-card">${title ? `<div class="fd-card-head"><div class="fd-card-heading"><h2 class="fd-title">${e(title)}</h2>${description ? `<p class="fd-card-desc">${e(description)}</p>` : ''}</div></div>` : ''}${body}</article>`;
+export const cards = (...items) => `<div class="fd-grid" data-min="lg" data-cols="2" data-gap="6">${items.filter(Boolean).join('')}</div>`;
 export function clientList(rows) {
     const register = linkButton('Register client', '/admin/clients/new', { variant: 'primary', icon: 'plus' });
     const body = rows.length ? table('Clients', ['App', 'Client ID', 'Sign-in methods', 'Sign-up', 'Agents'], rows.map(c => [

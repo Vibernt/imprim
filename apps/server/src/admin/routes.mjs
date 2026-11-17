@@ -14,6 +14,8 @@ import { json, readBody, redirect } from '../lib/http.mjs';
 import { invariant, AppError } from '../lib/errors.mjs';
 import * as pages from './pages.mjs';
 import { clientDelivery } from './delivery.mjs';
+import { workspaceGet, workspacePost } from './workspaces/routes.mjs';
+import { newPath as newWorkspacePath } from './workspaces/read.mjs';
 import { clientFromForm } from './client-form.mjs';
 // A form the console posted and the server refused: the console says why, in place. Scripts and the admin API (which
 // do not ask for HTML) still get the JSON error from the worker.
@@ -22,9 +24,12 @@ export async function admin(request, env, ctx) {
     catch (error) {
         const path = new URL(request.url).pathname;
         if (!(error instanceof AppError) || request.method !== 'POST' || path.startsWith('/admin/api/') || !request.headers.get('accept')?.includes('text/html') || !env.SEEN?.role) throw error;
-        // Back to the page the form was on: /admin/clients posts from /admin/clients/new, the rest from their own page.
+        // Return to the page the form was on.
         const [section = 'clients', id] = path.slice(7).split('/').filter(Boolean);
-        const back = section === 'clients' && !id ? '/admin/clients/new' : ['clients', 'users'].includes(section) && id ? `/admin/${section}/${id}` : `/admin/${section}`;
+        let back = `/admin/${section}`;
+        if (section === 'clients' && !id) back = '/admin/clients/new';
+        if (section === 'workspaces' && !id) back = newWorkspacePath;
+        if (id && ['clients', 'users', 'workspaces'].includes(section)) back += '/' + id;
         return pages.failedPage(error.message, error.status, back, section);
     }
 }
@@ -46,6 +51,7 @@ async function handle(request, env, ctx) {
     const [section = 'clients', id, action] = parts;
     invariant(parts.length <= 3, 'not_found', 'Admin endpoint not found.', 404);
     if (request.method === 'GET') {
+        if (!api && section === 'workspaces') return workspaceGet(env, session, csrf, id, action, url.searchParams);
         if (!api && section === 'users' && id && action === 'merge') {
             const source = await userDetail(env, id), survivor = await userDetail(env, url.searchParams.get('surviving_id') || '');
             return pages.mergeConfirmation(source, survivor, csrf);
@@ -100,8 +106,9 @@ async function handle(request, env, ctx) {
         // Every write is destructive: a client edit changes redirect URIs, back-channel and agent policy (S14).
         const destructive = true;
         await adminMutation(request, env, session, body, destructive);
-        const writeEnv = mutationEnvironment(env, session, destructive);
         delete body.csrf;
+        if (!api && section === 'workspaces') return workspacePost(request, env, ctx, session, id, action, body);
+        const writeEnv = mutationEnvironment(env, session, destructive);
         let result;
         if (section === 'clients' && !action) {
             result = await saveClient(writeEnv, session.user_id, id, api ? body : clientFromForm(body));
