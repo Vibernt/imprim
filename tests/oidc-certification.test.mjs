@@ -94,6 +94,9 @@ test('request objects and request_uri are refused with their own errors', async 
     for (const [name, error] of [['request', 'request_not_supported'], ['request_uri', 'request_uri_not_supported']]) {
         const response = await w.authorize({ [name]: 'eyJhbGciOiJub25lIn0.e30.' });
         assert.equal(new URL(response.headers.get('location')).searchParams.get('error'), error);
+        // The other parameters may be inside the request object, so their absence does not change the answer.
+        const bare = await w.authorize({ [name]: 'eyJhbGciOiJub25lIn0.e30.', state: null, nonce: null, scope: null, code_challenge: null, code_challenge_method: null });
+        assert.equal(new URL(bare.headers.get('location')).searchParams.get('error'), error);
     }
 });
 test('the classic switch is refused for a public client, in the seed script and the console', async t => {

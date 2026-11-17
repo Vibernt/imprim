@@ -26,6 +26,9 @@ export async function authorize(request, env) {
     const classic = client.classic_oidc === 'on' && Boolean(client.secret_hash);
     let hint = null;
     try {
+        // First: a request object may carry the parameters checked below, so refusing it must not depend on them.
+        invariant(query.request === undefined, 'request_not_supported', 'Request objects are not supported.');
+        invariant(query.request_uri === undefined, 'request_uri_not_supported', 'request_uri is not supported.');
         invariant(query.response_type === 'code', 'unsupported_response_type', 'Only code is supported.');
         const pkce = query.code_challenge !== undefined || query.code_challenge_method !== undefined;
         invariant((classic && !pkce) || (query.code_challenge_method === 'S256' && tokenShape(query.code_challenge)), 'invalid_request', 'PKCE S256 required.');
@@ -37,8 +40,6 @@ export async function authorize(request, env) {
         invariant(!query.response_mode || query.response_mode === 'query', 'invalid_request', 'Only query response mode supported.');
         invariant(query.max_age === undefined || /^\d{1,9}$/.test(query.max_age), 'invalid_request', 'max_age must be whole seconds.');
         invariant(query.acr_values === undefined || (query.acr_values.length <= 512 && /^[\x21-\x7e]+( [\x21-\x7e]+)*$/.test(query.acr_values)), 'invalid_request', 'Invalid acr_values.');
-        invariant(query.request === undefined, 'request_not_supported', 'Request objects are not supported.');
-        invariant(query.request_uri === undefined, 'request_uri_not_supported', 'request_uri is not supported.');
         // OIDC Core 5.5 lets a provider that does not support claims requests ignore them; only classic apps send them.
         invariant(classic || query.claims === undefined, 'invalid_request', 'claims is not supported.');
         if (query.id_token_hint !== undefined) {
