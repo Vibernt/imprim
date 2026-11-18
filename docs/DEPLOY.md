@@ -81,7 +81,7 @@ back automatically. Restore the backup only if a migration itself is wrong, and 
 
 ## Upgrading an existing deployment
 
-Migrations run in order, `0001` to `0023`, and each one is applied once. A Worker built from this repository expects
+Migrations run in order, `0001` to `0024`, and each one is applied once. A Worker built from this repository expects
 every migration in it, and an older Worker cannot always run against a newer schema, so apply, configure and deploy
 **back to back**, in a quiet minute. Rehearse the whole sequence on staging first.
 
@@ -157,6 +157,13 @@ Follow [Releases](#releases): staging first, then production with a backup. Thre
 - **Apps** can stay on client `0.3.0`. Upgrade to `0.6.0` to use step-up (`acrValues`, `maxAge`), DPoP
   verification or user events. An app still on `identity-client` `0.2.0` keeps signing people in, but refuses agent
   revocation events until it upgrades ([Clients](CLIENTS.md#upgrading-from-identity-client-020)).
+
+## Upgrading to migration 0024
+
+`0024` adds workspace tables, five per-app settings and an admission source column. It needs no new binding or secret.
+Nothing changes until a realm sets `"workspaces": "on"` and an app opts in with `workspaces='shared'` and a product.
+Use client `0.8.2`. See [Shared workspaces](WORKSPACES.md) and use
+[`scripts/import-workspaces.mjs`](../scripts/import-workspaces.mjs) to move an app's own workspaces in; run a dry run first.
 
 ## Upgrading to migration 0023
 

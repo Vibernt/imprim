@@ -10,7 +10,7 @@ setup and [Operations](OPERATIONS.md) for running it. Nothing below is a browser
 
 | Name | Kind | Notes |
 |---|---|---|
-| `DB` | D1 | All state, migrations `0001`–`0023` in `apps/server/migrations`. |
+| `DB` | D1 | All state, migrations `0001`–`0024` in `apps/server/migrations`. |
 | `EMAIL` | Cloudflare `send_email` binding | Sign-in links and security notices. Each realm's sender domain must be enabled for Email sending. |
 | `AUTH_LIMITER` | Rate limit, 20 per 60 seconds | Sign-in routes, per address (IPv6 /64). A missing binding fails the request. |
 | `API_LIMITER` | Rate limit, 120 per 60 seconds | Other routes per address; `/token`, `/userinfo` and `/v1/invitations` per authenticated client; refused agent token requests per address. Missing fails. |

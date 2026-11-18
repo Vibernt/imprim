@@ -1,6 +1,6 @@
 # Shared workspaces
 
-Status: built (migration `0024`, client `0.8.0`). This page is the specification; the code matches it.
+Status: built (migration `0024`, client `0.8.2`). This page is the specification; the code matches it.
 
 By default each app keeps its own workspaces, memberships and roles, and Imprim only admits people per app. A realm
 can instead hold **shared workspaces** for a family of products. Imprim then keeps each workspace's members, base
@@ -183,7 +183,10 @@ One invitation email, `workspace_invitation`, in every language Imprim ships, wi
 the workspace name, the products it uses, and a button to the inviting app's `initiate_login_uri` (or, if unset, the
 issuer's `/login`).
 
-## Client `0.8.0`
+## Client `0.8.2`
+
+Client `0.8.0` added these calls; `0.8.1` lets `handleCallback(url, values, { idToken: true })` return
+`{ claims, idToken }` for `actor_token`; and `0.8.2` refuses redirects so the client works inside Cloudflare Workers.
 
 `memberships(sub)`, `workspace(id)`, `workspaceMembers(id, { limit, cursor })`, `createWorkspace`, `renameWorkspace`,
 `setWorkspaceProducts`, `inviteToWorkspace`, `workspaceInvitations`, `revokeWorkspaceInvitation`, `setMemberRole`,

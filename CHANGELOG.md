@@ -5,23 +5,24 @@ describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
 ## Unreleased
 
-- Client `0.8.2`: every request refuses redirects with `redirect: 'manual'`; `0.8.1` used `redirect: 'error'` for workspace calls, which Cloudflare Workers reject.
-- Apps with workspace administration enabled can invite owners, revoke invitations, and close team workspaces using their product before the first member joins.
-- Re-registering a workspace resource to the same workspace by the same app returns the current snapshot without changing it.
-- Apps can manage only their own workspace product and may add it to an active workspace when acting for an owner or realm admin.
-- Client `0.8.1` lets `handleCallback` return the verified ID token for use as `actor_token`.
-
-- Migration `0024_workspaces.sql` adds opt-in [shared and personal workspaces](docs/WORKSPACES.md), with base roles,
-  invitations in all five languages and signed workspace events. Client `0.8.0` adds the workspace API and event verification.
-- `apps/server/wrangler.jsonc` is now a template with placeholder hosts and ids. Keep your deployment's real values
-  in `wrangler.local.jsonc`, which git ignores, and pass `--config wrangler.local.jsonc` to every `wrangler`
-  command ([Deploying](docs/DEPLOY.md)).
-- Tests and examples use `example.com` hosts.
+Nothing yet.
 
 ## 2026-11-18
 
-Docs and tests only; no migration.
+Migration `0024`.
 
+- Added opt-in [shared and personal workspaces](docs/WORKSPACES.md), with base roles, invitations in five languages
+  and signed workspace events. Client `0.8.0` adds the workspace API and event verification.
+- Limited each app to managing its own product through the app API.
+- Made resource registration idempotent: the same app registering a resource to the same workspace gets `200` with no change.
+- Let an app with `workspace_admin` invite an owner, revoke invitations and close a team workspace with no members
+  when the workspace uses its product.
+- Client `0.8.1` lets `handleCallback` return the verified ID token for `actor_token`.
+- Client `0.8.2` refuses redirects on every request with `redirect: 'manual'`; `0.8.1` used `redirect: 'error'` for
+  workspace calls, which Cloudflare Workers reject.
+- Made `apps/server/wrangler.jsonc` a template with placeholder hosts and ids. Keep deployment values in the ignored
+  `wrangler.local.jsonc` and pass `--config wrangler.local.jsonc` to every `wrangler` command ([Deploying](docs/DEPLOY.md)).
+- Changed tests and examples to use `example.com` hosts.
 - A test that revoking one of an agent's two grants leaves the other working, and that the event names only the
   revoked grant.
 - [Integrating](docs/INTEGRATE.md): why a missed revocation is still safe, how an app catches up with the grants API,

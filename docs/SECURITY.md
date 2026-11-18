@@ -42,7 +42,9 @@ This repository does not record which commit a deployment runs or which clients 
 Worker's deployments in Cloudflare before relying on a behaviour described here. Vibernt's deployment, the
 reference for these notes, was checked as follows:
 
-- **Production** runs every migration, `0001`–`0023`. On 2026-11-17 a person connected Claude Code to a Vibernt app's
+- **Production** applied and deployed migration `0024` on 2026-11-18, with workspaces switched off and no app opted in.
+  On staging, one product's two apps run on shared workspaces end to end: import, resource registration and event delivery.
+  On 2026-11-17 a person connected Claude Code to a Vibernt app's
   MCP server through production: Claude Code registered with its client ID metadata document, the person signed in
   and approved a `read-only` grant, the app's read tools answered, the token refreshed after its 60 seconds, and when
   the person revoked the grant from the account page, the signed revocation event reached the app's back-channel
