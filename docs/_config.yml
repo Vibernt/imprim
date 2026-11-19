@@ -1,5 +1,5 @@
 # The docs site: Jekyll renders the Markdown into Fire's documentation shell (_layouts/default.html).
-# The Pages workflow (.github/workflows/pages.yml) copies Fire from apps/server/public/fire to assets/fire first.
+# The Pages workflow (.github/workflows/pages.yml) copies Fire from node_modules/fire-design/fire (the pinned package) to assets/fire first.
 title: Imprim
 description: Identity for people and the agents that act for them. OpenID Connect and OAuth 2.1 on Cloudflare Workers.
 repository: Vibernt/imprim

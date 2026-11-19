@@ -1,12 +1,27 @@
 # Deploying on Cloudflare
 
 The service is one Worker with D1, a Queue with a dead-letter queue, three rate-limit bindings, the Email sending
-binding, a cron trigger and static assets (the [Fire](fire/README.md) design system in `apps/server/public/`). It
-has no build step and no runtime dependencies. `apps/server/wrangler.jsonc` is a template: a top level for
+binding, a cron trigger and static assets (the [Fire](fire/README.md) design system and Lit app in `apps/server/public/`). The Worker has no runtime dependencies. Build the assets before deploying. `apps/server/wrangler.jsonc` is a template: a top level for
 `wrangler dev`, and `staging` and `production` environments with placeholder hosts, ids and names. Copy it to
 `apps/server/wrangler.local.jsonc`, which git ignores, and put your own values there, so your deployment's details
 never land in a commit. Every command below passes `--config wrangler.local.jsonc`. Run every command from
 `apps/server`.
+
+From the repository root, build the assets before serving or deploying:
+
+```bash
+npm ci
+```
+
+```bash
+npm --prefix apps/web ci
+```
+
+```bash
+npm run build
+```
+
+Then return to `apps/server` for Wrangler commands.
 
 ## New deployment
 
@@ -26,7 +41,9 @@ never land in a commit. Every command below passes `--config wrangler.local.json
 
    Copy `wrangler.jsonc` to `wrangler.local.jsonc`. Put the database id, queue names and three unused rate-limit
    namespace ids into its `env.staging` (or a new environment). Add each realm host under `routes` as `{ "pattern": "<host>", "custom_domain": true }`. Keep the
-   top-level `"assets": { "directory": "public" }`: `wrangler deploy` uploads `public/` with the Worker.
+   top-level `assets` settings from the template: `"directory": "public"`, `"binding": "ASSETS"`,
+   `"html_handling": "none"` and `"run_worker_first": ["/ui", "/ui/*", "!/ui/static/*"]`.
+   `wrangler deploy` uploads `public/` with the Worker.
 2. **Email.** Enable Cloudflare Email sending for each sender domain a realm uses (for example `signin@example.com`).
 3. **Sealing secret.** Generate 32 random bytes as hex and keep an offline copy: `openssl rand -hex 32`. Then:
 
@@ -53,7 +70,7 @@ never land in a commit. Every command below passes `--config wrangler.local.json
    wrangler d1 execute imprim-staging --remote --config wrangler.local.jsonc --env staging --file realm.sql
    ```
 
-7. **Deploy.**
+7. **Build and deploy.** Run the three build commands above from the repository root, then from `apps/server`:
 
    ```bash
    wrangler deploy --config wrangler.local.jsonc --env staging
@@ -69,12 +86,14 @@ never land in a commit. Every command below passes `--config wrangler.local.json
 Every release goes through staging first:
 
 1. `npm run check` and `npm run test:quiet` pass on the release commit.
-2. Back up staging, apply migrations, deploy to staging.
+2. Back up staging and apply migrations. From the repository root, run `npm ci`, `npm --prefix apps/web ci`
+   and `npm run build`, then deploy to staging from `apps/server`.
 3. Smoke-test staging: email-link, GitHub and Google sign-in for one app; an agent connection by code flow and by
    device code; a revocation reaching the app's back-channel; an admin block ending the app session.
 4. Run the OpenID conformance basic profile against staging.
 5. Back up production (`wrangler d1 export <db> --remote --config wrangler.local.jsonc --env production --output backup.sql`), apply
-   migrations, deploy production, and repeat the smoke test.
+   migrations, run the same three build commands from the repository root, deploy production from `apps/server`,
+   and repeat the smoke test.
 
 Rollback: `wrangler rollback --config wrangler.local.jsonc --env production` returns to the previous Worker version. Migrations are not rolled
 back automatically. Restore the backup only if a migration itself is wrong, and treat that as an incident.
@@ -114,7 +133,8 @@ every migration in it, and an older Worker cannot always run against a newer sch
    node ../../scripts/realm.mjs default.json > default.sql
    ```
 
-3. **Apply** the migrations, then the realm SQL if you wrote one, then deploy:
+3. **Apply** the migrations, then the realm SQL if you wrote one. Run `npm ci`, `npm --prefix apps/web ci`
+   and `npm run build` from the repository root before deploying from `apps/server`:
 
    ```bash
    wrangler d1 migrations apply <database> --remote --config wrangler.local.jsonc --env production
@@ -157,6 +177,13 @@ Follow [Releases](#releases): staging first, then production with a backup. Thre
 - **Apps** can stay on client `0.3.0`. Upgrade to `0.6.0` to use step-up (`acrValues`, `maxAge`), DPoP
   verification or user events. An app still on `identity-client` `0.2.0` keeps signing people in, but refuses agent
   revocation events until it upgrades ([Clients](CLIENTS.md#upgrading-from-identity-client-020)).
+
+## Upgrading to the Lit interface
+
+This release needs no migration. Add `"binding": "ASSETS"`, `"html_handling": "none"` and
+`"run_worker_first": ["/ui", "/ui/*", "!/ui/static/*"]` to the top-level `assets` in `wrangler.local.jsonc`.
+From the repository root, run `npm ci`, `npm --prefix apps/web ci` and `npm run build` before deploying.
+The account and admin URLs are unchanged.
 
 ## Upgrading to migration 0024
 
@@ -206,7 +233,7 @@ look at it in light and dark mode before production.
 | `API_LIMITER` | Rate limit | Other routes per address; `/token`, `/userinfo` and invitations per authenticated client; refused agent token requests per address. |
 | `AGENT_LIMITER` | Rate limit, 1,200 per 60 seconds | Agent requests to `/token`, per address. Required from migration `0023`. |
 | `EMAIL` | Email sending | Sign-in links and security notices. |
-| Static assets | `"assets": { "directory": "public" }` | Fire's CSS, modules and fonts at `/fire/*`, and the branding editor at `/imprim/*`, served before the Worker runs. Headers in `public/_headers`. No binding name; other paths reach the Worker. |
+| `ASSETS` | Static assets | Fire at `/fire/*` and the built app at `/ui/*`. Configure `directory`, `binding`, `html_handling` and `run_worker_first` as above. Headers are in `public/_headers`. |
 | Cron `* * * * *` | Trigger | Outbox dispatch, expiry sweeps, key rotation per realm, retention. |
 | `SEALING_KEY` | Secret | AES-256-GCM key for every realm's signing keys. |
 | Realm secrets | Secrets | Whatever each realm's config names. |

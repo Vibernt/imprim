@@ -1,20 +1,23 @@
+import { readJson, requireCsrf } from '../api/json.mjs';
+import { webRequest, serveWeb } from '../web/serve.mjs';
 import { deliveryStatus, dispatchDeliveries } from '../services/outbox.mjs';
-import { adminSession, adminMutation, mutationEnvironment, requirePlatform } from './auth.mjs';
-import { realmId } from '../realms/realm.mjs';
+import { adminSession, adminMutation, mutationEnvironment, requirePlatform, requireAdminFresh } from './auth.mjs';
 import { listRealms, saveRealm, saveAdmin } from './realms.mjs';
-import { listServices, saveService, deleteService } from './services.mjs';
+import { saveService, deleteService } from './services.mjs';
 import { realmBranding, saveRealmBranding, uploadAsset, preview } from './branding.mjs';
-import { saveClient, getAdminClient, rotateSecret, publicClient } from './clients.mjs';
+import { saveClient, rotateSecret } from './clients.mjs';
 import { revokeSession } from './sessions.mjs';
-import { users, userDetail, changeUser, resetMfa } from './users.mjs';
+import { changeUser, resetMfa } from './users.mjs';
 import { rotateNow, keyList, revokeKeyNow } from '../oidc/keys.mjs';
 import { audit } from '../services/audit.mjs';
-import { cookies, CSRF_COOKIE, getSession } from '../auth/session.mjs';
+import { getSession } from '../auth/session.mjs';
 import { json, readBody, redirect } from '../lib/http.mjs';
 import { invariant, AppError } from '../lib/errors.mjs';
 import * as pages from './pages.mjs';
-import { clientDelivery } from './delivery.mjs';
-import { workspaceGet, workspacePost } from './workspaces/routes.mjs';
+import { coreRead } from './core-read.mjs';
+import { adminParts } from './path.mjs';
+import { workspaceApi, workspaceFormPost } from './workspaces/api.mjs';
+import { sampleEmail } from './branding-email.mjs';
 import { newPath as newWorkspacePath } from './workspaces/read.mjs';
 import { clientFromForm } from './client-form.mjs';
 // A form the console posted and the server refused: the console says why, in place. Scripts and the admin API (which
@@ -35,79 +38,47 @@ export async function admin(request, env, ctx) {
 }
 async function handle(request, env, ctx) {
     const url = new URL(request.url), api = url.pathname.startsWith('/admin/api/');
+    if (!api && webRequest(request, url.pathname)) return serveWeb(request, env, url);
     if (request.method === 'GET' && !api && !await getSession(request, env)) return redirect(env.ISSUER + '/login');
     let session;
-    try { session = await adminSession(request, env); }
+    try { session = await adminSession(request, env, api); }
     catch (error) {
         // The console sends an admin without a fresh second factor to enrol or verify, then back.
         if (request.method === 'GET' && !api && ['mfa_enrolment_required', 'mfa_required'].includes(error.code))
             return redirect(`${env.ISSUER}${error.code === 'mfa_required' ? '/mfa' : '/account/mfa'}?next=${encodeURIComponent(url.pathname)}`);
         throw error;
     }
-    const csrf = cookies(request)[CSRF_COOKIE] || '';
-    let parts;
-    try { parts = url.pathname.slice(api ? 11 : 7).split('/').filter(Boolean).map(decodeURIComponent); }
-    catch { invariant(false, 'invalid_request', 'Malformed admin path encoding.'); }
-    const [section = 'clients', id, action] = parts;
-    invariant(parts.length <= 3, 'not_found', 'Admin endpoint not found.', 404);
+    const [section = 'clients', id, action] = adminParts(url.pathname, api);
     if (request.method === 'GET') {
-        if (!api && section === 'workspaces') return workspaceGet(env, session, csrf, id, action, url.searchParams);
-        if (!api && section === 'users' && id && action === 'merge') {
-            const source = await userDetail(env, id), survivor = await userDetail(env, url.searchParams.get('surviving_id') || '');
-            return pages.mergeConfirmation(source, survivor, csrf);
-        }
-        if (section === 'clients' && !action) {
-            // This realm's upstream providers, as sign-in methods an app can turn on.
-            const providers = Object.fromEntries(Object.entries(env.PROVIDERS || {}).map(([key, provider]) => [key, provider.name || key]));
-            if (id === 'new' && !api) return pages.clientEditor(null, csrf, { providers });
-            if (id) {
-                const value = await getAdminClient(env, id), delivery = await clientDelivery(env, id);
-                return api ? json({ ...value, delivery }) : pages.clientEditor(value, csrf, { delivery, providers });
+        if (section === 'branding' && id === 'preview' && !action) return preview(env, url.searchParams.get('client'));
+        if (!api && section === 'branding' && id === 'email-preview' && !action) return sampleEmail(env);
+        if (api) {
+            if (section === 'workspaces') return workspaceApi(request, env, ctx, session, id, action, url.searchParams);
+            const response = await coreRead(env, section, id, action, url.searchParams);
+            if (response) return response;
+            if (section === 'branding' && !id) return json(await realmBranding(env));
+            if (section === 'realms' && !id) { requirePlatform(session); return json({ realms: await listRealms(env) }); }
+            if (section === 'keys' && !id) { requirePlatform(session); return json({ keys: await keyList(env) }); }
+            if (section === 'settings' && !id) {
+                const settings = { realm: env.REALM, role: session.role, turnstile: Boolean(env.TURNSTILE_SITE_KEY) && Boolean(env.TURNSTILE_SECRET) ? 'on' : !env.TURNSTILE_SITE_KEY && !env.TURNSTILE_SECRET ? 'off' : 'misconfigured',
+                    delivery: await deliveryStatus(env),
+                    rate_limits: 'Deployment bindings AUTH_LIMITER and API_LIMITER; fixed per-email/IP budgets in source. Not editable at runtime.' };
+                return json(settings);
             }
-            const rows = (await env.DB.prepare('SELECT * FROM clients WHERE realm_id=? ORDER BY id').bind(realmId(env)).all()).results.map(publicClient);
-            return api ? json({ clients: rows }) : pages.clientList(rows);
-        }
-        if (section === 'users' && !action) {
-            if (id) { const value = await userDetail(env, id); return api ? json(value) : pages.userPage(value, csrf); }
-            const rows = await users(env, url.searchParams);
-            return api ? json({ users: rows.slice(0,50), next: rows.length > 50 ? rows[49].id : null }) : pages.userList(rows, url.searchParams.get('q') || '');
-        }
-        // NDJSON export of this realm's audit log, 1,000 rows a page, oldest first; follow x-next-after.
-        if (section === 'audit' && id === 'export' && api) {
-            const after = url.searchParams.get('after') || '0';
-            invariant(/^\d{1,19}$/.test(after), 'invalid_request', 'Invalid page cursor.');
-            const rows = (await env.DB.prepare('SELECT id,event,actor,target,detail,created FROM audit WHERE realm_id=? AND id>? ORDER BY id LIMIT 1000').bind(realmId(env), after).all()).results;
-            return new Response(rows.map(row => JSON.stringify(row)).join('\n') + (rows.length ? '\n' : ''), { headers: { 'content-type': 'application/x-ndjson',
-                'cache-control': 'no-store', ...(rows.length === 1000 ? { 'x-next-after': String(rows.at(-1).id) } : {}) } });
-        }
-        if (section === 'audit' && !id) {
-            const before = url.searchParams.get('before') || '9223372036854775807';
-            invariant(/^\d{1,19}$/.test(before), 'invalid_request', 'Invalid page cursor.');
-            const actor = url.searchParams.get('actor') || '', target = url.searchParams.get('target') || '';
-            const rows = (await env.DB.prepare(`SELECT * FROM audit WHERE realm_id=? AND id<? AND (?='' OR actor=?) AND (?='' OR target=?) ORDER BY id DESC LIMIT 51`)
-                .bind(realmId(env), before, actor, actor, target, target).all()).results;
-            return api ? json({ audit: rows.slice(0,50), next: rows.length > 50 ? rows[49].id : null }) : pages.auditPage(rows, url.searchParams);
-        }
-        if (section === 'branding' && id === 'preview') return preview(env, url.searchParams.get('client'));
-        if (section === 'branding' && !id) { const value = await realmBranding(env); return api ? json(value) : pages.brandingPage(value, csrf); }
-        if (section === 'services' && !id) { const rows = await listServices(env); return api ? json({ services: rows }) : pages.servicesPage(rows); }
-        if (section === 'realms' && !id) { requirePlatform(session); const rows = await listRealms(env); return api ? json({ realms: rows }) : pages.realmsPage(rows, csrf); }
-        if (section === 'keys' && !id) { requirePlatform(session); const rows = await keyList(env); return api ? json({ keys: rows }) : pages.keysPage(rows, csrf); }
-        if (section === 'settings' && !id) {
-            const settings = { realm: env.REALM, role: session.role, turnstile: Boolean(env.TURNSTILE_SITE_KEY) && Boolean(env.TURNSTILE_SECRET) ? 'on' : !env.TURNSTILE_SITE_KEY && !env.TURNSTILE_SECRET ? 'off' : 'misconfigured',
-                delivery: await deliveryStatus(env),
-                rate_limits: 'Deployment bindings AUTH_LIMITER and API_LIMITER; fixed per-email/IP budgets in source. Not editable at runtime.' };
-            return api ? json(settings) : pages.settingsPage(settings);
         }
     }
     if (request.method === 'POST') {
+        if (api && section === 'workspaces') return workspaceApi(request, env, ctx, session, id, action, url.searchParams);
         // A logo upload carries up to 256 KiB as base64; every other admin body keeps the 16 KiB bound.
-        const body = await readBody(request, api ? 'json' : 'form', section === 'branding' && id === 'assets' ? 360000 : undefined);
+        const limit = section === 'branding' && id === 'assets' ? 360000 : undefined;
+        if (api) await requireCsrf(request, env, session);
+        const body = api ? await readJson(request, limit) : await readBody(request, 'form', limit);
         // Every write is destructive: a client edit changes redirect URIs, back-channel and agent policy (S14).
         const destructive = true;
-        await adminMutation(request, env, session, body, destructive);
+        if (api) requireAdminFresh(session);
+        else await adminMutation(request, env, session, body, destructive);
         delete body.csrf;
-        if (!api && section === 'workspaces') return workspacePost(request, env, ctx, session, id, action, body);
+        if (!api && section === 'workspaces') return workspaceFormPost(request, env, ctx, session, id, action, body);
         const writeEnv = mutationEnvironment(env, session, destructive);
         let result;
         if (section === 'clients' && !action) {
@@ -126,7 +97,7 @@ async function handle(request, env, ctx) {
         } else if (section === 'keys' && id === 'rotate' && !action) { requirePlatform(session); result = await rotateNow(writeEnv, session.user_id); }
         else if (section === 'keys' && id && action === 'revoke') { requirePlatform(session); result = await revokeKeyNow(writeEnv, session.user_id, id); }
         else if (section === 'services' && action === 'delete' && id) result = await deleteService(writeEnv, session.user_id, id);
-        else if (section === 'branding' && id === 'assets') result = await uploadAsset(writeEnv, session.user_id, body);
+        else if (section === 'branding' && id === 'assets' && !action) result = await uploadAsset(writeEnv, session.user_id, body);
         else if (section === 'branding' && !id) {
             if (!api) { try { body.branding = JSON.parse(body.branding); body.version = Number(body.version); } catch { invariant(false, 'invalid_request', 'branding must be JSON.'); } }
             result = await saveRealmBranding(writeEnv, session.user_id, body);

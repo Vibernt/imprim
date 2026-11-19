@@ -9,8 +9,8 @@ import { translate, dateTimeIn } from '../../i18n/index.mjs';
 import { escapeHtml as e } from '../../pages/ui.mjs';
 import { initialRows } from '../../pages/dots.mjs';
 import { resolveLook } from '../../branding/look.mjs';
-import { paletteTokens, toneTokens, isDefaultTone } from '../../../public/fire/js/palettes.js';
-import { getTypeface } from '../../../public/fire/js/typefaces.js';
+import { paletteTokens, toneTokens, isDefaultTone } from 'fire-design/fire/js/palettes.js';
+import { getTypeface } from 'fire-design/fire/js/typefaces.js';
 import { EMAILS, SECURITY, WORDS } from './messages.mjs';
 import { deviceText } from '../../lib/device.mjs';
 // Subjects are one line: control characters, line and paragraph separators and bidirectional overrides become spaces.
@@ -45,7 +45,11 @@ const HEX = /^#[0-9a-f]{6}$/i;
 export function emailColors(look) {
     const tokens = isDefaultTone(look.tone) ? paletteTokens(look.palette, { contrast: look.contrast }) : toneTokens(paletteTokens(look.palette, { contrast: look.contrast }), look.tone);
     const scheme = index => {
-        const pick = name => HEX.test(tokens[name]?.[index]) ? tokens[name][index] : (index ? '#ffffff' : '#000000');
+        const pick = name => {
+            const hex = tokens[name]?.[index];
+            if (!HEX.test(hex)) throw new Error(`Expected a hex colour for Fire email token ${name} (${index ? 'dark' : 'light'})`);
+            return hex;
+        };
         const colors = { page: pick('--fd-bg'), card: pick('--fd-surface'), line: pick('--fd-line'), ink: pick('--fd-ink'), accent: pick('--fd-accent'),
             onAccent: pick('--fd-accent-contrast'), link: pick('--fd-accent-text') };
         return { ...colors, muted: mix(colors.ink, colors.page, 0.64), faint: mix(colors.line, colors.page, 0.6) };

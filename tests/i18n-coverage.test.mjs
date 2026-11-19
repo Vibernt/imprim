@@ -1,6 +1,7 @@
 // Every visible word on people-facing pages and in emails goes through the catalogue. The test language wraps each
 // message in ⟦ ⟧; any other word must be data (names, emails, hosts, codes, dates).
 import test from 'node:test';
+import assert from 'node:assert/strict';
 import { world, turnstile, cookieJar } from './support/world.mjs';
 import { enrolMfa } from './support/admin.mjs';
 import { agentWorld, resource } from './support/agents.mjs';
@@ -18,7 +19,7 @@ async function check(w, path, init, where = path) {
 }
 test('sign-in, result and error pages', async t => {
     const w = await world(t); usePseudo(w); turnstile(t);
-    for (const path of ['/login', '/check-email', '/signed-out', '/error', '/device', '/device?user_code=BCDF-GHJK', '/account']) await check(w, path, { headers: { accept: 'text/html' } });
+    for (const path of ['/login', '/check-email', '/signed-out', '/error', '/device', '/device?user_code=BCDF-GHJK', '/account/security']) await check(w, path, { headers: { accept: 'text/html' } });
     w.env.DB.db.prepare(`UPDATE clients SET sign_in_methods='["email","password","passkey","github","google"]' WHERE id='app'`).run();
     await check(w, '/authorize?' + new URLSearchParams({ client_id: 'app', redirect_uri: 'https://app.example/callback', response_type: 'code', scope: 'openid', state: 's', nonce: 'n', code_challenge: 'c'.repeat(43), code_challenge_method: 'S256' }));
 });
@@ -30,9 +31,12 @@ test('account, second-factor, password and logout pages', async t => {
     const token = w.mails.at(-1).text.match(/#token=([A-Za-z0-9_-]+)/)[1];
     const cookie = cookieJar(await w.post('/v1/auth/magic/verify', { token }, browser)), csrf = cookie.match(/__Host-vi_csrf=([^;]+)/)[1];
     const get = path => check(w, path, { headers: { cookie } });
-    for (const path of ['/signed-in', '/account', '/account/security', '/account/sessions', '/account/agents', '/account/mfa', '/account/password', '/logout']) await get(path);
+    for (const path of ['/signed-in', '/account/mfa', '/account/password', '/logout']) await get(path);
+    const access = await w.call('/v1/account/sessions', { headers: { cookie } });
+    assert.equal(access.status, 200);
+    assertTranslated((await access.json()).sessions.find(session => session.current).device, DATA, 'current session device');
     await enrolMfa(w, cookie, csrf);
-    for (const path of ['/account/mfa', '/account/security', '/mfa', '/mfa?recovery=1']) await get(path);
+    for (const path of ['/account/mfa', '/mfa', '/mfa?recovery=1']) await get(path);
     const form = (path, body) => check(w, path, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: w.env.ISSUER, cookie }, body: new URLSearchParams({ csrf, ...body }) }, `POST ${path}`);
     await form('/account/mfa', { action: 'start' });
     await form('/account/mfa', { action: 'recovery' });

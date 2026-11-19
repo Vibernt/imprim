@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { world, login, turnstile, cookieJar, begin } from './support/world.mjs';
-import { adminLogin, enrolMfa, assertFireMarkup } from './support/admin.mjs';
+import { adminLogin, enrolMfa } from './support/admin.mjs';
 import { agentWorld } from './support/agents.mjs';
 const jarOf = (...parts) => parts.filter(Boolean).join('; ');
 const csrfOf = jar => jar.match(/__Host-vi_csrf=([^;]+)/)[1];
@@ -11,23 +11,29 @@ async function signedIn(w, t, email) {
     const { flow, cookie, code } = await login(w, t, email);
     return { jar: jarOf(flow.cookie, cookie), code };
 }
-test('the account page shows profile, security, sessions, apps and agents; the name reaches the profile claims', async t => {
+test('the account offers profile, security, sessions, apps and agents, and a name change reaches profile claims', async t => {
     const w = await world(t);
     const { jar, code } = await signedIn(w, t);
     await w.exchange(code);
-    const read = async path => (await w.call(path, { headers: { cookie: jar } })).text();
-    const html = await read('/account');
-    for (const [path, title, sections] of [['/account', 'Profile', ['Delete account']], ['/account/security', 'Security', ['Remembered browsers']],
-        ['/account/sessions', 'Sessions and apps', ['Signed-in sessions', 'Apps']], ['/account/agents', 'Connected agents', []]]) {
-        const page = await read(path);
-        assert.ok(page.includes(`<h1 class="fd-display">${title}</h1>`), title);
-        for (const heading of sections) assert.ok(page.includes(`>${heading}</h2>`), heading);
-        assert.match(page, new RegExp(`<a class="fd-nav-item" href="${path}" aria-current="page">`), `${path} is the current nav item`);
-        assertFireMarkup(page);
-    }
-    // The shell names who is signed in; someone who is not an administrator gets no link to the console.
-    assert.match(html, /<span class="fd-account-email">person@example\.com<\/span>/);
-    assert.ok(!html.includes('href="/admin"') && !html.includes('identity:'), 'no console link, no marker left behind');
+    const read = async path => {
+        const response = await w.call(`/v1/account/${path}`, { headers: { cookie: jar } });
+        assert.equal(response.status, 200, path);
+        return response.json();
+    };
+    const profile = await (await w.call('/v1/account/profile', { headers: { cookie: jar } })).json();
+    assert.equal(profile.email, 'person@example.com');
+    assert.equal(profile.email_verified, true);
+    const security = await read('security');
+    assert.equal(security.email_verified, true);
+    assert.deepEqual(security.factors, []);
+    const access = await read('sessions');
+    assert.equal(access.sessions.length, 1);
+    assert.equal(access.sessions[0].current, true);
+    assert.deepEqual(access.apps.map(app => app.client_id), ['app']);
+    assert.deepEqual(access.browsers, []);
+    assert.deepEqual(await read('agents'), { agents: [], next: null });
+    assert.deepEqual(await (await w.call('/v1/me', { headers: { cookie: jar } })).json().then(({ email, admin }) => ({ email, admin })),
+        { email: 'person@example.com', admin: null });
     assert.equal((await form(w, '/account/profile', { csrf: csrfOf(jar), display_name: '  Ada ‮Lovelace  ' }, jar)).status, 200);
     assert.equal(w.env.DB.db.prepare('SELECT display_name FROM users').get().display_name, 'Ada Lovelace');
     const next = await (await w.exchange(new URL((await w.authorize({ scope: 'openid profile' }, jar)).headers.get('location')).searchParams.get('code'))).json();
@@ -41,12 +47,12 @@ test('a person signs out another session or one app; each sends back-channel log
     await w.exchange(second.code);
     const otherSid = w.env.DB.db.prepare('SELECT sid FROM app_sessions').get().sid;
     const mine = w.env.DB.db.prepare('SELECT sid FROM sessions WHERE sid<>?').get(otherSid).sid;
-    assert.equal((await form(w, '/account/sessions', { csrf: csrfOf(first.jar), sid: mine }, first.jar)).status, 400, 'not this browser');
-    assert.equal((await form(w, '/account/sessions', { csrf: csrfOf(first.jar), sid: otherSid }, first.jar)).status, 200);
+    assert.equal((await w.post('/v1/account/sessions', { sid: mine }, first.jar, { 'x-csrf-token': csrfOf(first.jar) })).status, 400, 'not this browser');
+    assert.equal((await w.post('/v1/account/sessions', { sid: otherSid }, first.jar, { 'x-csrf-token': csrfOf(first.jar) })).status, 200);
     assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM sessions WHERE sid=?').get(otherSid).n, 0);
     assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM logout_outbox WHERE sid=?').get(otherSid).n, 1);
     await w.exchange((await signedIn(w, t)).code);
-    assert.equal((await form(w, '/account/apps', { csrf: csrfOf(first.jar), client_id: 'app' }, first.jar)).status, 200);
+    assert.equal((await w.post('/v1/account/apps', { client_id: 'app' }, first.jar, { 'x-csrf-token': csrfOf(first.jar) })).status, 200);
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM app_sessions WHERE client_id='app'").get().n, 0);
 });
 test('email change needs a fresh email link, a confirmation from the new address in the same browser, and tells the old one', async t => {
@@ -182,8 +188,8 @@ test('review 3 and 4: a held address gets no email, and email changes are capped
 });
 test('a signed-out visit to the account or second-factor pages gets a page that says how to sign in; POSTs stay JSON', async t => {
     const w = await world(t);
-    for (const path of ['/account', '/account/mfa', '/account/password', '/mfa']) {
-        const response = await w.call(path);
+    for (const path of ['/account/security', '/account/mfa', '/account/password', '/mfa']) {
+        const response = await w.call(path, { headers: { accept: 'text/html' } });
         assert.equal(response.status, 401, path);
         assert.match(response.headers.get('content-type'), /^text\/html/, path);
         const html = await response.text();

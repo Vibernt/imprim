@@ -37,3 +37,5 @@ export function assertTranslated(text, allowed, where) {
     const words = untranslated(text, allowed);
     assert.deepEqual([...new Set(words)], [], `${where}: text outside the catalogue`);
 }
+
+export const fireLabels = html => JSON.parse(html.match(/<script type="application\/json" data-fd-labels>([^<]*)<\/script>/)[1]);

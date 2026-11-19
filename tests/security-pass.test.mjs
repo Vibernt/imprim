@@ -142,12 +142,21 @@ test('S5: /account pages connected agents and a person cannot hold more than the
     const insert = w.env.DB.db.prepare(`INSERT INTO agent_grants(id,client_id,client_name,registration_method,app_id,user_id,resource,scope,method,created,last_used,expires_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (let i = 1; i <= MAX_LIVE_GRANTS; i++) insert.run(crypto.randomUUID(), grant.client_id, 'Filler', 'metadata_document', 'app', grant.user_id, resource, 'read', 'email', grant.created - i, grant.created, grant.expires_at);
-    const page = await (await w.call('/account/agents', { headers: { cookie: w.cookie } })).text();
-    assert.equal((page.match(/action="\/account\/revoke"/g) || []).length, 50, 'one revoke form per agent on the page');
-    assert.match(page, /Older agents/);
+    const read = async query => {
+        const response = await w.call(`/v1/account/agents${query}`, { headers: { cookie: w.cookie } });
+        assert.equal(response.status, 200);
+        return response.json();
+    };
+    const page = await read('');
+    assert.equal(page.agents.length, 50);
+    assert.ok(page.agents.every(agent => agent.status === 'active'));
+    assert.ok(page.next);
+    const older = await read(`?before=${encodeURIComponent(page.next)}`);
+    assert.equal(older.agents.length, MAX_LIVE_GRANTS + 1 - 50);
+    assert.ok(older.agents.every(agent => !page.agents.some(first => first.id === agent.id)));
     const flow = await w.start();
     await error(await w.approve(flow), 'access_denied', 403);
-    await error(await w.call('/account/agents?before=junk', { headers: { cookie: w.cookie } }), 'invalid_request');
+    await error(await w.call('/v1/account/agents?before=junk', { headers: { cookie: w.cookie } }), 'invalid_request');
 });
 
 // S7, S8: user codes use all 20 letters; budgets key on the IPv6 /64 and on the recipient.

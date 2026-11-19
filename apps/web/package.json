@@ -1,0 +1,44 @@
+{
+  "name": "imprim-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Imprim account and admin interface (Lit, Vite, Fire).",
+  "type": "module",
+  "scripts": {
+    "prepare:fire": "node scripts/prepare.mjs",
+    "dev": "npm run prepare:fire && vite",
+    "build": "npm run prepare:fire && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint:markup": "node scripts/lint.mjs",
+    "lint:css": "node scripts/lint.mjs --css",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {
+    "fire-design": "github:vidhatanand/firedesign#v0.9.1",
+    "lit": "3.3.3"
+  },
+  "devDependencies": {
+    "pixelmatch": "7.1.0",
+    "playwright-core": "1.64.1",
+    "pngjs": "7.0.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.8"
+  },
+  "fire": {
+    "slim": {
+      "sources": [
+        "src",
+        "index.html"
+      ],
+      "out": ".fire-slim",
+      "level": "component"
+    },
+    "budget": {
+      "initialJs": 205,
+      "routeJs": 25,
+      "css": 100
+    },
+    "prefix": "im"
+  }
+}

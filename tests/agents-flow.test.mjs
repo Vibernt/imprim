@@ -50,7 +50,9 @@ test('MCP resource challenge → discovery → metadata registration → consent
     assert.equal(refreshed.sub, w.user.id);
     assert.equal(refreshed.grant_issued_at, claims.grant_issued_at, 'a refresh never moves the approval time');
     const grant = w.env.DB.db.prepare('SELECT * FROM agent_grants').get();
-    const account = await w.call('/account/agents', { headers: { cookie: w.cookie } }); assert.match(await account.text(), /Connected agents.*Example Agent/s);
+    const account = await w.call('/v1/account/agents', { headers: { cookie: w.cookie } });
+    assert.equal(account.status, 200);
+    assert.equal((await account.json()).agents[0].name, 'Example Agent');
     w.env.DB.db.exec("UPDATE clients SET backchannel_uri='https://app.example/backchannel' WHERE id='app'");
     assert.equal((await w.form('/account/revoke', { grant_id: grant.id, csrf: w.csrf }, w.cookie)).status, 303);
     await w.drain();

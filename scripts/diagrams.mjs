@@ -10,7 +10,7 @@ import { dotMatrix } from '../apps/server/src/pages/dots.mjs';
 
 const SANS = "'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const MONO = "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-// Fire's tokens (apps/server/public/fire/tokens.css), resolved for each scheme. Muted text is ink at 64%; the grid
+// Fire's tokens (node_modules/fire-design/fire/tokens.css), resolved for each scheme. Muted text is ink at 64%; the grid
 // dots are faint ink, as Fire's texture rules set them.
 export const PALETTES = {
     light: { bg: '#f9f9f9', surface: '#ffffff', sunken: '#f4f4f4', ink: '#262626', muted: '#737373', line: '#e8e8e8', strong: '#d4d4d4',
@@ -25,7 +25,7 @@ const widthOf = (text, size, mono) => text.length * size * (mono ? 0.62 : 0.57);
 
 function fontFaces() {
     const face = (family, file) => `@font-face{font-family:'${family}';font-weight:100 900;src:url(data:font/woff2;base64,${
-        readFileSync(new URL(`../apps/server/public/fire/fonts/${file}`, import.meta.url)).toString('base64')}) format('woff2')}`;
+        readFileSync(new URL(`../node_modules/fire-design/fire/fonts/${file}`, import.meta.url)).toString('base64')}) format('woff2')}`;
     return `<style>${face('Geist', 'geist-latin-wght-normal.woff2')}${face('Geist Mono', 'geist-mono-latin-wght-normal.woff2')}</style>`;
 }
 

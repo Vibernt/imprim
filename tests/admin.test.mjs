@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { useWebShell } from './support/web-shell.mjs';
 import assert from 'node:assert/strict';
 import { world, turnstile, login } from './support/world.mjs';
 import { adminLogin, clientConfig } from './support/admin.mjs';
@@ -24,7 +25,7 @@ for (const boundary of ['anonymous','non-admin','normal admin session','provider
         if (boundary === 'cross origin') headers.origin = 'https://evil.example';
         if (boundary === 'stale authentication') w.env.DB.db.exec('UPDATE sessions SET auth_time=0');
         const response = await a.post(`users/${user.id}/block`, {}, headers);
-        assert.equal(response.status, 403, await response.text());
+        assert.equal(response.status, boundary === 'anonymous' ? 401 : 403, await response.text());
         assert.equal(w.env.DB.db.prepare('SELECT status FROM users WHERE id=?').get(user.id).status, 'active');
         assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_block'").get().n, 0);
     });
@@ -46,11 +47,14 @@ test('client create/edit/secret rotation audit and show-once secret; HTML screen
         assert.equal(response.headers.get('cache-control'), 'no-store');
         for (const secret of [first.client_secret, second.client_secret, await sha256(second.client_secret)]) assert.ok(!text.includes(secret));
     }
+    await useWebShell(t, w.env);
     for (const path of ['/admin','/admin/clients','/admin/clients/new','/admin/clients/notes','/admin/users','/admin/audit','/admin/keys','/admin/settings']) {
-        const response = await w.call(path, { headers: { cookie: a.cookie } });
+        const response = await w.call(path, { headers: { cookie: a.cookie, accept: 'text/html' } });
         assert.equal(response.status, 200, path); assert.equal(response.headers.get('cache-control'), 'no-store');
         assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
-        assert.ok(!(await response.text()).includes('<script>bad</script>'));
+        const html = await response.text();
+        assert.ok(!html.includes('<script>bad</script>'));
+        assert.match(html, /<app-shell><\/app-shell>/);
     }
     const events = w.env.DB.db.prepare("SELECT * FROM audit WHERE event LIKE 'admin_%'").all();
     assert.deepEqual(events.map(r => r.event), ['admin_sign_in','admin_client_create','admin_client_update','admin_client_secret_rotate']);
@@ -98,7 +102,9 @@ test('HTML client forms submit JSON fields and never redisplay a secret', async 
         agent_registration_methods: '["metadata_document"]', agent_allowlist: '[]', agent_scope_catalogue: '{}', agent_resource_prefixes: '[]', agent_max_grant_days: '90' });
     const response = await w.call('/admin/clients', { method: 'POST', headers: { origin: w.env.ISSUER, cookie: a.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body });
     assert.equal(response.status, 200, await response.clone().text()); assert.match(await response.text(), /Copy the new client secret now/);
-    const get = await w.call('/admin/clients/notes', { headers: { cookie: a.cookie } }); assert.ok(!(await get.text()).includes('client_secret'));
+    const get = await a.get('clients/notes');
+    assert.equal(get.status, 200);
+    assert.ok(!Object.hasOwn(await get.json(), 'client_secret'));
 });
 
 for (const endpoint of ['clients','clients/app','clients/app/rotate-secret','keys/rotate','users/target/block'])

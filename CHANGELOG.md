@@ -7,6 +7,16 @@ describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
 Nothing yet.
 
+## 2026-11-19
+
+No migration.
+
+- Pinned Fire 0.9.1 from its public repository, shipping its LICENSE and NOTICE; filed the fieldset reset with Fire.
+- Built the account area and admin console as a Lit app using `GET /v1/me`, `GET /v1/i18n/<locale>.json`, `/v1/account/*` and `/admin/api/*` JSON APIs.
+- Kept the account sign-in message on signed-out `/account`.
+- Added a build step and the `ASSETS` binding for deploys ([Deploying](docs/DEPLOY.md)).
+- Translated Fire interface labels and checked icons.
+
 ## 2026-11-18
 
 Migration `0024`.

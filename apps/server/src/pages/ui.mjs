@@ -1,13 +1,16 @@
 // Fire components rendered on the server, so pages that handle credentials need no client-side framework. Markup follows
 // the Fire docs (docs/fire/VOCABULARY.md); copy follows docs/fire/WRITING.md. Every argument that is text is escaped here.
-import { ICONS } from '../../public/fire/js/icons.js';
+import { ICONS } from 'fire-design/fire/js/icons.js';
 import { t } from '../i18n/index.mjs';
 export const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const e = escapeHtml;
 export const attrs = (pairs = {}) => Object.entries(pairs).filter(([, v]) => v !== undefined && v !== null && v !== false)
     .map(([k, v]) => v === true ? ` ${k}` : ` ${k}="${e(v)}"`).join('');
 // Lucide icons from Fire's set, inline (Fire's own <i data-icon> needs its JavaScript).
-export const icon = (name, size) => ICONS[name] ? `<svg class="fd-icon" viewBox="0 0 24 24"${size ? ` data-size="${size}"` : ''} aria-hidden="true">${ICONS[name]}</svg>` : '';
+export function icon(name, size) {
+    if (!Object.hasOwn(ICONS, name)) throw new Error(`Unknown Fire icon: ${name}`);
+    return `<svg class="fd-icon" viewBox="0 0 24 24"${size ? ` data-size="${size}"` : ''} aria-hidden="true">${ICONS[name]}</svg>`;
+}
 export { dotLogo, dotMark } from './dots.mjs';
 // The head of a centred screen: its heading and one line, centred.
 export const heading = (title, description = '') => `<header class="fd-screen-head"><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${e(description)}</p>` : ''}</header>`;

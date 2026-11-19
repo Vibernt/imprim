@@ -1,0 +1,24 @@
+/* Fire's layout starts at the elements rendered by these light-DOM components. */
+app-shell,
+screen-profile,
+screen-admin-clients,
+screen-admin-client-editor,
+screen-admin-services,
+screen-admin-users,
+screen-admin-user,
+screen-admin-merge,
+screen-admin-audit,
+screen-workspaces,
+screen-branding,
+screen-realm-settings,
+screen-signing-keys,
+screen-realms,
+screen-moving,
+screen-not-found,
+screen-no-access,
+screen-load-error {
+  display: contents;
+}
+
+/* Stopgap (docs/fire/REQUESTS.md): Fire has no fieldset reset, so a fieldset keeps the browser's border and padding. */
+.im-fieldset { border: 0; margin: 0; padding: 0; min-inline-size: 0; }

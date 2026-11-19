@@ -1,12 +1,26 @@
 {
-  "name": "imprim", "private": true, "type": "module",
-  "workspaces": ["apps/server", "packages/imprim-client"],
-  "engines": {"node": ">=22.13.0"},
+  "name": "imprim",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/server",
+    "packages/imprim-client"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
-    "pretest": "node scripts/build-client.mjs",
+    "build:fire": "node scripts/build-fire.mjs",
+    "build:web": "npm --prefix apps/web run build && node scripts/build-web.mjs",
+    "build": "npm run build:fire && npm run build:web",
+    "pretest": "node scripts/build-fire.mjs && node scripts/build-client.mjs",
     "test": "node --test tests/*.test.mjs",
-    "pretest:quiet": "node scripts/build-client.mjs",
+    "pretest:quiet": "node scripts/build-fire.mjs && node scripts/build-client.mjs",
     "test:quiet": "node --test --test-reporter=./scripts/quiet-reporter.mjs tests/*.test.mjs",
+    "precheck": "node scripts/build-fire.mjs",
     "check": "node scripts/check.mjs"
+  },
+  "devDependencies": {
+    "fire-design": "github:vidhatanand/firedesign#v0.9.1"
   }
 }

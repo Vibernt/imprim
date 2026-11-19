@@ -1,5 +1,5 @@
 // Translation catalogue checks (docs/TRANSLATING.md). English is the source: every message id is English text in
-// apps/server/src, written as t(env, '…'), tHtml(env, '…'), tPlural(env, n, '…', '…'), msg('…'), or as the message of an
+// apps/server/src or apps/web/src. Server ids are written as t(env, '…'), tHtml(env, '…'), tPlural(env, n, '…', '…'), msg('…'), or as the message of an
 // error a person can see (invariant(…, 'code', '…') and new AppError(status, 'code', '…') outside the modules below).
 //
 //   node scripts/i18n.mjs             check every shipped catalogue; exit 1 on any problem
@@ -7,6 +7,7 @@
 //   node scripts/i18n.mjs ids         list every id, as JSON
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+const WEB = fileURLToPath(new URL('../apps/web/src/', import.meta.url));
 const SRC = fileURLToPath(new URL('../apps/server/src/', import.meta.url));
 // Errors from these modules reach developers, operators or the admin console, never a person's page or script: they
 // stay English (protocol error_description is ASCII by RFC 6749; the admin console is English).
@@ -19,11 +20,11 @@ export const ENGLISH_ONLY = [/^admin\//, /^machines\//, /^branding\//, /^realms\
     /^workspaces\/(?!email\.mjs$)/];
 const STRING = String.raw`'((?:\\.|[^'\\])*)'`;
 const unquote = text => text.replace(/\\(.)/g, '$1');
-async function files(dir, base = '') {
+async function files(dir, base = '', extension = '.mjs') {
     const out = [];
     for (const entry of await readdir(dir, { withFileTypes: true }))
-        if (entry.isDirectory()) out.push(...await files(`${dir}${entry.name}/`, `${base}${entry.name}/`));
-        else if (entry.name.endsWith('.mjs')) out.push(`${base}${entry.name}`);
+        if (entry.isDirectory()) out.push(...await files(`${dir}${entry.name}/`, `${base}${entry.name}/`, extension));
+        else if (entry.name.endsWith(extension)) out.push(`${base}${entry.name}`);
     return out;
 }
 // Every id in the source, with where it was found. `problems` lists ids that are not plain literals.
@@ -47,7 +48,26 @@ export async function extract(root = SRC) {
             else add(unquote(m[1]), line(m.index + m[0].length));
         }
     }
+    if (root === SRC) await scanWeb(add, plurals, problems);
     return { ids, plurals, problems };
+}
+// The Lit app calls t(id) and tPlural(count, one, other) without a request environment.
+async function scanWeb(add, plurals, problems) {
+    const literal = String.raw`('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")`;
+    const idOf = value => unquote(value.slice(1, -1));
+    for (const path of await files(WEB, '', '.ts')) {
+        const source = await readFile(WEB + path, 'utf8');
+        const line = index => `apps/web/src/${path}:${source.slice(0, index).split('\n').length}`;
+        for (const match of source.matchAll(new RegExp(String.raw`\bt\(\s*` + literal, 'g'))) add(idOf(match[1]), line(match.index));
+        const plural = new RegExp(String.raw`\btPlural\(\s*[^,]+,\s*` + literal + String.raw`\s*,\s*` + literal, 'g');
+        for (const match of source.matchAll(plural)) {
+            const id = idOf(match[2]);
+            add(id, line(match.index));
+            plurals.add(id);
+        }
+        for (const match of source.matchAll(/\b(?:t\(\s*|tPlural\(\s*[^,]+,\s*)`/g))
+            problems.push(`${line(match.index)}: a template literal as a message id; use {placeholders}`);
+    }
 }
 const placeholders = text => [...String(text).matchAll(/\{([a-z][a-z0-9_]*)\}/gi)].map(m => m[1]).sort().join(',');
 const tags = text => [...String(text).matchAll(/<\/?(\d)>/g)].map(m => m[0]).sort().join(',');

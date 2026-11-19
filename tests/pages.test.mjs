@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { useWebShell } from './support/web-shell.mjs';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
 import { world, begin, turnstile } from './support/world.mjs';
@@ -10,7 +11,7 @@ for (const path of ['/login', '/check-email', '/error', '/signed-out']) test(`se
     // Turnstile's origin appears only on the page that renders the widget.
     const turnstile = path === '/login' ? " https://challenges.cloudflare.com" : '', frames = path === '/login' ? 'https://challenges.cloudflare.com' : "'none'";
     assert.equal(response.headers.get('content-security-policy'), `default-src 'self'; script-src 'self'${turnstile}; frame-src ${frames}; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
-    assert.match(html, /<html lang="en">/);
+    assert.match(html, /<html lang="en" data-fd-surface="app">/);
     if (path !== '/login') assert.ok(!/<(?:script|link|img|iframe)[^>]+(?:src|href)="https?:/i.test(html));
     assert.equal(response.headers.get('referrer-policy'), 'same-origin', 'no-referrer makes browsers send Origin: null on form POSTs, which the origin check refuses');
 });
@@ -22,7 +23,7 @@ test('every page shows the realm name, escaped, and no product is written into t
     assert.match(html, /<title>Signed out · Vibernt<\/title>/);
     // Every class is Fire's own: there are no stopgap rules, so no page links the stopgap stylesheet.
     assertFireMarkup(html);
-    assert.ok(!html.includes('local.css') && !/class="[^"]*\bx-/.test(html));
+    assert.ok(!html.includes('local.css') && !/class="[^"]*\bim-/.test(html));
     assert.ok(!(await (await w.call('/assets/local.css')).text()).includes('{'));
     w.env.DB.db.prepare("UPDATE realms SET display_name=? WHERE id='default'").run('<b>Acme</b>');
     const { forgetRealms } = await import('../apps/server/src/realms/realm.mjs'); forgetRealms(w.env);
@@ -63,26 +64,42 @@ test('fragment page never sends token on load; explicit click posts once and nav
     assert.equal(JSON.parse(requests[0].options.body).browser_response, true);
     assert.deepEqual(navigations, ['https://app.example/callback?code=issued']);
 });
-test('the console wears the app shell: scripts only from this origin, and navigation by role', async t => {
+test('legacy admin form responses retain the Fire shell, same-origin scripts and role-based navigation', async t => {
     const w = await world(t); turnstile(t);
-    const a = await adminLogin(w), read = async path => { const response = await w.call(path, { headers: { cookie: a.cookie } }); return { response, html: await response.text() }; };
-    const { response, html } = await read('/admin/clients');
+    const a = await adminLogin(w);
+    const legacyResponse = async () => {
+        const response = await w.call('/admin/clients', { method: 'POST',
+            headers: { cookie: a.cookie, accept: 'text/html', origin: w.env.ISSUER, 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ csrf: a.csrf, redirect_uris: 'invalid' }) });
+        assert.equal(response.status, 400);
+        return { response, html: await response.text() };
+    };
+    const { response, html } = await legacyResponse();
     assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
     assert.match(html, /<div class="fd-app" data-sidebar="expanded"><aside class="fd-sidebar" aria-label="Admin console">/);
     assert.match(html, /<a class="fd-nav-item" href="\/admin\/clients" aria-current="page">/);
     assert.match(html, /<span class="fd-account-email">admin@example\.com<\/span>/);
-    assert.deepEqual([...html.matchAll(/<script[^>]*>/g)].map(m => m[0]), ['<script type="module" src="/imprim/shell.js">'], 'one same-origin module, nothing inline');
+    assert.deepEqual([...html.matchAll(/<script[^>]*>/g)].map(m => m[0]), [
+        '<script type="application/json" data-fd-labels>', '<script type="module" src="/imprim/shell.js">'
+    ], 'non-executable label data precedes the only executable script');
     assertFireMarkup(html);
     // A platform administrator sees the platform pages; a realm administrator is not shown them.
     assert.ok(html.includes('href="/admin/keys"') && html.includes('href="/admin/realms"') && !html.includes('identity:'));
     w.env.DB.db.exec("UPDATE admins SET role='realm'");
-    const realm = (await read('/admin/clients')).html;
+    const realm = (await legacyResponse()).html;
     assert.ok(!realm.includes('href="/admin/keys"') && !realm.includes('href="/admin/realms"') && !realm.includes('Platform') && !realm.includes('identity:'));
-    assert.equal((await read('/admin/keys')).response.status, 403, 'hiding the link is not the control: the page itself refuses');
-    // The same person's account pages link to the console.
-    assert.match((await read('/account')).html, /<a class="fd-nav-item" href="\/admin">/);
-    // Only the Branding page may call the admin API.
-    assert.match((await read('/admin/branding')).response.headers.get('content-security-policy'), /script-src 'self'; connect-src 'self';/);
+    assert.equal((await a.get('keys')).status, 403);
+    const accountMfa = await w.call('/account/mfa', { headers: { cookie: a.cookie } });
+    assert.match(await accountMfa.text(), /<a class="fd-nav-item" href="\/admin">/);
+
+    await useWebShell(t, w.env);
+    const read = path => w.call(path, { headers: { cookie: a.cookie, accept: 'text/html' } });
+    assert.equal((await read('/admin/keys')).status, 403);
+    assert.equal((await read('/admin/realms')).status, 403);
+    const branding = await read('/admin/branding');
+    assert.equal(branding.status, 200);
+    assert.match(branding.headers.get('content-security-policy'), /script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self';/);
+    assert.match(await branding.text(), /<app-shell><\/app-shell>/);
 });
 test('the forms script loads Fire\'s forms module and makes no request of its own', async () => {
     const { readFileSync } = await import('node:fs');

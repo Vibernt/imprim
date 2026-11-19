@@ -106,7 +106,13 @@ test('admins create service clients with public keys, catalogue scopes and prefi
     assert.equal(created.status, 200, await created.clone().text());
     assert.equal((await admin.post('services', good)).status, 409);
     assert.equal((await (await admin.get('services')).json()).services[0].owner_email, 'ops@example.com');
+    assert.equal((await admin.post('services/deployer', { id: 'renamed' })).status, 400);
+    const edited = await admin.post('services/deployer', { name: 'Updated deployer', status: 'disabled' });
+    assert.equal(edited.status, 200);
+    const { service } = await edited.json();
+    assert.deepEqual([service.name, service.status, service.scopes], ['Updated deployer', 'disabled', good.scopes]);
     assert.equal((await admin.post('services/deployer/delete')).status, 200);
+    assert.deepEqual((await (await admin.get('services')).json()).services, []);
 });
 test('discovery lists introspection, revocation and client_credentials', async t => {
     const w = await world(t);

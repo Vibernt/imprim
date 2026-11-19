@@ -4,6 +4,9 @@ import { world } from './support/world.mjs';
 import { composeEmail } from '../apps/server/src/services/email/send.mjs';
 import { EMAILS } from '../apps/server/src/services/email/messages.mjs';
 import { catalogues, LANGUAGES } from '../apps/server/src/i18n/index.mjs';
+import { resolveLook } from '../apps/server/src/branding/look.mjs';
+import { emailColors } from '../apps/server/src/services/email/render.mjs';
+import { contrast, PALETTES } from 'fire-design/fire/js/palettes.js';
 const ISSUER = 'https://id.example.com';
 const TIME = Date.UTC(2026, 10, 17, 9, 30);
 const footer = '\n\n--\nAcme accounts run on Imprim.\nHelp: help@acme.example\n© Acme Ltd';
@@ -123,6 +126,25 @@ test('the look sets the colours and font; a forced theme has no dark-mode switch
     assert.ok(!light.html.includes('prefers-color-scheme') && light.html.includes('content="light"'));
     const dark = await composeEmail(w.env, { kind: 'account_deleted', to: 'p@example.com', branding: { look: { theme: 'dark' } } });
     assert.ok(dark.html.includes('content="dark"'));
+});
+test('email buttons use Fire’s accent label with at least 4.5:1 contrast in both schemes', async t => {
+    const tones = [{}, { hue: 180, vivid: 0, light: -12, warmth: 100 }, { hue: -180, vivid: 150, light: 12, warmth: -100 }];
+    for (const { name: palette } of PALETTES) {
+        for (const tone of tones) {
+            for (const level of ['default', 'high']) {
+                const schemes = emailColors(resolveLook({ palette, tone, contrast: level }));
+                for (const [scheme, { accent, onAccent }] of Object.entries(schemes))
+                    assert.ok(contrast(accent, onAccent) >= 4.5, `${palette} ${scheme} ${level} ${JSON.stringify(tone)}: ${accent} / ${onAccent}`);
+            }
+        }
+    }
+    const w = await setup(t), look = { palette: 'ember' };
+    const { light, dark } = emailColors(resolveLook(look));
+    const mail = await composeEmail(w.env, { kind: 'sign_in_link', to: 'p@example.com', branding: { look }, links: { link: `${ISSUER}/login#token=a` } });
+    assert.match(mail.html, new RegExp(`class="im-button" bgcolor="${light.accent}"`));
+    assert.match(mail.html, new RegExp(`class="im-button-text"[^>]*color:${light.onAccent};`));
+    assert.ok(mail.html.includes(`.im-button{background:${dark.accent}!important}`));
+    assert.ok(mail.html.includes(`.im-button-text{color:${dark.onAccent}!important}`));
 });
 test('sent mail carries both parts, and a failed send never logs the link', async t => {
     const w = await world(t);

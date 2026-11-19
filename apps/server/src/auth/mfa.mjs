@@ -90,3 +90,7 @@ export async function trustBrowser(env, userId, clientId, days, request) {
 }
 // Any password or factor change ends remembered browsers.
 export const forgetDevices = (env, userId) => env.DB.prepare('DELETE FROM trusted_devices WHERE user_id=?').bind(userId);
+
+export const hasFactorSql = `EXISTS (SELECT 1 FROM mfa_factors WHERE user_id=?1 AND confirmed=1)
+    OR EXISTS (SELECT 1 FROM webauthn_credentials WHERE user_id=?1)`;
+export const clearOrphanedRecovery = (env, userId) => env.DB.prepare(`DELETE FROM recovery_codes WHERE user_id=?1 AND NOT (${hasFactorSql})`).bind(userId);

@@ -13,12 +13,18 @@ keep it that way.
 3. **Write the change and its tests.** Run both checks before you push:
 
    ```bash
+   npm ci
+   ```
+
+   ```bash
    npm run test:quiet
    ```
 
    ```bash
    npm run check
    ```
+
+   For app changes, also run `npm --prefix apps/web ci` and `npm --prefix apps/web run check`.
 
 4. **Open a pull request** using the template. Say what changed, why, which negative tests prove the boundary,
    and anything you could not verify (for example live Cloudflare behaviour).
@@ -30,7 +36,7 @@ By contributing, you agree that your contribution is licensed under the [MIT lic
 
 ## Engineering rules
 
-- Native ES modules, Web Crypto, no runtime dependencies, no build step. `npm run check` enforces this.
+- The Worker uses native ES modules and Web Crypto, with no runtime dependencies or build step. The Lit app needs a build.
 - Small modules grouped by concern: routes, authentication, OIDC, agents, admin, pages and services stay separate.
 - Parameterised SQL only. Single-use values are claimed atomically (`DELETE … RETURNING` or a fenced `INSERT … SELECT`).
 - No network calls inside a D1 batch. No mocked success and no automatic fallback: fail explicitly and say why.
@@ -39,16 +45,16 @@ By contributing, you agree that your contribution is licensed under the [MIT lic
   origin, CSRF token, replay, or race must fail.
 - Tests use `node:test` and the real SQLite harness in `tests/support`. Node 22.13 or later.
 - Keep `sub` stable. Apps own authorisation; Imprim only proves identity and records consent.
-- Build UI with the vendored [Fire](docs/fire/README.md) design system: read `docs/fire/GUIDE.md`, render components
-  with `apps/server/src/pages/ui.mjs`, use only classes in `docs/fire/VOCABULARY.md`, and never edit
-  `apps/server/public/fire/`. No custom CSS, `<style>` blocks or `style` attributes: the CSP forbids them. Write
-  on-screen text to `docs/fire/WRITING.md`.
+- Screens follow [docs/WEB.md](docs/WEB.md).
+- Build UI with the [Fire](docs/fire/README.md) design system. Read `docs/fire/AGENT-RULES.md`, render
+  components with `apps/server/src/pages/ui.mjs`, and verify Fire classes in `docs/fire/CLASSES.md`.
+  Never edit Fire; it comes from the pinned `fire-design` package. The CSP forbids inline styles.
 - Update the docs in the same pull request when behaviour changes (`docs/PROTOCOL.md` for anything on the wire).
 
 ## Documentation
 
 The site at https://vibernt.github.io/imprim/ is built from `docs/` with Jekyll by `.github/workflows/pages.yml`,
-which copies `apps/server/public/fire` into the site so pages use Fire's documentation shell
+which copies `node_modules/fire-design/fire` into the site so pages use Fire's documentation shell
 (`docs/_layouts/default.html`). Each page's first `# ` heading becomes its title, so keep exactly one at the top.
 Add a new page to the navigation in `docs/_data/nav.yml`. Write docs to the same voice as the product
 (`docs/fire/WRITING.md`): plain, specific, sentence case, with one command per fenced `bash` block.

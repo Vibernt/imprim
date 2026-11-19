@@ -26,11 +26,10 @@ test('a concurrent secret rotation prevents stale client configuration from comm
     assert.equal(current.signup_policy, 'invited'); assert.equal(current.version, first.client.version + 1);
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_client_update'").get().n, 0);
 });
-test('public conversion is an explicit checkbox and is enforced on HTML POST', async t => {
+test('legacy rotation requires explicit public client conversion', async t => {
     const w = await world(t); turnstile(t); const a = await adminLogin(w);
     w.env.DB.db.exec("UPDATE clients SET secret_hash=NULL WHERE id='app'");
-    const html = await (await w.call('/admin/clients/app', { headers: { cookie: a.cookie } })).text();
-    assert.match(html, /type="checkbox" name="make_confidential" value="true" required/);
+    assert.equal((await (await a.get('clients/app')).json()).confidential, false);
     const submit = body => w.call('/admin/clients/app/rotate-secret', { method: 'POST', headers: { cookie: a.cookie, origin: w.env.ISSUER, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: a.csrf, ...body }) });
     assert.equal((await submit({})).status, 400);
     assert.equal((await submit({ make_confidential: 'false' })).status, 400);

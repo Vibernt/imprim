@@ -296,7 +296,7 @@ export function removeWorkspaceMember(env, client, actor, id, sub) {
         event: 'workspace-member-removed', eventOptions: { userId: sub }, detail: { sub } });
 }
 
-export async function closeWorkspace(env, client, actor, id) {
+export async function closeWorkspace(env, client, actor, id, confirm) {
     const now = Date.now();
     const { results } = await env.DB.prepare(`SELECT m.user_id FROM workspace_members m JOIN workspaces w ON w.id=m.workspace_id
         WHERE w.id=? AND w.realm_id=? ORDER BY m.user_id`).bind(id, realmId(env)).all();
@@ -307,6 +307,8 @@ export async function closeWorkspace(env, client, actor, id) {
     });
     const unjoined = unjoinedAppRule(client, id);
     const checks = [...(actor.admin ? [] : [actorRole(id, actor, ownerMember, unjoined)]), held,
+        ...(confirm === undefined ? [] : [check('EXISTS(SELECT 1 FROM workspaces WHERE id=? AND name=?)',
+            [id, confirm], 'invalid_request', 'The confirmation must match the workspace name.', 400)]),
         conflict(`NOT EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id NOT IN (SELECT value FROM json_each(?)))
             AND (SELECT count(*) FROM workspace_members WHERE workspace_id=?)=?`,
         [id, JSON.stringify(members), id, members.length], 'conflict', 'Workspace membership changed. Reload and try again.')];
@@ -373,6 +375,6 @@ export function adminWorkspaceWrites(env, admin) {
         revokeInvitation: (id, invitationId) => revokeWorkspaceInvitation(env, null, actor, id, invitationId),
         changeRole: (id, sub, role) => setWorkspaceMemberRole(env, null, actor, id, sub, role),
         removeMember: (id, sub) => removeWorkspaceMember(env, null, actor, id, sub),
-        close: id => closeWorkspace(env, null, actor, id)
+        close: (id, confirm) => closeWorkspace(env, null, actor, id, confirm)
     };
 }

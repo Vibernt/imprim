@@ -12,3 +12,9 @@
   X-Content-Type-Options: nosniff
   Cross-Origin-Resource-Policy: same-origin
   Cache-Control: public, max-age=0, must-revalidate
+
+# Vite content hashes change when these bytes change. The shell is served by the Worker with no-store.
+/ui/static/*
+  X-Content-Type-Options: nosniff
+  Cross-Origin-Resource-Policy: same-origin
+  Cache-Control: public, max-age=31536000, immutable

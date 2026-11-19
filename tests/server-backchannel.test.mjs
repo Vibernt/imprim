@@ -116,8 +116,8 @@ test('admin session revocation captures only selected sid for each app and audit
     await w.grant();
     for (const sid of [w.signed.session.sid, second.session.sid]) for (const id of ['app','other'])
         w.env.DB.db.prepare('INSERT INTO app_sessions VALUES(?,?,?,?)').run(id, w.user.id, sid, Date.now());
-    const page = await w.call('/admin/users/' + w.user.id, { headers: { cookie: admin.cookie } });
-    assert.match(await page.text(), /revoke-session/);
+    const user = await (await admin.get('users/' + w.user.id)).json();
+    assert.deepEqual(user.sessions.map(session => session.sid).sort(), [w.signed.session.sid, second.session.sid].sort());
     assert.equal((await admin.post(`users/${w.user.id}/revoke-session`, { sid: w.signed.session.sid })).status, 200);
     await w.drain();
     const events = w.env.DB.db.prepare('SELECT * FROM logout_outbox').all();
@@ -184,13 +184,10 @@ for (const kind of ['logout','revocation']) test(`${kind} younger event retries 
     assert.equal(api.delivery.counts.undelivered, 1); assert.equal(api.delivery.counts.expired, 0);
     assert.equal(api.delivery.events[0].id, row.id);
     assert.match(api.delivery.events[0].last_error, /refused delivery \(HTTP 503\)\./);
-    const html = await (await w.call('/admin/clients/app', { headers: { cookie: admin.cookie } })).text();
-    assert.match(html, /<dt class="fd-kv-key">Undelivered<\/dt><dd class="fd-kv-value"><span class="fd-kv-text">1<\/span><\/dd>/); assert.match(html, /<dt class="fd-kv-key">Expired<\/dt><dd class="fd-kv-value"><span class="fd-kv-text">0<\/span><\/dd>/);
     w.env.DB.db.prepare(`UPDATE ${table} SET created=? WHERE id=?`).run(Date.now() - deliveryWindowMs - 1, row.id);
     await queue({ messages: [message] }, w.env);
     const expired = await (await admin.get('clients/app')).json();
     assert.equal(expired.delivery.counts.undelivered, 0); assert.equal(expired.delivery.counts.expired, 1);
     assert.equal(expired.delivery.events[0].delivery_state, 'expired');
-    const expiredHtml = await (await w.call('/admin/clients/app', { headers: { cookie: admin.cookie } })).text();
-    assert.match(expiredHtml, /<dt class="fd-kv-key">Expired<\/dt><dd class="fd-kv-value"><span class="fd-kv-text">1<\/span><\/dd>/); assert.match(expiredHtml, /Back-channel endpoint refused delivery/);
+    assert.match(expired.delivery.events[0].last_error, /Back-channel endpoint refused delivery/);
 });

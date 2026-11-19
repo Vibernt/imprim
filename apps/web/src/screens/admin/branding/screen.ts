@@ -1,0 +1,173 @@
+import 'fire-design/fire/components/tweaks.css';
+import { html, nothing, type PropertyValues } from 'lit';
+import { forms } from 'fire-design';
+import { keyed } from 'lit/directives/keyed.js';
+import { api } from '../../../lib/api';
+import { icon } from '../../../lib/icon';
+import { AdminRealmScreen } from '../realm-screen';
+import { failed, formData, notice } from '../realm-ui';
+import { collect, copyFields, languageFields, nameFields } from './fields';
+import { openLookPreview } from './look';
+import { signatureFields } from './signature';
+import { encodeFile, logoFields } from './logos';
+import type { Asset, BrandResponse, Branding, Look } from './types';
+import { sections, specimen, type Section } from './view';
+
+class BrandingScreen extends AdminRealmScreen<BrandResponse> {
+  static override properties = {
+    section: { state: true }, assetDraft: { state: true }, lookPending: { state: true }, look: { state: true }, reset: { state: true },
+  };
+  declare private section: Section;
+  declare private assetDraft: Branding;
+  declare private lookPending: boolean;
+  declare private reset: number;
+  declare private look: Look;
+  private previewLife?: AbortController;
+  private tweaks?: Awaited<ReturnType<typeof openLookPreview>>;
+  protected heading = 'Branding';
+  protected override description = 'How sign-in, consent and account pages look for this realm. Apps can override it.';
+  protected endpoint() { return '/admin/api/branding'; }
+
+  constructor() {
+    super();
+    this.section = 'look';
+    this.assetDraft = {};
+    this.look = {};
+    this.reset = 0;
+  }
+
+  override disconnectedCallback() {
+    this.previewLife?.abort();
+    super.disconnectedCallback();
+  }
+
+  protected override willUpdate(changed: PropertyValues) {
+    super.willUpdate(changed);
+    if (changed.has('data') && this.data) {
+      this.assetDraft = this.data.branding;
+      this.look = this.data.branding.look ?? {};
+      const address = new URL(location.href);
+      if (address.searchParams.get('saved') === '1') {
+        address.searchParams.delete('saved');
+        history.replaceState(history.state, '', address);
+        notice('Branding saved', 'Sign-in pages use it within 5 minutes.');
+      }
+    }
+  }
+
+  private editLook = async (edit: (tweaks: NonNullable<BrandingScreen['tweaks']>) => void) => {
+    if (!this.data || this.lookPending) return;
+    this.lookPending = true;
+    try {
+      if (!this.tweaks) {
+        this.previewLife = new AbortController();
+        this.tweaks = await openLookPreview(this.look, look => { this.look = look; }, this.previewLife.signal);
+      }
+      if (this.tweaks) edit(this.tweaks);
+    } catch (error) {
+      if (this.isConnected) failed(error);
+    } finally {
+      this.lookPending = false;
+    }
+  };
+
+  private openTweaks = (event: MouseEvent) => {
+    event.stopPropagation();
+    const trigger = event.currentTarget as HTMLElement;
+    void this.editLook(tweaks => tweaks.toggle(trigger));
+  };
+
+  private upload = async (event: CustomEvent<{ value: File[] }>, slot: Asset) => {
+    const file = event.detail.value[0];
+    if (this.pending || !file) return;
+    const zone = event.currentTarget as HTMLElement;
+    const row = zone.nextElementSibling?.querySelector<HTMLElement>('.fd-file[data-state="uploading"]');
+    this.pending = true;
+    try {
+      if (row) forms.setFileProgress(row, 0);
+      const { id } = await api<{ id: string }>('/admin/api/branding/assets', { method: 'POST',
+        body: { content_type: file.type, data: await encodeFile(file) } });
+      if (!this.isConnected) return;
+      if (row) forms.setFileProgress(row, 100, { message: 'Uploaded' });
+      this.assetDraft = { ...this.assetDraft, [slot]: id };
+      notice('Logo uploaded', 'Save branding to use it.');
+    } catch (error) {
+      if (row) forms.setFileProgress(row, 0, { state: 'error', message: 'Upload failed' });
+      if (this.isConnected) failed(error);
+    } finally {
+      this.pending = false;
+    }
+  };
+
+  private removeLogo = (slot: Asset) => {
+    const draft = { ...this.assetDraft };
+    delete draft[slot];
+    this.assetDraft = draft;
+  };
+
+  private discard = () => {
+    if (!this.data) return;
+    this.previewLife?.abort();
+    this.tweaks = undefined;
+    this.assetDraft = this.data.branding;
+    this.look = this.data.branding.look ?? {};
+    this.reset++;
+  };
+
+  private save = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (this.pending || this.lookPending || !this.data) return;
+    const branding = collect(formData(event), this.assetDraft, this.look);
+    this.pending = true;
+    try {
+      await api(this.endpoint(), { method: 'POST', body: { branding, version: this.data.version } });
+      if (this.isConnected) location.replace('/admin/branding?saved=1');
+    } catch (error) {
+      if (this.isConnected) failed(error);
+    } finally {
+      this.pending = false;
+    }
+  };
+
+  protected content({ branding }: BrandResponse) {
+    const panels = {
+      look: html`<div class="fd-stack" data-gap="3">
+        <p class="fd-muted">Preview the palette, type set and dials before saving.</p>
+        <div><button class="fd-btn" data-variant="outline" type="button" data-fd-tweaks-open aria-expanded="false"
+          ?disabled=${this.lookPending || this.pending} @click=${this.openTweaks}>${icon('sliders-horizontal')}<span>Open tweaks</span></button></div>
+        ${signatureFields(this.look, this.lookPending || this.pending, signature => void this.editLook(tweaks => tweaks.set({ signature })))}
+      </div>`,
+      logos: logoFields(this.assetDraft, this.pending, this.upload, this.removeLogo),
+      name: html`${nameFields(branding)}`,
+      languages: languageFields(branding),
+      words: html`<p class="fd-muted">Leave a field empty to use the built-in words in that language.</p>${copyFields(branding)}`,
+    };
+    return keyed(this.reset, html`<div class="fd-split" data-side="start">
+      <aside class="fd-panel" aria-label="Branding sections">
+        <nav class="fd-subnav" aria-label="Branding">
+          ${sections.map(([id, label, glyph]) => html`<button class="fd-subnav-item" type="button"
+            aria-current=${this.section === id ? 'true' : nothing} @click=${() => { this.section = id; }}>${icon(glyph)}<span>${label}</span></button>`)}
+        </nav>
+      </aside>
+      <div class="fd-split-main">
+        <div class="fd-grid" data-min="lg" data-cols="2" data-gap="6">
+          <form class="fd-form" data-size="full" method="post" novalidate @submit=${this.save}>
+            <fieldset class="im-fieldset" ?disabled=${this.pending}>
+              ${sections.map(([id, label]) => html`<section class="fd-stack" data-gap="4" ?hidden=${this.section !== id} aria-labelledby=${id + '-heading'}>
+                <h2 class="fd-h2" id=${id + '-heading'}>${label}</h2>
+                ${panels[id]}
+              </section>`)}
+              <div class="fd-form-actions">
+                <button type="button" class="fd-btn" data-variant="ghost" ?disabled=${this.lookPending} @click=${this.discard}>Discard changes</button>
+                <button type="submit" class="fd-btn" data-variant="primary" ?disabled=${this.lookPending}>Save branding</button>
+              </div>
+            </fieldset>
+          </form>
+          ${specimen(this.assetDraft, this.view.session.realm.display_name)}
+        </div>
+      </div>
+    </div>`);
+  }
+}
+
+customElements.define('screen-branding', BrandingScreen);

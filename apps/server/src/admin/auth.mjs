@@ -1,16 +1,19 @@
+import { requireApiSession } from '../api/json.mjs';
 import { getSession, requireCsrf } from '../auth/session.mjs';
 import { adminRole } from '../services/admission.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { confirmedFactors, ADMIN_MFA_MS } from '../auth/mfa.mjs';
 import { invariant } from '../lib/errors.mjs';
-export async function adminSession(request, env) {
-    const session = await getSession(request, env);
+export const ADMIN_FRESH_MS = 600000;
+const SCOPED_SIGN_IN = 'Sign in at /login with an administrator magic link. Admin access lasts one hour.';
+export async function adminSession(request, env, api = false) {
+    const session = await (api ? requireApiSession(request, env) : getSession(request, env));
     const role = session ? await adminRole(env, session.email) : null;
-    invariant(session && session.method === 'email' && session.email_verified === 1 &&
-        role && session.admin_until > Date.now(), 'admin_required',
-    'Sign in at /login with an administrator magic link. Admin access lasts one hour.', 403);
+    invariant(session && session.method === 'email' && session.email_verified === 1 && role,
+        'admin_required', SCOPED_SIGN_IN, 403);
+    invariant(session.admin_until > Date.now(), api ? 'reauth_required' : 'admin_required', SCOPED_SIGN_IN, 403);
     // Administrators always use a second factor, verified within the hour.
-    invariant((await confirmedFactors(env, session.user_id)).length, 'mfa_enrolment_required', 'Administrators need a second factor: add one at /account/mfa.', 403);
+    invariant((await confirmedFactors(env, session.user_id)).length, api ? 'mfa_required' : 'mfa_enrolment_required', 'Administrators need a second factor: add one at /account/mfa.', 403);
     invariant(session.mfa_at && session.mfa_at > Date.now() - ADMIN_MFA_MS, 'mfa_required', 'Enter your second-factor code at /mfa?next=/admin.', 403);
     if (env.SEEN) env.SEEN.role = role;
     return { ...session, role };
@@ -21,7 +24,10 @@ export function requirePlatform(session) {
 }
 export async function adminMutation(request, env, session, body, destructive = false) {
     await requireCsrf(request, env, session, body.csrf);
-    invariant(!destructive || session.auth_time * 1000 > Date.now() - 600000, 'reauth_required',
+    if (destructive) requireAdminFresh(session);
+}
+export function requireAdminFresh(session) {
+    invariant(session.auth_time * 1000 > Date.now() - ADMIN_FRESH_MS, 'reauth_required',
         'Sign in again at /login before this action (ten-minute authentication required).', 403);
 }
 export function auditStatement(env, actor, event, target, detail = {}) {
@@ -35,7 +41,7 @@ export function adminWriteGuard(env, session, destructive, now) {
             AND s.method='email' AND s.admin_until>? AND s.expires_at>? AND s.auth_time>=? AND s.mfa_at>?
             AND u.status='active' AND u.merged_into IS NULL AND u.realm_id=?
             AND EXISTS(SELECT 1 FROM admins a WHERE a.realm_id=u.realm_id AND a.email=u.email AND (a.role='platform' OR ?=0)))`,
-        args: [session.hash, session.user_id, now, now, destructive ? Math.floor((now - 600000) / 1000) + 1 : 0,
+        args: [session.hash, session.user_id, now, now, destructive ? Math.floor((now - ADMIN_FRESH_MS) / 1000) + 1 : 0,
             now - ADMIN_MFA_MS, realmId(env), session.role === 'platform' ? 1 : 0]
     };
 }

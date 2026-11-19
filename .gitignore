@@ -10,6 +10,7 @@ exports/
 imports/
 dist/
 docs/assets/fire/
+/apps/server/public/fire/
 docs/_site/
 docs/.jekyll-cache/
 probe-client.sql
@@ -18,3 +19,10 @@ email-preview/
 
 # Your deployment's real Wrangler config (hosts, database ids, queues). See docs/DEPLOY.md.
 wrangler.local.jsonc
+
+# The account and admin app (apps/web): installed packages and build output
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.fire-slim/
+apps/web/public/fire/
+apps/server/public/ui/

@@ -81,7 +81,7 @@ test('a realm admin sees only their realm; only platform admins see realms and k
     assert.equal((await admin.get('keys')).status, 403);
     assert.equal((await admin.post('keys/rotate')).status, 403);
     // The Vibernt admin session is not an admin anywhere else.
-    assert.equal((await acme('/admin/api/clients', { headers: { cookie: admin.cookie } })).status, 403);
+    assert.equal((await acme('/admin/api/clients', { headers: { cookie: admin.cookie } })).status, 401);
 });
 test('a platform admin creates a realm and its first admin; secrets must be env references', async t => {
     const w = await world(t); turnstile(t);

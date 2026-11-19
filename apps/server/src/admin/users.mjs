@@ -17,7 +17,8 @@ async function requireRank(env, actor, targetEmail) {
 }
 export async function changeUser(env, actor, id, action, survivor, confirmSourceEmail) {
     const user = await env.DB.prepare('SELECT * FROM users WHERE id=? AND realm_id=?').bind(id, realmId(env)).first();
-    invariant(user && !user.merged_into, 'invalid_request', 'User unavailable.');
+    invariant(user, 'not_found', 'User not found.', 404);
+    invariant(!user.merged_into, 'invalid_request', 'User unavailable.');
     invariant(id !== actor, 'invalid_request', 'Administrators cannot change their own status or merge themselves.');
     await requireRank(env, actor, user.email);
     invariant(['block','unblock','delete','merge'].includes(action), 'invalid_request', 'Unknown user action.');

@@ -20,14 +20,12 @@ test('merge API requires exact source email confirmation and never accepts survi
 });
 test('merge console reviews both emails before explicit destructive confirmation', async t => {
     const { w, a } = await setup(t), source = await ensureUser(w.env, 'source@example.com'), survivor = await ensureUser(w.env, 'survivor@example.com');
-    const page = await w.call(`/admin/users/${source.id}`, { headers: { cookie: a.cookie } });
-    const html = await page.text(); assert.match(html, /Merge this user into another: this user is deleted/);
-    assert.doesNotMatch(html, /Merge into this user/);
-    const preview = await w.call(`/admin/users/${source.id}/merge?surviving_id=${survivor.id}`, { headers: { cookie: a.cookie } });
+    const preview = await a.get(`users/${source.id}/merge?surviving_id=${survivor.id}`);
     assert.equal(preview.status, 200);
-    const confirmation = await preview.text();
-    for (const email of [source.email, survivor.email]) assert.ok(confirmation.includes(email));
-    assert.match(confirmation, /name="confirm_source_email"/);
+    assert.equal(preview.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await preview.json(), {
+        source: { id: source.id, email: source.email }, survivor: { id: survivor.id, email: survivor.email },
+    });
     assert.equal(w.env.DB.db.prepare('SELECT status FROM users WHERE id=?').get(source.id).status, 'active');
     const submit = async email => w.call(`/admin/users/${source.id}/merge`, { method: 'POST', headers: { cookie: a.cookie, origin: w.env.ISSUER, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: a.csrf, surviving_id: survivor.id, confirm_source_email: email }) });
     assert.equal((await submit(survivor.email)).status, 400);
@@ -46,8 +44,6 @@ test('client edits require a version; concurrent edits have one winner and stale
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_client_update'").get().n, 1);
     assert.equal((await a.post('clients/notes', { branding: { name: 'Missing version' } })).status, 400);
     assert.equal((await a.post('clients/notes', { version, branding: { name: 'Stale' } })).status, 409);
-    const html = await (await w.call('/admin/clients/notes', { headers: { cookie: a.cookie } })).text();
-    assert.match(html, new RegExp(`type="hidden" name="version" value="${current.version}"`));
     const form = await w.call('/admin/clients/notes', { method: 'POST', headers: { cookie: a.cookie, origin: w.env.ISSUER, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: a.csrf, version: String(version), signup_policy: 'open' }) });
     assert.equal(form.status, 409);
 });

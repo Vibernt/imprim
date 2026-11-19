@@ -1,3 +1,9 @@
+import { webRequest, serveWeb } from './web/serve.mjs';
+import { viewer } from './api/viewer.mjs';
+import { catalogueResponse } from './api/catalogue.mjs';
+import { profileApi } from './api/profile.mjs';
+import { accountAccessApi } from './api/account-access.mjs';
+import { accountSecurityApi } from './api/account-security.mjs';
 import { admin } from './admin/routes.mjs';
 import { registerAgent } from './agents/registration.mjs';
 import { consent } from './agents/consent.mjs';
@@ -45,6 +51,8 @@ async function route(request, env, ctx, url) {
     if (start) return providerStart(request, env, start[1]);
     const callback = ['GET', 'POST'].includes(request.method) && PROVIDER_CALLBACK.exec(url.pathname);
     if (callback) return providerCallback(request, env, callback[1]);
+    const catalogue = request.method === 'GET' && /^\/v1\/i18n\/([^/]+)\.json$/.exec(url.pathname);
+    if (catalogue) return catalogueResponse(request, catalogue[1]);
     const key = `${request.method} ${url.pathname}`;
     switch (key) {
         case 'GET /assets/local.css': return new Response(localCss, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
@@ -62,7 +70,25 @@ async function route(request, env, ctx, url) {
         case 'POST /device_authorization': return deviceAuthorization(request, env);
         case 'GET /device': return devicePage(request, env);
         case 'GET /agent/consent': case 'POST /agent/consent': return consent(request, env);
-        case 'GET /account': case 'GET /account/security': case 'GET /account/sessions': case 'GET /account/agents': case 'POST /account/revoke': return account(request, env, ctx);
+        case 'POST /account/revoke': return account(request, env, ctx);
+        case 'GET /v1/me': return viewer(request, env);
+        case 'GET /v1/account/profile': case 'POST /v1/account/profile': return profileApi(request, env, ctx, 'profile');
+        case 'POST /v1/account/language': return profileApi(request, env, ctx, 'language');
+        case 'POST /v1/account/email': return profileApi(request, env, ctx, 'email');
+        case 'POST /v1/account/delete': return profileApi(request, env, ctx, 'delete');
+        case 'GET /v1/account/sessions': case 'POST /v1/account/sessions': return accountAccessApi(request, env, ctx, 'sessions');
+        case 'POST /v1/account/apps': return accountAccessApi(request, env, ctx, 'apps');
+        case 'POST /v1/account/devices': return accountAccessApi(request, env, ctx, 'devices');
+        case 'GET /v1/account/agents': case 'POST /v1/account/agents/revoke': return accountAccessApi(request, env, ctx, 'agents');
+        case 'GET /v1/account/security': return accountSecurityApi(request, env, ctx, 'overview');
+        case 'POST /v1/account/mfa/start': return accountSecurityApi(request, env, ctx, 'start');
+        case 'POST /v1/account/mfa/confirm': return accountSecurityApi(request, env, ctx, 'confirm');
+        case 'POST /v1/account/mfa/remove': return accountSecurityApi(request, env, ctx, 'remove');
+        case 'POST /v1/account/mfa/recovery': return accountSecurityApi(request, env, ctx, 'recovery');
+        case 'POST /v1/account/passkeys/options': return accountSecurityApi(request, env, ctx, 'passkey-options');
+        case 'POST /v1/account/passkeys/register': return accountSecurityApi(request, env, ctx, 'passkey-register');
+        case 'POST /v1/account/passkeys/remove': return accountSecurityApi(request, env, ctx, 'passkey-remove');
+        case 'POST /v1/account/password': return accountSecurityApi(request, env, ctx, 'password');
         case 'GET /authorize': case 'POST /authorize': return authorize(request, env);
         case 'POST /token': return token(request, env, ctx);
         case 'GET /userinfo': case 'POST /userinfo': return userinfo(request, env);
@@ -95,7 +121,9 @@ async function route(request, env, ctx, url) {
         case 'GET /signed-out': return page(t(env, 'Signed out'), result('log-out', 'neutral', t(env, 'You’re signed out'), brandCopy(env, env.REALM.branding || {}, 'signed_out') || t(env, 'Apps you used keep their own sessions until you sign out there.')));
         case 'GET /assets/theme.css': return themeResponse(env, url);
         case 'GET /error': return errorPage(env, t(env, 'This sign-in request is missing or has expired.'));
-        default: throw new AppError(404, 'not_found', 'Endpoint not found.');
+        default:
+            if (webRequest(request, url.pathname)) return serveWeb(request, env, url);
+            throw new AppError(404, 'not_found', 'Endpoint not found.');
     }
 }
 // Public metadata is unlimited (and memoised); /token, /userinfo and /v1/invitations limit by the authenticated client
@@ -108,7 +136,7 @@ export function limiterFor(method, path) {
     return path.startsWith('/v1/auth/') || path.startsWith('/login/provider/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';
 }
 // Browser endpoints whose errors a person reads (sign-in.js, passkey.js and the account forms show them).
-const PEOPLE_PATHS = /^\/(?:v1\/auth\/|account(?:\/|$)|mfa$|agent\/consent$|device$|logout$|login$|signed-in$)/;
+const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|device$|logout$|login$|signed-in$)/;
 export async function handleRequest(request, base, ctx) {
     const url = new URL(request.url);
     let env = base;
@@ -128,18 +156,19 @@ export async function handleRequest(request, base, ctx) {
         // codes to apps, still send no referrer.
         response.headers.set('referrer-policy', 'same-origin');
         response.headers.set('strict-transport-security', 'max-age=31536000');
-        return withBrand(response, env);
+        return webRequest(request, url.pathname) ? response : withBrand(response, env);
     } catch (error) {
         const known = error instanceof AppError;
         if (!known) console.error(JSON.stringify({ type: 'request_failed', path: url.pathname, code: 'internal_error' }));
         const code = known ? error.code : 'server_error', status = known ? error.status : 500;
         // A person's browser may POST an authorization request (OIDC Core 3.1.2.1); refusals before the redirect is trusted are pages.
         const workspaceRequest = workspaceApiPath(request.method, url.pathname);
-        const html = !workspaceRequest && (request.method === 'GET' || url.pathname === '/authorize') && request.headers.get('accept')?.includes('text/html');
+        const jsonRequest = workspaceRequest || /^\/(?:v1\/(?:me$|account\/|i18n\/)|admin\/api\/)/.test(url.pathname);
+        const html = !jsonRequest && (request.method === 'GET' || url.pathname === '/authorize') && request.headers.get('accept')?.includes('text/html');
         // People read the message on an error page, or in the sign-in and account scripts, so it is translated there.
         // Protocol endpoints keep English: RFC 6749 limits error_description to ASCII, and developers read it.
         const message = known ? (html || PEOPLE_PATHS.test(url.pathname) ? tError(env, error) : error.message)
-            : workspaceRequest ? 'The request could not be completed.' : t(env, 'The request could not be completed.');
+            : jsonRequest && !PEOPLE_PATHS.test(url.pathname) ? 'The request could not be completed.' : t(env, 'The request could not be completed.');
         // A person who opens their account page while signed out gets a page that says how to sign in, whatever
         // the request's Accept header; API clients of the same paths use POST and still get JSON.
         const signedOut = code === 'login_required' && request.method === 'GET' && /^\/(account(\/|$)|mfa$)/.test(url.pathname);

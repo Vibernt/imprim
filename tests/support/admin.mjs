@@ -13,11 +13,11 @@ export async function enrolMfa(w, cookie, csrf) {
     assert.equal(confirmed.status, 200, await confirmed.clone().text());
     return { secret, code, recovery: [...(await confirmed.text()).matchAll(/<li><code class="fd-code">([A-Z2-7-]+)<\/code><\/li>/g)].map(m => m[1]) };
 }
-// Fire pages: only Fire (fd-) and stopgap (x-) classes and no inline styles (docs/fire/GUIDE.md section 4).
+// Fire pages use Fire (fd-) and Imprim (im-) classes, with no inline styles.
 export function assertFireMarkup(html) {
     assert.ok(!/\sstyle=/.test(html) && !/<style/.test(html), 'no inline styles');
     for (const [, list] of html.matchAll(/\sclass="([^"]*)"/g))
-        for (const name of list.split(/\s+/).filter(Boolean)) assert.match(name, /^(fd|x)-[a-z0-9-]+$/, `class ${name}`);
+        for (const name of list.split(/\s+/).filter(Boolean)) assert.match(name, /^(fd|im)-[a-z0-9-]+$/, `class ${name}`);
 }
 export async function adminLogin(w) {
     const page = await w.call('/login'), browser = cookieJar(page);

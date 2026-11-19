@@ -1,0 +1,43 @@
+import { t } from './lib/i18n';
+import type { Guard, Route } from './lib/router';
+
+const noAccess = '/no-access';
+const admin: Guard = ({ session }) => session.admin !== null || noAccess;
+const platform: Guard = ({ session }) => session.admin === 'platform' || noAccess;
+
+export const routes: Route[] = [
+  { path: '/account', title: () => t('Profile'), label: (english) => english ? 'Profile' : t('Profile'), icon: 'user', area: 'account',
+    tag: 'screen-profile', load: () => import('./screens/account/profile') },
+  { path: '/account/security', title: () => t('Security'), label: (english) => english ? 'Security' : t('Security'), icon: 'shield-check', area: 'account',
+    tag: 'screen-security', load: () => import('./screens/account/security') },
+  { path: '/account/sessions', title: () => t('Sessions and apps'), label: (english) => english ? 'Sessions and apps' : t('Sessions and apps'), icon: 'monitor', area: 'account',
+    tag: 'screen-sessions', load: () => import('./screens/account/sessions') },
+  { path: '/account/agents', title: () => t('Agents'), label: (english) => english ? 'Agents' : t('Agents'), icon: 'bot', area: 'account',
+    tag: 'screen-agents', load: () => import('./screens/account/agents') },
+  { path: '/admin', redirect: '/admin/clients' },
+  { path: '/admin/clients', title: 'Clients', label: () => 'Clients', icon: 'blocks', area: 'admin', guard: admin,
+    tag: 'screen-admin-clients', load: () => import('./screens/admin/clients') },
+  { path: '/admin/clients/new', title: 'Register client', area: 'admin', guard: admin,
+    tag: 'screen-admin-client-editor', load: () => import('./screens/admin/client/editor') },
+  { path: '/admin/clients/:id', title: 'Edit client', area: 'admin', guard: admin,
+    tag: 'screen-admin-client-editor', load: () => import('./screens/admin/client/editor') },
+  { path: '/admin/services', title: 'Services', label: () => 'Services', icon: 'server', area: 'admin', guard: admin,
+    tag: 'screen-admin-services', load: () => import('./screens/admin/services') },
+  { path: '/admin/users', title: 'Users', label: () => 'Users', icon: 'users', area: 'admin', guard: admin,
+    tag: 'screen-admin-users', load: () => import('./screens/admin/users') },
+  { path: '/admin/users/:id', title: 'User detail', area: 'admin', guard: admin,
+    tag: 'screen-admin-user', load: () => import('./screens/admin/user-detail') },
+  { path: '/admin/users/:id/merge', title: 'Review merge', area: 'admin', guard: admin,
+    tag: 'screen-admin-merge', load: () => import('./screens/admin/user-merge') },
+  { path: '/admin/workspaces', title: 'Workspaces', label: () => 'Workspaces', icon: 'workflow', area: 'admin', guard: admin, tag: 'screen-workspaces', load: () => import('./screens/admin/workspaces/screen') },
+  { path: '/admin/workspaces/:id', title: 'Workspace', area: 'admin', guard: admin, tag: 'screen-workspaces', load: () => import('./screens/admin/workspaces/screen') },
+  { path: '/admin/workspaces/:id/close', title: 'Close workspace', area: 'admin', guard: admin, tag: 'screen-workspaces', load: () => import('./screens/admin/workspaces/screen') },
+  { path: '/admin/branding', title: 'Branding', label: () => 'Branding', icon: 'palette', area: 'admin', group: 'Realm', guard: admin, tag: 'screen-branding', load: () => import('./screens/admin/branding/screen') },
+  { path: '/admin/audit', title: 'Audit log', label: () => 'Audit log', icon: 'scroll-text', area: 'admin', group: 'Realm', guard: admin,
+    tag: 'screen-admin-audit', load: () => import('./screens/admin/audit') },
+  { path: '/admin/settings', title: 'Settings', label: () => 'Settings', icon: 'settings', area: 'admin', group: 'Realm', guard: admin, tag: 'screen-realm-settings', load: () => import('./screens/admin/settings') },
+  { path: '/admin/keys', title: 'Signing keys', label: () => 'Signing keys', icon: 'key-round', area: 'admin', group: 'Platform', guard: platform, tag: 'screen-signing-keys', load: () => import('./screens/admin/keys') },
+  { path: '/admin/realms', title: 'Realms', label: () => 'Realms', icon: 'globe', area: 'admin', group: 'Platform', guard: platform, tag: 'screen-realms', load: () => import('./screens/admin/realms/screen') },
+  { path: noAccess, title: () => t('No access'), tag: 'screen-no-access' },
+  { path: '*', title: () => t('Page not found'), tag: 'screen-not-found' },
+];

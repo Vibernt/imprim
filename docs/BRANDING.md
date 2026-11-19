@@ -15,8 +15,8 @@ above one card; the console and the account pages show it at the top of the side
 
 Open **Branding** in the admin console (`/admin/branding`).
 
-- **Look:** *Open tweaks* opens Fire's Tweaks panel. Pick a palette, bend its tone, choose a type set, density,
-  corners, lines, text size, contrast, motion and texture, or force light or dark. The console itself changes as you
+- **Look:** *Open tweaks* opens Fire's Tweaks panel. Choose a preset look or adjust the palette, type, structure
+  and signature. Set light or dark mode, or follow the system. The console itself changes as you
   go, and a sample sign-in card shows the result. Nothing reaches people until you choose *Save branding*.
 - **Logo:** upload a logo, an optional dark-mode logo and a square mark. The logo leads sign-in and consent
   screens. The mark is the browser-tab icon, sits beside the name when there is no logo, and leads the console and
@@ -24,7 +24,8 @@ Open **Branding** in the admin console (`/admin/branding`).
 - **Name and links**, **Languages** (the default language and the languages offered) and **Words** (sign-in heading
   and line, agent consent line, signed-out line, footer line), in the default language and, under each language, in
   that language. An empty field uses the built-in words, translated.
-- *Open the sign-in page* previews it with your apps' sign-in methods.
+- *Open saved sign-in page* previews it with your apps' sign-in methods. *Open sample email* shows the saved
+  branding in the sign-in email, with no email sent.
 
 Saving needs an admin session with a recent sign-in and second factor, the same CSRF and Origin checks as every
 admin write, and the version the page loaded, so two admins cannot overwrite each other silently.
@@ -33,7 +34,7 @@ admin write, and the version the page loaded, so two admins cannot overwrite eac
 
 | Field | Value |
 |---|---|
-| `look` | Fire tweak state; see below. Merged key by key over the realm's (and `tone` per key). |
+| `look` | Fire tweak state. App settings override the realm's. The `tone` and `signature` objects also merge per key. |
 | `name` | Shown beside the mark, in page titles, email subjects and text. Up to 200 characters, escaped. |
 | `legal_name` | Footer `© <legal_name>` on pages and emails. |
 | `support_url`, `privacy_url`, `terms_url` | `https://` links in the footer. |
@@ -59,6 +60,12 @@ admin write, and the version the page loaded, so two admins cannot overwrite eac
 | `contrast` | `default`, `high` |
 | `motion` | `off`, `default`, `slow` |
 | `texture` | 0 to 1.5 in steps of 0.05 (default 1) |
+| `surfaces` | `objects` (default), `flat`, `outlined` |
+| `elevation` | `soft` (default), `none`, `lifted` |
+| `controls` | `soft` (default), `outlined`, `filled` |
+| `headings` | `sentence` (default), `upper`, `mono` |
+| `imagery` | `natural` (default), `mono`, `duotone`, `wash` |
+| `signature` | Texture and frame marks. Fire defines the available `field`, `mark`, `ramp` and `marks` choices in `fire/js/theme.js`. `cell` is `auto` or an integer from 4 to 24. `intensity` goes from 0.4 to 1.6 in steps of 0.05 (default 1). |
 
 Values outside these are refused, not clamped. **Contrast** is Fire's job: its palette engine keeps accent text at
 4.5:1 or more on the page and on surfaces, and button labels readable, for every palette and after any tone.

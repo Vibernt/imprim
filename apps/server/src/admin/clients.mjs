@@ -76,6 +76,19 @@ function validate(config) {
     delete value.confidential;
     return Object.fromEntries(Object.entries(value).map(([k,v]) => [k, jsonFields.includes(k) ? JSON.stringify(v) : v]));
 }
+const newClient = () => ({
+    redirect_uris: [], post_logout_uris: [], backchannel_uri: null, signup_policy: 'invited',
+    allowed_domains: [], branding: { name: '' }, dev: 0, sign_in_methods: ['email'], google_hosted_domains: []
+});
+export function clientEditorDefaults() {
+    const defaults = newClient();
+    return {
+        ...defaults, ...validateAgentSettings(defaults), id: '', workspaces: 'app', product: null, initiate_login_uri: null,
+        personal_workspaces: 'off', workspace_admin: 'off', mfa: 'off', mfa_trusted_device_days: 0,
+        agent_consent_mfa: 'off', agent_dpop: 'optional', classic_oidc: 'off', id_token_signed_response_alg: 'ES256',
+        agent_token_rate: 3000, token_exchange_from: {}, user_events: 'off'
+    };
+}
 export async function saveClient(env, actor, id, input) {
     const old = id ? await getAdminClient(env, id) : null;
     const allowed = ['id','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev',
@@ -87,8 +100,7 @@ export async function saveClient(env, actor, id, input) {
         invariant(Number.isSafeInteger(input.version) && input.version >= 0, 'invalid_request', 'The client version is required.');
         invariant(input.version === old.version, 'conflict', 'Client changed; reload before editing.', 409);
     }
-    const config = { redirect_uris: [], post_logout_uris: [], backchannel_uri: null, signup_policy: 'invited',
-        allowed_domains: [], branding: { name: '' }, dev: 0, sign_in_methods: ['email'], google_hosted_domains: [], ...old, ...input };
+    const config = { ...newClient(), ...old, ...input };
     let value;
     try {
         value = validate(config);
@@ -138,9 +150,13 @@ function versionGuard(env, id, version) {
 }
 export async function rotateSecret(env, actor, id, input = {}) {
     const old = await getAdminClient(env, id);
-    invariant(Object.keys(input).every(key => key === 'make_confidential') &&
+    invariant(Object.keys(input).every(key => key === 'make_confidential' || key === 'version') &&
         (input.make_confidential === undefined || typeof input.make_confidential === 'boolean'),
     'invalid_request', 'make_confidential must be an explicit boolean.');
+    if (Object.hasOwn(input, 'version')) {
+        invariant(Number.isSafeInteger(input.version) && input.version >= 0, 'invalid_request', 'Invalid client version.');
+        invariant(input.version === old.version, 'conflict', 'Client changed; reload before rotating.', 409);
+    }
     invariant(old.confidential || input.make_confidential === true, 'invalid_request', 'Public client: explicitly choose make_confidential to change authentication.');
     const secret = randomToken();
     try {

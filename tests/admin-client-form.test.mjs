@@ -37,24 +37,17 @@ test('malformed values are refused with a message a person can act on', () => {
     assert.throws(() => clientFromForm({ redirect_uris: '["https://a.example/cb"' }), error => error.code === 'invalid_request');
 });
 
-test('the editor shows controls, not JSON, and a browser form registers and edits a client', async t => {
+test('legacy client editor POSTs still register and update the values returned by the JSON API', async t => {
     const w = await world(t); turnstile(t); const a = await adminLogin(w);
-    const page = await (await w.call('/admin/clients/new', { headers: { cookie: a.cookie } })).text();
-    assertFireMarkup(page);
-    assert.match(page, /<form class="fd-form" data-size="full" method="post" action="\/admin\/clients" data-fd-validate autocomplete="off">/);
-    assert.equal((page.match(/<section class="fd-form-section"/g) || []).length, 6, 'one section per concern');
-    assert.match(page, /<div class="fd-tag-input" data-fd-tag-input data-mono data-pattern="\^https\?:\/\/"><textarea name="redirect_uris" id="f-redirect_uris" rows="3" required/);
-    assert.match(page, /<label class="fd-segmented-item"><input type="radio" name="signup_policy" value="invited" checked><span>Invited only<\/span><\/label>/);
-    assert.match(page, /<input type="checkbox" role="switch" id="f-dev" name="dev" value="1" aria-labelledby="f-dev-label" aria-describedby="f-dev-desc">/);
-    assert.match(page, /<input type="checkbox" name="sign_in_methods\.email" value="1" checked>/);
-    assert.match(page, /<input class="fd-input" type="number" size="4" id="f-agent_max_grant_days" name="agent_max_grant_days" value="90" min="1" step="1" required[^>]*><span class="fd-input-affix" data-kind="unit">days<\/span>/);
-    assert.match(page, /<div class="fd-pairs" data-fd-pairs data-format="json" data-mono="key" data-key-label="Scope"/);
-    assert.match(page, /<script type="module" src="\/imprim\/forms\.js"><\/script>/);
-    // The only JSON on the page is the branding override, in a code field, folded away.
-    assert.equal((page.match(/<textarea/g) || []).length - (page.match(/data-fd-tag-input|data-fd-pairs/g) || []).length, 1);
-    assert.match(page, /<details class="fd-disclosure">[\s\S]*<div class="fd-codefield" data-fd-json>/);
-    assert.ok(!/off, optional or required|invited or open|on or off|JSON list|Lists and branding are JSON/.test(page), 'no hint lists the allowed words');
-
+    const data = await a.get('clients/editor/defaults');
+    assert.equal(data.status, 200);
+    const { defaults } = await data.json();
+    assert.deepEqual(defaults.sign_in_methods, ['email']);
+    assert.deepEqual(defaults.redirect_uris, []);
+    assert.deepEqual(defaults.agent_scope_catalogue, {});
+    assert.equal(defaults.signup_policy, 'invited');
+    assert.equal(defaults.dev, 0);
+    assert.equal(defaults.agent_max_grant_days, 90);
     const post = (path, fields, headers = {}) => w.call(path, { method: 'POST', headers: { origin: w.env.ISSUER, cookie: a.cookie, 'content-type': 'application/x-www-form-urlencoded', ...headers },
         body: new URLSearchParams({ csrf: a.csrf, ...fields }) });
     const created = await post('/admin/clients', EDITOR);
@@ -64,15 +57,10 @@ test('the editor shows controls, not JSON, and a browser form registers and edit
     assert.deepEqual([saved.dev, saved.agent_access, saved.agent_dpop, saved.user_events, saved.mfa_trusted_device_days], [0, 'on', 'required', 'off', 30]);
     assert.deepEqual(saved.token_exchange_from, { reports: ['notes:read'] });
 
-    // The edit page shows what was saved, as controls: saved methods first and in their order, lists as lines.
-    const edit = await (await w.call('/admin/clients/notes', { headers: { cookie: a.cookie } })).text();
-    assertFireMarkup(edit);
-    assert.match(edit, /name="sign_in_methods\.passkey" value="1" checked>[\s\S]*name="sign_in_methods\.email" value="1" checked>[\s\S]*name="sign_in_methods\.password" value="1">/);
-    assert.match(edit, /<textarea name="redirect_uris"[^>]*>https:\/\/notes\.example\/callback\nhttps:\/\/notes\.example\/silent<\/textarea>/);
-    assert.match(edit, /<textarea name="agent_scope_catalogue"[^>]*>notes:read = Read your notes\na=b = Odd name<\/textarea>/);
-    assert.match(edit, /name="agent_access" value="on" checked/);
-    assert.match(edit, /<span class="fd-input" data-mono>notes<\/span>/, 'the client id is shown, not editable');
-    assert.ok(!edit.includes('name="id"'));
+    assert.deepEqual(saved.redirect_uris, ['https://notes.example/callback', 'https://notes.example/silent']);
+    assert.deepEqual(saved.agent_scope_catalogue, { 'notes:read': 'Read your notes', 'a=b': 'Odd name' });
+    assert.equal(saved.id, 'notes');
+    assert.equal((await a.post('clients/notes', { id: 'renamed', version: saved.version })).status, 400);
 
     // Turning a switch off is an unchecked box: the editor form says the switch was there.
     const { agent_access: _on, id: _id, ...rest } = EDITOR;

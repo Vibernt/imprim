@@ -52,7 +52,11 @@ export async function saveService(env, actor, id, input) {
     return { service: view(await env.DB.prepare('SELECT * FROM service_clients WHERE id=? AND realm_id=?').bind(value.id, realmId(env)).first()) };
 }
 export async function deleteService(env, actor, id) {
-    const result = await env.DB.batch([env.DB.prepare('DELETE FROM service_clients WHERE id=? AND realm_id=?').bind(id, realmId(env)), auditStatement(env, actor, 'admin_service_delete', id)]);
+    const result = await env.DB.batch([
+        env.DB.prepare('DELETE FROM service_clients WHERE id=? AND realm_id=?').bind(id, realmId(env)),
+        env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id)
+            SELECT 'admin_service_delete',?,?,'{}',?,? WHERE changes()=1`).bind(actor, id, Date.now(), realmId(env))
+    ]);
     invariant(result[0].meta.changes === 1, 'not_found', 'Service client not found.', 404);
     return { id, deleted: true };
 }

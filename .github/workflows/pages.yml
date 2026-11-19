@@ -1,10 +1,10 @@
 name: Docs
 # Builds docs/ with Jekyll into Fire's documentation shell and publishes it to GitHub Pages.
-# Fire is copied from apps/server/public/fire at build time, so the repository keeps one copy.
+# Fire comes from the pinned fire-design package (package.json), so the repository keeps no copy.
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'apps/server/public/fire/**', '.github/workflows/pages.yml']
+    paths: ['docs/**', 'package.json', 'package-lock.json', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: false }
@@ -14,7 +14,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-      - run: cp -R apps/server/public/fire docs/assets/fire
+      - uses: actions/setup-node@v4
+        with: { node-version: '24.x' }
+      - run: npm ci
+      - run: cp -R node_modules/fire-design/fire docs/assets/fire
       - uses: actions/jekyll-build-pages@v1
         with: { source: ./docs, destination: ./_site }
       - uses: actions/upload-pages-artifact@v3

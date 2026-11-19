@@ -1,8 +1,7 @@
 # Imprim
 
 **Identity for people and the agents that act for them.** Imprim is an open-source OpenID Connect provider and
-OAuth 2.1 authorization server that runs on Cloudflare Workers with D1. It has no runtime dependencies and no build
-step.
+OAuth 2.1 authorization server that runs on Cloudflare Workers with D1. The Worker has no runtime dependencies; the account and admin app needs a build.
 
 - **People sign in once** per brand, with an email link, a password (breach-checked), a passkey, GitHub, Google,
   Microsoft, Apple or any OpenID Connect provider, chosen per app. SSO across that brand's apps.
@@ -24,7 +23,8 @@ step.
 - **Your people's language.** Pages and emails in English, Spanish, French, German and Portuguese (Brazil), chosen
   by the app's `ui_locales`, the person's choice or the browser. Every email has a branded HTML part, light and dark,
   beside its plain text.
-- **An admin console** for apps, users, sessions, service clients, branding, audit, keys and realms.
+- **Account and admin in one app.** Each person manages their profile, security, sessions and agents; admins manage
+  apps, users, service clients, workspaces, branding, audit, keys and realms. One Lit app over JSON APIs.
 
 Docs: **https://vibernt.github.io/imprim/**. Start with [Getting started](docs/GETTING_STARTED.md).
 
@@ -102,6 +102,10 @@ The full prompts are in [Getting started](docs/GETTING_STARTED.md).
 Run the checks locally (Node 22.13 or later):
 
 ```bash
+npm ci
+```
+
+```bash
 npm run test:quiet
 ```
 
@@ -114,7 +118,8 @@ npm run check
 | Path | Contents |
 |---|---|
 | `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, languages (`i18n/`), email, maintenance |
-| `apps/server/public/` | Static assets: the vendored Fire design system (`fire/`), the branding editor (`imprim/`) and `_headers` |
+| `apps/server/public/` | Static assets: generated Fire assets (`fire/`), the built app (`ui/`) and `_headers` |
+| `apps/web/` | The Lit account and admin app |
 | `apps/server/migrations/` | D1 schema, `0001` to `0024` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
 | `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
@@ -125,8 +130,8 @@ npm run check
 
 ## Built with
 
-Every page uses the [Fire design system](docs/fire/README.md) (MIT), vendored in `apps/server/public/fire/`, with
-fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (ISC).
+Every page uses the [Fire v0.9.1 design system](docs/fire/README.md) (MIT), from its pinned package, with
+Lit for the account and admin app, fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (ISC).
 
 ## Status
 

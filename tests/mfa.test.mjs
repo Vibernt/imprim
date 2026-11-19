@@ -172,7 +172,7 @@ test('administrators must enrol and verify a second factor before the console op
     assert.equal(html.status, 303);
     assert.equal(html.headers.get('location'), 'https://id.example.com/account/mfa?next=%2Fadmin%2Fclients');
     const api = await w.call('/admin/api/clients', { headers: { cookie: jar } });
-    assert.equal((await api.json()).error, 'mfa_enrolment_required');
+    assert.equal((await api.json()).error, 'mfa_required');
     await enrolMfa(w, jar, csrfOf(jar));
     assert.equal((await w.call('/admin/api/clients', { headers: { cookie: jar } })).status, 200);
     w.env.DB.db.prepare('UPDATE sessions SET mfa_at=?').run(Date.now() - 2 * 3600000);

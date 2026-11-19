@@ -20,6 +20,7 @@ export function cookies(request) {
     }
     return result;
 }
+export const initialsOf = email => email.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase();
 export const cookie = (name, value, maxAge, httpOnly = true) => `${name}=${value}; Path=/; Secure; SameSite=Lax; Max-Age=${maxAge}${httpOnly ? '; HttpOnly' : ''}`;
 export function assertOrigin(request, env) {
     invariant(request.headers.get('origin') === env.ISSUER, 'origin', 'Same-origin request required.', 403);

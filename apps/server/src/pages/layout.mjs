@@ -5,11 +5,14 @@
 // never reach the output from input and no marker can be forged.
 import { resolveBranding } from '../branding/tokens.mjs';
 import { lookAttributes } from '../branding/look.mjs';
+import { initialsOf } from '../auth/session.mjs';
 import { adminRole } from '../services/admission.mjs';
 import { escapeHtml, dotLogo, dotMark, icon, result } from './ui.mjs';
+import { fireLabelScript } from './fire-labels.mjs';
 import { t, tHtml, localeOf, htmlLang, brandCopy } from '../i18n/index.mjs';
 export { escapeHtml, icon };
 const marker = name => `<!--identity:${name}-->`;
+const appRoot = (lang, look = '') => `<html lang="${lang}" data-fd-surface="app"${look}>`;
 // BRAND: the name. HEADER: the centred brand row. SIDE_BRAND and MARK: the shell's brand. FOOTER and SHELL_FOOTER: legal
 // lines. VIEWER and INITIALS: the signed-in person's email and initials.
 export const BRAND = marker('brand'), HEADER = marker('header'), HEAD = marker('head'), FOOTER = marker('footer'), SIDE_BRAND = marker('side-brand'),
@@ -18,8 +21,7 @@ export const BRAND = marker('brand'), HEADER = marker('header'), HEAD = marker('
 export const only = (who, html) => `${marker(`if:${who}`)}${html}${marker(`end:${who}`)}`;
 const POWERED_BY = marker('powered-by');
 const poweredBy = `<p class="fd-screen-note"><span>${POWERED_BY}</span>${dotLogo('sm')}</p>`;
-// Stopgaps for anything Fire lacks (docs/fire/GUIDE.md section 7; requests in docs/fire/REQUESTS.md): `x-` classes, Fire
-// tokens only. There are none now, so no page links the stylesheet.
+// Stopgaps for requests in docs/fire/REQUESTS.md use Imprim's im- prefix. No page links this empty stylesheet.
 export const localCss = '/* Fire stopgaps for Imprim: none. See docs/fire/REQUESTS.md. */\n';
 // Browsers keep /assets/local.css for an hour, so its link carries a hash of the rules: a release that changes them is
 // picked up at once.
@@ -40,7 +42,7 @@ export function htmlResponse(title, inner, { script = '', modules = [], turnstil
     for (const cookie of cookies) headers.append('set-cookie', cookie);
     const scripts = [script].flat().filter(Boolean).map(src => `<script src="${escapeHtml(src)}" defer></script>`).join('') +
         modules.map(src => `<script type="module" src="${escapeHtml(src)}"></script>`).join('');
-    return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    return new Response(`<!doctype html>${appRoot('en')}<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 ${client?.id && /^[A-Za-z0-9_-]{1,200}$/.test(client.id) ? marker(`client:${client.id}`) : ''}<title>${escapeHtml(title)} · ${BRAND}</title><link rel="stylesheet" href="/fire/fire.css">${localCssLink}${HEAD}</head>
 <body>${inner}${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ''}${scripts}</body></html>`, { status, headers });
 }
@@ -84,15 +86,15 @@ export async function withBrand(response, env) {
     const footer = legal ? `<footer class="fd-band" data-pad="sm"><div class="fd-row fd-small fd-muted" data-justify="center" data-wrap data-gap="4">${legal}</div></footer>` : '';
     const shellFooter = `<footer class="fd-band" data-pad="sm"><div class="fd-row fd-small fd-muted" data-justify="between" data-wrap data-gap="4"><div class="fd-row" data-wrap data-gap="4">${legal}</div>${poweredBy}</div></footer>`;
     const head = `<link rel="stylesheet" href="/assets/theme.css${client ? `?client=${encodeURIComponent(client.id)}` : ''}">${b.mark ? `<link rel="icon" href="${asset(b.mark)}">` : ''}`;
-    const email = env.SEEN?.email || '', viewer = escapeHtml(email), initials = escapeHtml(email.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase());
+    const email = env.SEEN?.email || '', viewer = escapeHtml(email), initials = escapeHtml(initialsOf(email));
     // The role is looked up only for a page that has administrator-only parts.
     const role = html.includes('<!--identity:if:') && email ? env.SEEN.role ?? await adminRole(env, email) : null;
     const allowed = { admin: Boolean(role), platform: role === 'platform' };
-    const open = `<html lang="${htmlLang(localeOf(env), b.locale)}"${lookAttributes(b.look)}>`;
+    const open = appRoot(htmlLang(localeOf(env), b.locale), lookAttributes(b.look));
     // Replacements are functions, so `$&`, `$'` or `$\`` in a brand's text is inserted as text, never as a pattern.
-    html = html.replace(/<!--identity:client:[A-Za-z0-9_-]{1,200}-->/, '').replace('<html lang="en">', () => open)
+    html = html.replace(/<!--identity:client:[A-Za-z0-9_-]{1,200}-->/, '').replace(appRoot('en'), () => open)
         .replace(/<!--identity:if:(admin|platform)-->([\s\S]*?)<!--identity:end:\1-->/g, (_, who, inner) => allowed[who] ? inner : '')
-        .replaceAll(BRAND, () => name).replace(HEAD, () => head).replace(HEADER, () => header).replace(FOOTER, () => footer)
+        .replaceAll(BRAND, () => name).replace(HEAD, () => head + fireLabelScript(env)).replace(HEADER, () => header).replace(FOOTER, () => footer)
         .replaceAll(SIDE_BRAND, () => markAndName).replaceAll(MARK, () => mark).replace(SHELL_FOOTER, () => shellFooter)
         .replaceAll(VIEWER, () => viewer).replaceAll(INITIALS, () => initials).replaceAll(POWERED_BY, () => escapeHtml(t(env, 'Powered by')));
     return new Response(html, { status: response.status, headers: response.headers });

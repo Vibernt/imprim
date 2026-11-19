@@ -7,7 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { realmEnv, validateRealmConfig } from '../apps/server/src/realms/realm.mjs';
 import { clientSeedSql } from '../scripts/seed-client.mjs';
-import { adminLogin, assertFireMarkup, clientConfig } from './support/admin.mjs';
+import { adminLogin, clientConfig } from './support/admin.mjs';
 import { turnstile, world } from './support/world.mjs';
 
 const SETTINGS = { product: 'notes-2', workspaces: 'shared', personal_workspaces: 'on', workspace_admin: 'on',
@@ -62,18 +62,11 @@ test('the Fire editor posts workspace settings through the guarded client write'
     const admin = await adminLogin(w);
     const form = { editor: '1', id: clientConfig.id, redirect_uris: clientConfig.redirect_uris[0], backchannel_uri: clientConfig.backchannel_uri,
         'sign_in_methods.email': '1', 'agent_registration_methods.metadata_document': '1', ...SETTINGS };
-    const get = async path => {
-        const html = await (await w.call(path, { headers: { cookie: admin.cookie } })).text();
-        assertFireMarkup(html);
-        assert.match(html, /<h3 class="fd-title" id="workspaces-title">Workspaces<\/h3>/);
-        return html;
-    };
     const post = (path, fields, headers = {}, csrf = admin.csrf) => w.call(path, { method: 'POST', headers: {
         origin: w.env.ISSUER, cookie: admin.cookie, 'content-type': 'application/x-www-form-urlencoded', ...headers,
     }, body: new URLSearchParams({ csrf, ...fields }) });
-    const newPage = await get('/admin/clients/new');
-    assert.match(newPage, /name="workspaces" value="app" checked/);
-    assert.match(newPage, /name="product" value=""/);
+    const { defaults } = await (await admin.get('clients/editor/defaults')).json();
+    assert.deepEqual(workspaceFields(defaults), DEFAULTS);
     assert.equal((await post('/admin/clients', form, { origin: 'https://other.example' })).status, 403);
     assert.equal((await post('/admin/clients', form, {}, 'wrong')).status, 403);
     for (const fields of [{ product: 'Notes' }, { workspaces: 'app' }, { personal_workspaces: 'yes' },
@@ -82,11 +75,6 @@ test('the Fire editor posts workspace settings through the guarded client write'
     }
     const created = await post('/admin/clients', form);
     assert.equal(created.status, 200, await created.clone().text());
-    const edited = await get('/admin/clients/notes');
-    for (const [name, value] of Object.entries(SETTINGS)) {
-        const checked = ['workspaces', 'personal_workspaces', 'workspace_admin'].includes(name);
-        assert.ok(edited.includes(`name="${name}"${name === 'initiate_login_uri' ? ' type="url"' : ''} value="${value}"${checked ? ' checked' : ''}`), name);
-    }
     const saved = await (await admin.get('clients/notes')).json();
     assert.deepEqual(workspaceFields(saved), SETTINGS);
     const rejected = await admin.post('clients/notes', { version: saved.version, redirect_uris: ['https://new.example/cb'] });

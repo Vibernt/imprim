@@ -1,16 +1,18 @@
 # Fire in Imprim
 
-Every Imprim page is built with **Fire**, a design system of plain CSS and ES modules with no build step. Fire
-v0.5.0 is vendored at `apps/server/public/fire/` and served as static files (Workers Static Assets, see
-`apps/server/wrangler.jsonc`). It is MIT licensed (`apps/server/public/fire/LICENSE`); its fonts are SIL OFL 1.1 and
-its icons are Lucide (ISC).
+Every Imprim page uses **Fire v0.9.1** (commit `7bca159`), MIT, from the pinned package
+`"fire-design": "github:vidhatanand/firedesign#v0.9.1"` (root and `apps/web` `package.json`).
+`scripts/build-fire.mjs` copies its CSS, ES modules and other static assets into `apps/server/public/fire/`,
+the generated directory served by Workers Static Assets. The package includes SIL OFL notices for the fonts
+and the ISC notice for the Lucide icons.
 
 | Read | For |
 |---|---|
 | [AGENT-RULES.md](AGENT-RULES.md) | The rules an AI agent follows when it builds an interface with Fire; it names the files below |
 | [GUIDE.md](GUIDE.md) | Building screens: layout, components, theming, what to do when Fire lacks something |
 | [WRITING.md](WRITING.md) | Every word on a screen: labels, buttons, hints, errors, empty states |
-| [VOCABULARY.md](VOCABULARY.md) | Every class and attribute Fire defines |
+| [VOCABULARY.md](VOCABULARY.md) | The common classes and attributes organized by component |
+| [CLASSES.md](CLASSES.md) | The complete generated class and attribute reference |
 | [REQUESTS.md](REQUESTS.md) | Gaps found in Fire while building Imprim, and what shipped for each |
 
 How Imprim uses it:
@@ -29,23 +31,24 @@ How Imprim uses it:
   Nobody types JSON, `0` or `1`, or an option's name.
 - A brand's **look** is Fire's tweak state (palette, tone, type set, density, corners, lines, text size, contrast,
   motion, texture, theme). `apps/server/src/branding/look.mjs` applies it as `<html>` attributes plus
-  `/assets/theme.css`, using Fire's own palette engine (`public/fire/js/palettes.js`), exactly as the Tweaks panel
+  `/assets/theme.css`, using Fire's palette engine (`fire-design/fire/js/palettes.js`), as the Tweaks panel
   does in the browser.
-- The Content Security Policy stays strict: `style-src 'self'`, no inline styles or scripts. Markup never carries a
-  `style` attribute. A stopgap for something Fire lacks goes in `/assets/local.css` (`localCss` in
-  `apps/server/src/pages/layout.mjs`); there are none now, so no page links it.
+- Pages declare `data-fd-surface="app"`. The page's catalogue supplies Fire's runtime labels in inert JSON in the
+  document head. The Content Security Policy allows same-origin scripts and styles. Stopgap classes and tokens use
+  the `im-` prefix. Request variants in [REQUESTS.md](REQUESTS.md).
 
 - The README's graphics (`docs/assets/diagrams/`) are drawn in Fire too, by `scripts/diagrams.mjs`: Fire's
   neutrals and ember accent, hairlines, mono eyebrows, the dot grid and corner marks, Geist embedded so GitHub
   shows it, and Imprim's dot-matrix wordmark and numerals (`dotMatrix` in `pages/dots.mjs`). Run
   `node scripts/diagrams.mjs` after changing them, or after a Fire release changes those tokens.
 
-**Upgrading Fire.** Take the release from its tag, not a working tree: replace `apps/server/public/fire/` with the
-tag's `fire/` folder (keep `LICENSE`), and copy its `GUIDE.md`, `WRITING.md`, `AGENT-RULES.md` and
-`docs/_ref/VOCABULARY.md` here. Then run the tests (`tests/branding.test.mjs` checks looks against Fire's palettes
-and type sets) and look at the sign-in, account and console pages. Never edit files inside `public/fire/`.
+**Upgrading Fire.** Change the tag in the root and `apps/web` `package.json` and run `npm install` in both. Copy `GUIDE.md`, `WRITING.md`,
+and `AGENT-RULES.md` from the package and `CLASSES.md` and `VOCABULARY.md` from the tag's `docs/_ref/`.
+Record the release here and in [WEB.md](../WEB.md). Run `npm run test:quiet` and `npm run check` to regenerate the assets
+and check the upgrade. Review the sign-in, account and console pages in light and dark at desktop and phone widths.
 
 | Fire | In Imprim since | What changed for Imprim |
 |---|---|---|
+| 0.9.0 | 2026-11-19 | Vendored package, translated control labels, updated palette tokens and new Tweaks settings. |
 | 0.5.0 | 2026-11-17 | No Fire module writes a `style` attribute any more, so every component works under Imprim's policy. Tweaks starts from the page's own palette and type set. Also new, not used yet: a pipeline graph, a day strip, a secret entry field. |
 | 0.4.0 | 2026-11-15 | The form controls the console uses: lists, names with values, code fields, form sections, radio choices. |

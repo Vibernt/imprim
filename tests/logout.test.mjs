@@ -88,7 +88,7 @@ test('a person signs out from Imprim\'s own pages: no app is named, so nothing o
     const csrf = signed.cookie.match(/__Host-vi_csrf=([^;]+)/)[1];
     const sessions = () => w.env.DB.db.prepare('SELECT count(*) n FROM sessions').get().n;
     // The account pages link to it.
-    assert.match(await (await w.call('/account', { headers: { cookie: signed.cookie } })).text(), /<a class="fd-btn" data-variant="ghost" data-only="desktop" href="\/logout">/);
+    assert.match(await (await w.call('/account/mfa', { headers: { cookie: signed.cookie } })).text(), /<a class="fd-btn" data-variant="ghost" data-only="desktop" href="\/logout">/);
     // GET only asks; it changes nothing.
     const ask = await w.call('/logout', { headers: { cookie: signed.cookie } });
     assert.equal(ask.status, 200);

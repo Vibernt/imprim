@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { useWebShell } from './support/web-shell.mjs';
 import assert from 'node:assert/strict';
 import { world, turnstile, cookieJar, login, basic } from './support/world.mjs';
 // The sign-in page for an authorization request, read once: its markup, cookie and request id.
@@ -6,6 +7,7 @@ async function open(w, changes = {}, cookie = '') {
     const response = await w.authorize(changes, cookie), html = await response.text();
     return { response, html, cookie: cookieJar(response), request_id: html.match(/data-request-id="([^"]+)"/)?.[1] };
 }
+import { fireLabels } from './support/i18n.mjs';
 import { adminLogin } from './support/admin.mjs';
 import { catalogues, LANGUAGES } from '../apps/server/src/i18n/index.mjs';
 import { forgetRealms } from '../apps/server/src/realms/realm.mjs';
@@ -16,21 +18,21 @@ const setRealmBranding = (w, branding) => { w.env.DB.db.prepare("UPDATE realms S
 test('Accept-Language picks the page language; <html lang> follows; unknown languages get English', async t => {
     const w = await world(t);
     const french = await (await w.call('/check-email', { headers: { 'accept-language': 'fr-CA,fr;q=0.9,en;q=0.5' } })).text();
-    assert.match(french, /<html lang="fr">/);
+    assert.match(french, /<html lang="fr" data-fd-surface="app">/);
     assert.ok(french.includes(escaped(fr('Check your email'))));
     const unknown = await (await w.call('/check-email', { headers: { 'accept-language': 'it, ja;q=0.8' } })).text();
-    assert.match(unknown, /<html lang="en">/);
+    assert.match(unknown, /<html lang="en" data-fd-surface="app">/);
     assert.ok(unknown.includes('Check your email'));
     const junk = await w.call('/check-email', { headers: { 'accept-language': '"><script>alert(1)</script>;q=1, ' + 'x'.repeat(5000) } });
     assert.equal(junk.status, 200);
     const html = await junk.text();
-    assert.match(html, /<html lang="en">/); assert.ok(!html.includes('<script>alert'));
+    assert.match(html, /<html lang="en" data-fd-surface="app">/); assert.ok(!html.includes('<script>alert'));
 });
 test('ui_locales on /authorize wins over the browser, is stored sanitized, and reaches the sign-in email', async t => {
     const w = await world(t); turnstile(t);
     const flow = await open(w, { ui_locales: '"><img src=x> de fr' });
     const html = flow.html;
-    assert.match(html, /<html lang="de">/);
+    assert.match(html, /<html lang="de" data-fd-surface="app">/);
     assert.ok(html.includes(escaped(de('Email me a link'))));
     assert.ok(!html.includes('<img src=x>') && !html.includes('&lt;img src=x'), 'the value is never reflected');
     assert.equal(w.env.DB.db.prepare('SELECT ui_locales FROM auth_requests WHERE id=?').get(flow.request_id).ui_locales, 'de fr');
@@ -46,7 +48,7 @@ test('ui_locales with nothing usable falls through to the browser, then English'
     // Well-formed but unknown tags are kept (they are only preferences); anything else is dropped.
     for (const [value, stored] of [['"><script>', null], ['x'.repeat(600), null], ['xx yy zz', 'xx yy zz'], ['', null]]) {
         const flow = await open(w, { ui_locales: value });
-        assert.match(flow.html, /<html lang="en">/, value);
+        assert.match(flow.html, /<html lang="en" data-fd-surface="app">/, value);
         assert.equal(w.env.DB.db.prepare('SELECT ui_locales FROM auth_requests WHERE id=?').get(flow.request_id).ui_locales, stored, value);
     }
 });
@@ -54,9 +56,9 @@ test('a brand that offers some languages only uses those; the default language a
     const w = await world(t);
     setRealmBranding(w, { locales: ['de', 'fr'], locale: 'de' });
     const english = await (await w.call('/check-email', { headers: { 'accept-language': 'en' } })).text();
-    assert.match(english, /<html lang="de">/, 'English is not offered');
+    assert.match(english, /<html lang="de" data-fd-surface="app">/, 'English is not offered');
     const french = await (await w.call('/check-email', { headers: { 'accept-language': 'fr' } })).text();
-    assert.match(french, /<html lang="fr">/);
+    assert.match(french, /<html lang="fr" data-fd-surface="app">/);
     const discovery = await (await w.call('/.well-known/openid-configuration')).json();
     assert.deepEqual(discovery.ui_locales_supported, ['de', 'fr']);
     setRealmBranding(w, {});
@@ -79,21 +81,27 @@ test('the saved language: chosen on the account page, checked, CSRF-bound, and u
     assert.equal((await save('de', { origin: 'https://evil.example' })).status, 403);
     const saved = await save('de');
     assert.equal(saved.status, 200);
-    assert.match(await saved.text(), /<html lang="de">/);
+    assert.match(await saved.text(), /<html lang="de" data-fd-surface="app">/);
     assert.equal(w.env.DB.db.prepare("SELECT locale FROM users WHERE email='person@example.com'").get().locale, 'de');
     // The saved language beats the browser's, but not an app's ui_locales.
-    assert.match(await (await w.call('/account', { headers: { cookie, 'accept-language': 'fr' } })).text(), /<html lang="de">/);
+    const headers = { cookie, 'accept-language': 'fr' };
+    assert.equal((await (await w.call('/v1/me', { headers })).json()).locale, 'de');
+    assert.equal((await (await w.call('/v1/account/profile', { headers })).json()).locale, 'de');
     const flow = await open(w, { ui_locales: 'fr', prompt: 'login' }, cookie);
-    assert.match(flow.html, /<html lang="fr">/);
+    assert.match(flow.html, /<html lang="fr" data-fd-surface="app">/);
     assert.equal((await save('')).status, 200);
     assert.equal(w.env.DB.db.prepare("SELECT locale FROM users WHERE email='person@example.com'").get().locale, null);
 });
 test('the admin console stays English whatever the browser asks', async t => {
     const w = await world(t); turnstile(t);
     const admin = await adminLogin(w);
-    const html = await (await w.call('/admin/clients', { headers: { cookie: admin.cookie, 'accept-language': 'de' } })).text();
-    assert.match(html, /<html lang="en">/);
-    assert.ok(html.includes('Clients'));
+    await useWebShell(t, w.env);
+    const response = await w.call('/admin/clients', { headers: { cookie: admin.cookie, accept: 'text/html', 'accept-language': 'de' } });
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /<html [^>]*lang="en"[^>]*>/);
+    assert.equal(fireLabels(html)['menu.close'], 'Close menu');
+    assert.match(html, /<app-shell><\/app-shell>/);
 });
 test('an administrator\'s two-factor reset notice goes in the person\'s language, not the administrator\'s', async t => {
     const w = await world(t); turnstile(t);
@@ -138,7 +146,7 @@ test('every shipped language renders the main pages without falling back to Engl
     const w = await world(t);
     for (const tag of LANGUAGES.filter(tag => tag !== 'en')) {
         const html = await (await w.call('/login', { headers: { 'accept-language': tag } })).text();
-        assert.match(html, new RegExp(`<html lang="${tag}">`));
+        assert.match(html, new RegExp(`<html lang="${tag}" data-fd-surface="app">`));
         assert.ok(!html.includes('>Email me a link<') && !html.includes('Administrators sign in by email.'), tag);
     }
 });
