@@ -1,6 +1,6 @@
 # Account and admin interface
 
-Status: built. This page is the specification for Fire 0.9.1 and the Lit account and admin interface; the code matches it.
+Status: built. This page is the specification for Fire 0.10.1 and the Lit account and admin interface; the code matches it.
 
 ## What changes and what does not
 

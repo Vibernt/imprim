@@ -1,7 +1,7 @@
 # Repository rules
 
 Read README.md, docs/ARCHITECTURE.md and docs/ROADMAP.md first. Read docs/PROTOCOL.md before changing protocol behavior.
-- The Worker uses native ESM with no runtime dependencies and no build step; its only outside import is Fire's modules, bundled from the pinned `fire-design` package. The account and admin interface in `apps/web` is Lit and Vite, built by `npm run build`. Fire v0.9.1 comes from the pinned `fire-design` package and is never edited. Keep modules small and grouped by concern.
+- The Worker uses native ESM with no runtime dependencies and no build step; its only outside import is Fire's modules, bundled from the pinned `fire-design` package. The account and admin interface in `apps/web` is Lit and Vite, built by `npm run build`. Fire v0.10.1 comes from the pinned `fire-design` package and is never edited. Keep modules small and grouped by concern.
 - Preserve imported principal ids as subjects. Apps retain authorization and their own sessions. Apps keep their own memberships unless they opt in to [shared workspaces](docs/WORKSPACES.md), where Imprim manages membership and base roles.
 - Never bypass client, browser, Origin, CSRF, admission or single-use boundaries. Add negative tests for each change.
 - No network calls inside database transactions. No mocked production success or automatic fallback.
