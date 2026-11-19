@@ -1,4 +1,4 @@
-# imprim-client 0.9.0
+# imprim-client 0.9.1
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
 named `@vibernt/identity-client`. To move an app from that version, follow

@@ -1,6 +1,6 @@
 # Shared workspaces
 
-Status: built (migrations `0024` and `0027`, client `0.9.0`). This page is the specification; the code matches it.
+Status: built (migrations `0024` and `0027`, client `0.9.1`). This page is the specification; the code matches it.
 
 By default each app keeps its own workspaces, memberships and roles, and Imprim only admits people per app. A realm
 can instead hold **shared workspaces** for a family of products. Imprim then keeps each workspace's members, base
@@ -106,7 +106,7 @@ in its realm by adding its own product. Bodies are JSON. Errors use the existing
 | `GET /v1/workspaces/{id}/members?limit=&cursor=` | app | `{ members: [{ sub, email, role }], next_cursor, version }`, oldest first; cursor as in `/v1/grants` |
 | `POST /v1/workspaces` | app with `workspace_admin` on, or any shared app for `kind: "personal"` with `personal_workspaces` on | Team body `{ name, products, first_owner_email, actor_token }`. Omit `products` to use the app's product, or pass exactly that product in a one-item array. The first owner is invited as `owner`, or added at once when it is the actor. Personal body `{ kind: "personal", name, actor_token }`. The actor becomes owner, one per person (`409` if one exists). |
 | `PATCH /v1/workspaces/{id}` | actor admin+ | `{ name, actor_token }` |
-| `POST /v1/workspaces/{id}/products` | app with `workspace_admin` on, acting for an owner or realm admin | `{ add: [], remove: [], actor_token }`. Every entry must be the app's own product. Adding it can join an active workspace in the app's realm even when the app could not read it before. |
+| `POST /v1/workspaces/{id}/products` | app with `workspace_admin` on, acting for an owner or realm admin | `{ add: [], remove: [], actor_token }`; an omitted list counts as empty. Every entry must be the app's own product. Adding it can join an active workspace in the app's realm even when the app could not read it before. |
 | `POST /v1/workspaces/{id}/invitations` | actor admin+ (owner for role `owner`); team only | `{ email, role, actor_token }` → `201 { invitation_id, expires_at }`; 30 days; one open invitation per email (re-inviting replaces it); sends one email |
 | `GET /v1/workspaces/{id}/invitations` | app | open invitations `{ invitations: [{ invitation_id, email, role, expires_at }] }` |
 | `DELETE /v1/workspaces/{id}/invitations/{invitation_id}` | actor admin+ | `{ actor_token }` |
@@ -212,11 +212,11 @@ One invitation email, `workspace_invitation`, in every language Imprim ships, wi
 the workspace name, the products it uses, and a button to the inviting app's `initiate_login_uri` (or, if unset, the
 issuer's `/login`).
 
-## Client `0.9.0`
+## Client `0.9.1`
 
 Client `0.8.0` added these calls; `0.8.1` lets `handleCallback(url, values, { idToken: true })` return
 `{ claims, idToken }` for `actor_token`. Client `0.8.2` refuses redirects so the client works inside Cloudflare Workers.
-Client `0.8.3` types `created_via`. Client `0.9.0` adds `joinableWorkspaces`.
+Client `0.8.3` types `created_via`. Client `0.9.0` adds `joinableWorkspaces`; `0.9.1` sends an omitted `add` or `remove` as an empty list.
 
 `memberships(sub)`, `joinableWorkspaces({ actorToken })`, `workspace(id)`, `workspaceMembers(id, { limit, cursor })`,
 `createWorkspace`, `renameWorkspace`, `setWorkspaceProducts`, `inviteToWorkspace`, `workspaceInvitations`,

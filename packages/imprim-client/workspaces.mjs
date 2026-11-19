@@ -40,7 +40,7 @@ export function workspaceMethods(send, fail) {
             return sendAsActor('PATCH', workspacePath(id), actorToken, { name });
         },
         async setWorkspaceProducts(id, { add, remove, actorToken } = {}) {
-            return sendAsActor('POST', `${workspacePath(id)}/products`, actorToken, { add, remove });
+            return sendAsActor('POST', `${workspacePath(id)}/products`, actorToken, { add: add ?? [], remove: remove ?? [] });
         },
         async inviteToWorkspace(id, { email, role, actorToken } = {}) {
             return sendAsActor('POST', `${workspacePath(id)}/invitations`, actorToken, { email, role });

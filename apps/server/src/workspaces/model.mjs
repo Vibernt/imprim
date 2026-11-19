@@ -233,7 +233,8 @@ export function renameWorkspace(env, client, actor, id, value) {
 }
 
 export function setWorkspaceProducts(env, client, actor, id, body, signIn = null) {
-    const add = validProducts(body.add, client), remove = validProducts(body.remove, client);
+    // An omitted list means no change on that side; a present value must still be an array of products.
+    const add = validProducts(body.add ?? [], client), remove = validProducts(body.remove ?? [], client);
     invariant(!add.some(product => remove.includes(product)), 'invalid_request', 'A product cannot be added and removed together.');
     const checks = actor.admin ? [] : [
         flag(client, signIn ? 'join_workspaces' : 'workspace_admin'),

@@ -3,10 +3,12 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
-## Unreleased
+## 2026-11-20.1
 
 No migration.
 
+- `POST /v1/workspaces/{id}/products` treats an omitted `add` or `remove` as an empty list, and client 0.9.1 sends
+  both. Before, `setWorkspaceProducts(id, { add, actorToken })` without `remove` failed with `400 invalid_request`.
 - Docs: the README, integration guide, roadmap and architecture describe sign-up approval, joining an existing
   workspace and the realm-admin close.
 

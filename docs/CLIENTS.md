@@ -341,6 +341,7 @@ What each version changed:
 | 0.3.0 | Wire change: agent revocation events are `secevent+jwt`. `iss` is required on the authorization response. Error text handling, JWKS refresh after 10 minutes, a failed discovery is not cached. Details below. |
 | 0.4.0 | Step-up: `startLogin({ acrValues, maxAge })`; ID tokens carry `acr`. |
 | 0.5.0 | `verifyAccessToken` checks a DPoP proof for a bound token (`dpop`, `requireDpop`) and returns `dpop_jti`. |
+| 0.9.1 | `setWorkspaceProducts` sends an omitted `add` or `remove` as an empty list. Nothing else changes. |
 | 0.9.0 | `joinableWorkspaces({ actorToken })` lists team workspaces the person owns and can add the app's product to. `closeWorkspace(id, { actorToken, confirm })` lets an enabled operator app close a workspace on behalf of a realm admin with the current name as confirmation. |
 | 0.8.3 | Types only: workspace reads include `created_via` (`'signup'` or `null`). Nothing else changes. |
 | 0.8.2 | Every request uses `redirect: 'manual'` and treats any redirect as a failure, so the client works inside Cloudflare Workers, which reject `redirect: 'error'`. Nothing else changes. |
