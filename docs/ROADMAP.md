@@ -17,7 +17,9 @@ Tweaks panel in the console; pages and emails in English, Spanish, French, Germa
 RS256 ID tokens; agents at scale (token budgets per grant and per agent, grants API paging, `listGrants`, `revokeGrant`
 and `introspect` in `imprim-client`, `agent_assurance`, registrations kept while a grant is live);
 opt-in shared and personal workspaces for a family of products (members, base roles, invitations in five languages,
-signed versioned events, agent resources revoked on removal; [Shared workspaces](WORKSPACES.md)).
+signed versioned events, agent resources revoked on removal; [Shared workspaces](WORKSPACES.md)); self-serve sign-up,
+open or held for realm administrator approval ([Self-serve sign-up](SIGNUP.md)); products joining an existing workspace
+on the owner's first sign-in, and realm administrators closing workspaces from an operator console.
 The OpenID conformance suite passed ([OpenID certification](CERTIFICATION.md)).
 
 Planned, roughly in order. Each item is an issue to discuss before code:

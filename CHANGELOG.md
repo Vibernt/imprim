@@ -3,6 +3,13 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## Unreleased
+
+No migration.
+
+- Docs: the README, integration guide, roadmap and architecture describe sign-up approval, joining an existing
+  workspace and the realm-admin close.
+
 ## 2026-11-20
 
 Migration `0027`.

@@ -40,6 +40,17 @@ immediately. In `approval` mode a realm administrator reviews the verified reque
 so the approval email can start a fresh sign-in from the app.
 See [Self-serve sign-up](SIGNUP.md).
 
+### Join an existing workspace
+
+A product that does not offer sign-up can serve workspaces created through another product. Enable `join_workspaces`
+on the app: when a workspace owner signs in and is not yet admitted, Imprim asks "Use a workspace for <app>?" on its
+hosted page and adds the app's product. Your app then receives `workspace-products-changed` and sets itself up for the
+workspace. Apps with `workspace_admin` can offer the same choice in their own interface with `joinableWorkspaces` and
+`setWorkspaceProducts`. [Adding a product to an existing workspace](WORKSPACES.md#adding-a-product-to-an-existing-workspace)
+
+Operator consoles with `workspace_admin` can close a workspace for a realm administrator with
+`closeWorkspace(id, { actorToken, confirm })`, where `confirm` is the workspace's exact name.
+
 ## 2. Sign people in
 
 ```js

@@ -31,7 +31,7 @@ Migrations `0001` through `0027` create or extend these tables. Workspace child 
 | `users` | Stable subject, normalized email, verification, active/blocked/deleted status and saved language. |
 | `user_identities` | A provider id and that provider's subject (GitHub numeric id, Google `sub`, or a registry provider's `sub`) linked to a user. |
 | `clients` | App credentials, URLs, admission, sign-in and agent policy. |
-| `auth_requests` | Browser-bound pending app or agent authorization request, with its sanitized `ui_locales`. |
+| `auth_requests` | Browser-bound pending app or agent authorization request, with its sanitized `ui_locales` and any workspace-join offer (person, product, offered workspaces). |
 | `magic_links` | Hashed, browser-bound email link and request reference. |
 | `oauth_states` | Hashed upstream state, PKCE verifier, provider and nonce. |
 | `sessions` | Hashed identity session and CSRF, `sid`, method, `amr`, second-factor time, admin scope, device, place and Google `hd`. |
@@ -62,7 +62,7 @@ Migrations `0001` through `0027` create or extend these tables. Workspace child 
 | `dpop_proofs` | DPoP proof `jti` replay records. |
 | `user_event_outbox` | Signed user lifecycle events pending delivery to apps that opted in. |
 | `brand_assets` | Realm-scoped, content-addressed logos and marks. |
-| `workspaces`, `workspace_members`, `workspace_products`, `workspace_invitations` | Realm workspaces, base roles, participating products and shared invitations. |
+| `workspaces`, `workspace_members`, `workspace_products`, `workspace_invitations` | Realm workspaces, base roles, participating products and shared invitations. `workspaces.created_via` marks sign-up workspaces. |
 | `workspace_resources`, `workspace_holds`, `workspace_event_outbox` | Registered agent resources, app holds on closing a workspace and durable workspace events. |
 | `signup_requests` | Verified sign-up requests, recipient language and realm administrator decisions. |
 

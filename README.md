@@ -14,7 +14,8 @@ OAuth 2.1 authorization server that runs on Cloudflare Workers with D1. The Work
 - **Apps keep authorisation.** Imprim proves who someone is and what they consented to. Your app owns its sessions
   and checks permissions on every request.
 - **Shared and personal workspaces.** Products can opt in to share team memberships, base roles and invitations
-  through Imprim, give each person a workspace of their own, and offer optional self-serve sign-up for team workspaces.
+  through Imprim, give each person a workspace of their own, and offer optional self-serve sign-up for team workspaces,
+  open or held for administrator approval. Another product joins an existing workspace when its owner first signs in.
   [Shared workspaces](docs/WORKSPACES.md) · [Self-serve sign-up](docs/SIGNUP.md)
 - **Many brands, one deployment.** Each realm has its own issuer host, signing keys, users, provider credentials,
   email sender, admins and branding. Branding is a look (palette, tone, type set and other tweaks) plus a name,
