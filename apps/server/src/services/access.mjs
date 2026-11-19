@@ -18,17 +18,22 @@ export function endAccess(env, id) {
 }
 // First mailbox proof for an account a provider created unverified (S4): whoever held that provider identity was
 // trusted on a "verified" flag alone. Their links, sessions and agent grants end; the mailbox owner keeps the account.
-export async function claimMailbox(env, user) {
-    if (user.email_verified === 1) return user;
-    const now = Date.now();
-    await env.DB.batch([
-        env.DB.prepare('INSERT INTO admin_assertions(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM users WHERE id=? AND email_verified=0) THEN 1 ELSE 0 END').bind(user.id),
+export function mailboxClaimStatements(env, user, now) {
+    return [
         ...endAccess(env, user.id),
         env.DB.prepare('DELETE FROM user_identities WHERE user_id=?').bind(user.id),
         env.DB.prepare('DELETE FROM user_passwords WHERE user_id=?').bind(user.id),
         env.DB.prepare('DELETE FROM webauthn_credentials WHERE user_id=?').bind(user.id),
         env.DB.prepare('UPDATE users SET email_verified=1 WHERE id=?').bind(user.id),
         env.DB.prepare("INSERT INTO audit(event,actor,target,detail,created,realm_id) SELECT 'mailbox_claimed',?,?,'{}',?,realm_id FROM users WHERE id=?").bind(user.id, user.id, now, user.id)
+    ];
+}
+
+export async function claimMailbox(env, user) {
+    if (user.email_verified === 1) return user;
+    await env.DB.batch([
+        env.DB.prepare('INSERT INTO admin_assertions(ok) SELECT CASE WHEN EXISTS(SELECT 1 FROM users WHERE id=? AND email_verified=0) THEN 1 ELSE 0 END').bind(user.id),
+        ...mailboxClaimStatements(env, user, Date.now())
     ]).catch(error => { invariant(!String(error.message).includes('admin_assertions'), 'conflict', 'Account changed; sign in again.', 409); throw error; });
     return { ...user, email_verified: 1 };
 }

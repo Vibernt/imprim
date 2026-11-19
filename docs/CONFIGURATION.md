@@ -69,6 +69,13 @@ The seed script accepts every setting in this table except `version`, with the c
 an existing client. Rotating a secret (console or `rotate-secret`) invalidates the old one
 at once; there is no overlap, so switch the app's secret in the same window.
 
+### Self-serve sign-up
+
+Realm `signup` is `off` by default. Set it to `approval` to hold verified requests for administrators or `open`
+to create workspaces immediately after email verification. Both enabled modes require realm `"workspaces": "on"`.
+In the app editor or seed configuration, set `self_signup` to `on` for a shared app with a product and email sign-in.
+Set `initiate_login_uri` to the app's sign-in entry point for approval emails. See [Self-serve sign-up](SIGNUP.md).
+
 ## Runtime limits
 
 D1 `rate_limits` holds email, address, degraded-Turnstile and agent-action budgets. They are code constants, not

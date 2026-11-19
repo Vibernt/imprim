@@ -18,7 +18,7 @@ apps can opt in to membership and base roles managed by Imprim. Users imported w
 | `GET /logout` | Validate client/return URI, show confirmation; no cookie-authenticated destructive GET. With no `client_id` it is a person signing out from Imprim's own pages: a return URI is refused, a lone `state` is ignored (it only travels with a return URI), and it ends at `/signed-out`. |
 | `POST /logout` | Form-encoded same-origin CSRF confirmation; deletes identity session and associated tokens/codes. |
 | `POST /v1/invitations` | JSON `{email}`, confidential client Basic authentication; upserts a 30-day invitation. |
-| `POST /v1/auth/magic/request` | JSON `{email, request_id, turnstile}`; neutral `{accepted:true}` after browser/challenge checks. |
+| `POST /v1/auth/magic/request` | JSON `{email, request_id, turnstile}` with optional `purpose` and sign-up `workspace_name`. Neutral `{accepted:true}` after browser and challenge checks. |
 | `POST /v1/auth/magic/verify` | JSON `{token}`; explicit same-origin POST, browser-bound single use, resumes authorization. |
 | `GET /v1/auth/github/start?request_id=…` | Browser-bound pending request, PKCE S256 GitHub OAuth start. |
 | `GET /auth/github/callback` | Consumes hashed OAuth state, checks browser, exchanges code, links numeric GitHub id. |
@@ -222,6 +222,14 @@ and is sent only after a Sign in click. Link prefetch GETs cannot consume it. Ve
 binding, single use, current account state and current admission; invitation expiry/revocation applies at verification.
 `browser_response:true` makes verification return `{redirect}` plus session cookies instead of a 303, allowing the
 page to navigate without fetch following a cross-origin redirect.
+
+When [self-serve sign-up](SIGNUP.md) is enabled, the hosted page can send `purpose: "signup"` for a pending
+app authorization request. The neutral response is `202` with `{accepted:true}`. Already eligible addresses get
+the usual sign-in email. In `open` mode, verification creates the verified account and team workspace in a
+guarded write and resumes authorization. An outstanding sign-up link that would create a second workspace for the
+same person and product fails with `409 signup_limit`. In `approval` mode, verification records a request and
+redirects to the hosted status page without issuing session cookies or completing authorization. After approval,
+the person starts a fresh authorization from the app.
 
 Admission is per (user, client), recorded in `client_admissions`. A user is admitted to a client when they already
 reached it, or when that client's own policy admits them: `open` signup; a current invitation for the exact email;

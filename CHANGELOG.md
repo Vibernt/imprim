@@ -3,9 +3,14 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
-## Unreleased
+## 2026-11-19.2
 
-Nothing yet.
+Migrations `0025` and `0026`.
+
+- Optional [self-serve sign-up](docs/SIGNUP.md) lets a person prove their email on Imprim's hosted pages and
+  create a team workspace they own. Each participating app receives the usual workspace membership event.
+- Realms can require administrator approval after email verification. The Sign-up requests console records approvals,
+  declines and expired requests. The realm's immediate sign-up mode is `open`.
 
 ## 2026-11-19.1
 

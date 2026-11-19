@@ -14,7 +14,8 @@ OAuth 2.1 authorization server that runs on Cloudflare Workers with D1. The Work
 - **Apps keep authorisation.** Imprim proves who someone is and what they consented to. Your app owns its sessions
   and checks permissions on every request.
 - **Shared and personal workspaces.** Products can opt in to share team memberships, base roles and invitations
-  through Imprim, and give each person a workspace of their own. [Shared workspaces](docs/WORKSPACES.md)
+  through Imprim, give each person a workspace of their own, and offer optional self-serve sign-up for team workspaces.
+  [Shared workspaces](docs/WORKSPACES.md) · [Self-serve sign-up](docs/SIGNUP.md)
 - **Many brands, one deployment.** Each realm has its own issuer host, signing keys, users, provider credentials,
   email sender, admins and branding. Branding is a look (palette, tone, type set and other tweaks) plus a name,
   copy, links and logos, and each app can override it.
@@ -120,7 +121,7 @@ npm run check
 | `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, languages (`i18n/`), email, maintenance |
 | `apps/server/public/` | Static assets: generated Fire assets (`fire/`), the built app (`ui/`) and `_headers` |
 | `apps/web/` | The Lit account and admin app |
-| `apps/server/migrations/` | D1 schema, `0001` to `0024` |
+| `apps/server/migrations/` | D1 schema, `0001` to `0026` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
 | `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
 | `scripts/` | Offline SQL generators for realms, clients and user imports; checks (including translations); email preview; client build |

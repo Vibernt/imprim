@@ -16,8 +16,12 @@ const PROVIDER_FIELDS = {
     apple: { scalar: ['client_id', 'name', 'team_id', 'key_id'], secret: ['private_key'] }
 };
 const providerType = (id, config) => ['github', 'google'].includes(id) ? id : config?.type;
-function workspaceMode(value = 'off') {
-    invariant(['on', 'off'].includes(value), 'realm_config', 'Realm workspaces must be on or off.');
+function realmSwitch(name, value = 'off') {
+    invariant(['on', 'off'].includes(value), 'realm_config', `Realm ${name} must be on or off.`);
+    return value;
+}
+function realmSignup(value = 'off') {
+    invariant(['off', 'approval', 'open'].includes(value), 'realm_config', 'Realm signup must be off, approval or open.');
     return value;
 }
 export function validateRealmConfig(config) {
@@ -26,12 +30,14 @@ export function validateRealmConfig(config) {
     const known = { email: ['from', 'from_name', 'reply_to'], turnstile: ['site_key', 'secret'] };
     const scalar = value => value === undefined || (typeof value === 'string' && value.length > 0 && value.length <= 500) || isRef(value);
     for (const [section, value] of Object.entries(config)) {
-        if (section === 'workspaces') { workspaceMode(value); continue; }
+        if (section === 'workspaces') { realmSwitch(section, value); continue; }
+        if (section === 'signup') { realmSignup(value); continue; }
         if (section === 'branding') { validateBranding(value); continue; }
         if (!known[section] && section !== 'providers') fail(`Unknown realm config section ${section}.`);
         if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`${section} must be an object.`);
         if (section !== 'providers') for (const key of Object.keys(value)) if (!known[section].includes(key)) fail(`Unknown field ${section}.${key}.`);
     }
+    if (realmSignup(config.signup) !== 'off' && config.workspaces !== 'on') fail('Realm sign-up requires workspaces.');
     for (const path of [['email','from'], ['email','from_name'], ['email','reply_to'], ['turnstile','site_key']])
         if (!scalar(at(config, path))) fail(`${path.join('.')} must be a string or {"env":"NAME"}.`);
     if (at(config, ['turnstile', 'secret']) !== undefined && !isRef(config.turnstile.secret)) fail('turnstile.secret is a secret: use {"env":"SECRET_NAME"}, never a literal.');
@@ -74,7 +80,7 @@ export async function realmFor(env, origin, now = Date.now()) {
 export function realmEnv(env, realm) {
     const config = JSON.parse(realm.config), value = path => resolve(env, at(config, path));
     return { ...env, REALM: { id: realm.id, issuer: realm.issuer, display_name: realm.display_name, branding: config.branding || {},
-        workspaces: workspaceMode(config.workspaces) }, ISSUER: realm.issuer,
+        workspaces: realmSwitch('workspaces', config.workspaces), signup: realmSignup(config.signup) }, ISSUER: realm.issuer,
         EMAIL_FROM: value(['email','from']), EMAIL_FROM_NAME: value(['email','from_name']) || realm.display_name, EMAIL_REPLY_TO: value(['email','reply_to']),
         TURNSTILE_SITE_KEY: value(['turnstile','site_key']), TURNSTILE_SECRET: value(['turnstile','secret']),
         GITHUB_CLIENT_ID: value(['providers','github','client_id']), GITHUB_CLIENT_SECRET: value(['providers','github','client_secret']),

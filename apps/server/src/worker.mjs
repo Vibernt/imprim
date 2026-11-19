@@ -35,8 +35,9 @@ import { logout } from './oidc/logout.mjs';
 import { invite } from './services/invitations.mjs';
 import { scheduled, queue } from './services/maintenance.mjs';
 import { loginPage, signInScriptFor } from './pages/sign-in.mjs';
+import { checkEmailPage, pendingSignupPage } from './pages/signup.mjs';
 import { page, localCss, errorPage, signedOutPage, withBrand, only } from './pages/layout.mjs';
-import { result, linkButton, escapeHtml } from './pages/ui.mjs';
+import { result, linkButton } from './pages/ui.mjs';
 import { themeResponse } from './branding/theme.mjs';
 import { startLocale, t, tError, brandCopy } from './i18n/index.mjs';
 import { serveAsset } from './branding/assets.mjs';
@@ -98,7 +99,7 @@ async function route(request, env, ctx, url) {
         case 'POST /revoke': return revoke(request, env, ctx);
         case 'GET /v1/grants': case 'POST /v1/grants/revoke': return appGrants(request, env, ctx);
         case 'POST /v1/auth/magic/request': return requestMagic(request, env, ctx);
-        case 'POST /v1/auth/magic/verify': return verifyMagic(request, env);
+        case 'POST /v1/auth/magic/verify': return verifyMagic(request, env, ctx);
         case 'POST /v1/auth/password': return passwordSignIn(request, env);
         case 'GET /account/password': case 'POST /account/password': return passwordPage(request, env, ctx);
         case 'GET /mfa': case 'POST /mfa': return mfaChallenge(request, env, ctx);
@@ -111,8 +112,8 @@ async function route(request, env, ctx, url) {
         case 'GET /v1/auth/google/start': return googleStart(request, env);
         case 'GET /login/google/callback': return googleCallback(request, env);
         case 'GET /login': return loginPage(request, env);
-        case 'GET /check-email': return page(t(env, 'Check your email'), result('mail', 'accent', t(env, 'Check your email'), t(env, 'If this address can sign in here, a link arrives within a minute.')) +
-            `<p class="fd-screen-note">${escapeHtml(t(env, 'Open it in this browser. The link works once and expires in 15 minutes.'))}</p>`);
+        case 'GET /check-email': return checkEmailPage(request, env, url.searchParams.get('request_id'));
+        case 'GET /signup-pending': return pendingSignupPage(request, env, url.searchParams.get('request_id'));
         case 'GET /signed-in': {
             if (!await getSession(request, env)) throw new AppError(401, 'login_required', 'Sign in first.');
             return page(t(env, 'Signed in'), result('circle-check', 'success', t(env, 'You’re signed in'), t(env, 'Go back to your app to continue.')) +

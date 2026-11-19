@@ -194,7 +194,11 @@ Client `0.8.0` added these calls; `0.8.1` lets `handleCallback(url, values, { id
 `unregisterWorkspaceResource`; and `verifyBackchannel` returns `kind: 'workspace'` for a `workspace_token`, with
 `{ event, workspaceId, sub, version, payload, jti }`. Calls that change things take `actorToken`.
 
+## Self-serve sign-up
+
+Realms and apps can opt in to [self-serve sign-up](SIGNUP.md), which creates a team workspace for the app's
+product after mailbox verification.
+
 ## Not in this version
 
-Open sign-up that creates a workspace; agents changing membership; workspace claims in the ID token; translated
-console pages.
+Agents changing membership, workspace claims in the ID token, and translated console pages.

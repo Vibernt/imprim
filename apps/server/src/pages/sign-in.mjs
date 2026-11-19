@@ -6,32 +6,36 @@ import { t, msg, brandCopy, localizeScript, scriptPath, useLocale } from '../i18
 import { cookies, cookie, BROWSER_COOKIE } from '../auth/session.mjs';
 import { randomToken } from '../lib/crypto.mjs';
 import { tokenShape } from '../lib/http.mjs';
+import { signupFields, signupHeading, signupButtons } from './signup.mjs';
 const challengeConfigured = env => Boolean(env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET);
 // One form serves email links and passwords: the button pressed chooses the action (see signInScript).
-function emailForm(env, requestId, { link, password }) {
+function emailForm(env, requestId, { link, password, signup }) {
     // The set-password action comes after Sign in, so Enter in a field signs in (the first submit button is the default).
     const passwordField = password ? field({ id: 'password', label: t(env, 'Password'), type: 'password', name: 'password', size: 'lg', autocomplete: 'current-password', maxlength: 1024 }) : '';
-    return `<form class="fd-stack" data-gap="4" id="email-form"><input type="hidden" name="request_id" value="${escapeHtml(requestId)}">
-${field({ id: 'email', label: t(env, 'Email'), type: 'email', name: 'email', size: 'lg', autocomplete: password ? 'username' : 'email', required: true, maxlength: 254, placeholder: t(env, 'you@example.com') })}
-${passwordField}${challengeConfigured(env) ? `<div class="cf-turnstile" data-sitekey="${escapeHtml(env.TURNSTILE_SITE_KEY)}" data-action="sign_in"></div>` : ''}
-${password ? button(t(env, 'Sign in'), { id: 'password-sign-in', value: 'password', variant: 'primary', size: 'lg', block: true }) : ''}
+    const signInButtons = `${password ? button(t(env, 'Sign in'), { id: 'password-sign-in', value: 'password', variant: 'primary', size: 'lg', block: true }) : ''}
 ${link ? button(t(env, 'Email me a link'), { id: 'send-link', value: 'link', variant: password ? 'outline' : 'primary', size: 'lg', block: true, icon: 'mail' }) : ''}
-${password ? `<div class="fd-row" data-justify="center"><button class="fd-btn-text" id="set-password" type="submit" value="set">${escapeHtml(t(env, 'Set or reset password'))}</button></div>` : ''}</form>`;
+${password ? `<div class="fd-row" data-justify="center"><button class="fd-btn-text" id="set-password" type="submit" value="set">${escapeHtml(t(env, 'Set or reset password'))}</button></div>` : ''}`;
+    return `<form class="fd-stack" data-gap="4" id="email-form" method="post"><input type="hidden" name="request_id" value="${escapeHtml(requestId)}">
+${field({ id: 'email', label: t(env, 'Email'), type: 'email', name: 'email', size: 'lg', autocomplete: password ? 'username' : 'email', required: true, maxlength: 254, placeholder: t(env, 'you@example.com') })}
+${signup && password ? `<div data-sign-in-only>${passwordField}</div>` : passwordField}
+${signup ? signupFields(env) : ''}${challengeConfigured(env) ? `<div class="cf-turnstile" data-sitekey="${escapeHtml(env.TURNSTILE_SITE_KEY)}" data-action="sign_in"></div>` : ''}
+${signup ? `<div id="sign-in-actions" class="fd-stack" data-gap="4" data-sign-in-only>${signInButtons}</div>${signupButtons(env)}` : signInButtons}</form>`;
 }
-export function signInPage(env, requestId = '', responseCookies = [], client = null) {
+export function signInPage(env, requestId = '', responseCookies = [], client = null, { signup = false } = {}) {
     useLocale(env, { client });
     const branding = brandingFor(env, client);
     const methods = client ? signInSettings(client).methods : ['email'];
     const email = methods.includes('email'), password = methods.includes('password');
     const providerLink = (href, label) => `<a class="fd-btn" data-variant="outline" data-size="lg" data-block href="${href}"><span>${escapeHtml(label)}</span></a>`;
-    const controls = methods.filter(method => method !== 'password' || !email).map(method => ['email', 'password'].includes(method) ? emailForm(env, requestId, { link: email, password })
+    const controls = methods.filter(method => method !== 'password' || !email).map(method => ['email', 'password'].includes(method) ? emailForm(env, requestId, { link: email, password, signup })
         : method === 'passkey' ? button(t(env, 'Sign in with a passkey'), { id: 'passkey-sign-in', type: 'button', 'data-request-id': requestId, variant: 'outline', size: 'lg', block: true, icon: 'key-round' })
         : ['github', 'google'].includes(method) ? providerLink(`/v1/auth/${method}/start?request_id=${encodeURIComponent(requestId)}`, t(env, 'Sign in with {provider}', { provider: method === 'github' ? 'GitHub' : 'Google' }))
         : env.PROVIDERS?.[method] ? providerLink(`/v1/auth/provider/${method}/start?request_id=${encodeURIComponent(requestId)}`, t(env, 'Sign in with {provider}', { provider: env.PROVIDERS[method].name || method })) : '').filter(Boolean);
     // In the app's order; "or" separates the email form from the buttons around it.
     const divider = or(env), ordered = controls.flatMap((c, i) => c.startsWith('<form') ? [...(i > 0 ? [divider] : []), c, ...(i < controls.length - 1 ? [divider] : [])] : [c]);
     const heading = brandCopy(env, branding, 'sign_in_heading') || t(env, 'Sign in to {name}', { name: branding.name || env.REALM.display_name }), help = brandCopy(env, branding, 'sign_in_help');
-    return page(t(env, 'Sign in'), `<header class="fd-screen-head"><h1 class="fd-h1">${escapeHtml(heading)}</h1>${help ? `<p class="fd-muted">${escapeHtml(help)}</p>` : ''}</header>
+    return page(t(env, 'Sign in'), `<header class="fd-screen-head" id="sign-in-head"><h1 class="fd-h1">${escapeHtml(heading)}</h1>${help ? `<p class="fd-muted">${escapeHtml(help)}</p>` : ''}</header>
+${signup ? signupHeading(env) : ''}
 <section id="request" class="fd-stack" data-gap="3" data-request-id="${escapeHtml(requestId)}">${ordered.join('\n')}${client ? '' : `<p class="fd-screen-note">${escapeHtml(t(env, 'Administrators sign in by email.'))}</p>`}</section>
 <section id="confirm" class="fd-stack" data-gap="4" hidden><header class="fd-screen-head"><p class="fd-muted">${escapeHtml(t(env, 'Finish signing in with the link you opened. Keep this browser.'))}</p></header>${button(t(env, 'Sign in'), { id: 'verify', type: 'button', variant: 'primary', size: 'lg', block: true })}</section>
 <p class="fd-small" id="message" role="status" aria-live="polite"></p>`, { client, cookies: responseCookies, script: methods.includes('passkey') ? [scriptPath(env, '/assets/sign-in.js'), scriptPath(env, '/assets/passkey.js')] : scriptPath(env, '/assets/sign-in.js'), turnstile: (email || password) && challengeConfigured(env) });
@@ -48,6 +52,32 @@ const params = new URLSearchParams(location.hash.slice(1));
 const token = params.get('token');
 if(token){history.replaceState(null,'',location.pathname);document.getElementById('request').hidden=true;document.getElementById('confirm').hidden=false;}
 const message=document.getElementById('message');
+const signupFields=document.getElementById('signup-fields');
+const emailForm=document.getElementById('email-form');
+const openSignup=document.getElementById('open-signup'), closeSignup=document.getElementById('close-signup');
+function showSignup(active){
+ const submit=document.getElementById('send-signup');
+ const actions=document.getElementById('sign-in-actions');
+ for(const node of emailForm.querySelectorAll('[data-sign-in-only]'))node.hidden=active;
+ // Enter targets the first submit button, even if that button is hidden.
+ for(const control of actions.querySelectorAll('button')){
+  control.type=active?'button':'submit';
+  control.disabled=active;
+ }
+ submit.type=active?'submit':'button';
+ for(const node of emailForm.parentElement.children)if(node!==emailForm)node.hidden=active;
+ document.getElementById('sign-in-head').hidden=active;
+ document.getElementById('signup-head').hidden=!active;
+ const password=document.getElementById('password');
+ if(password)password.disabled=active;
+ signupFields.hidden=submit.hidden=!active;
+ openSignup.hidden=active;
+ closeSignup.hidden=submit.disabled=!active;
+ message.textContent='';
+ document.getElementById('email').focus();
+}
+openSignup?.addEventListener('click',()=>showSignup(true));
+closeSignup?.addEventListener('click',()=>showSignup(false));
 document.getElementById('verify').addEventListener('click',async()=>{
  const button=document.getElementById('verify');button.disabled=true;
  try{
@@ -56,8 +86,8 @@ document.getElementById('verify').addEventListener('click',async()=>{
   location.assign(body.redirect);
  }catch(error){message.textContent=error.message;button.disabled=false;}
 });
-document.getElementById('email-form')?.addEventListener('submit',async(event)=>{
- event.preventDefault();const form=new FormData(event.target);const action=event.submitter?.value||'link';
+emailForm?.addEventListener('submit',async(event)=>{
+ event.preventDefault();const form=new FormData(event.target);const action=signupFields?.hidden===false?'signup':event.submitter?.value||'link';
  const buttons=[...event.target.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
  const common={email:form.get('email'),request_id:form.get('request_id'),turnstile:form.get('cf-turnstile-response')};
  try{
@@ -67,8 +97,10 @@ document.getElementById('email-form')?.addEventListener('submit',async(event)=>{
    const body=await result.json();if(!result.ok)throw new Error(body.error_description||'Sign-in failed.');
    location.assign(body.redirect);return;
   }
-  const result=await fetch('/v1/auth/magic/request',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...common,purpose:action==='set'?'password':'sign_in'})});
+  const payload={...common,purpose:action==='set'?'password':'sign_in'};
+  if(action==='signup'){payload.purpose='signup';payload.workspace_name=form.get('workspace_name');}
+  const result=await fetch('/v1/auth/magic/request',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
   const body=await result.json();if(!result.ok)throw new Error(body.error_description||'Request failed.');
-  location.assign('/check-email');
- }catch(error){message.textContent=error.message;buttons.forEach(b=>b.disabled=false);window.turnstile?.reset();}
+  location.assign(action==='signup'?'/check-email?request_id='+encodeURIComponent(common.request_id):'/check-email');
+ }catch(error){message.textContent=error.message;buttons.forEach(b=>b.disabled=b.hidden||Boolean(b.closest('[data-sign-in-only][hidden]')));window.turnstile?.reset();}
 });`;

@@ -9,6 +9,7 @@ import { deliverUserEvent } from './user-events.mjs';
 import { deliverWorkspaceEvent } from '../workspaces/delivery.mjs';
 import { REGISTRATION_IDLE_MS } from '../agents/registration.mjs';
 import { configuredRealms, realmEnv } from '../realms/realm.mjs';
+import { expireSignupRequests } from '../workspaces/signup-requests.mjs';
 export async function scheduled(env) {
     // Delivery is independent of key maintenance: a bad sealing key must not stop enqueueing.
     const results = await Promise.allSettled([dispatchDeliveries(env), maintain(env)]);
@@ -21,6 +22,7 @@ async function maintain(env) {
     const now = Date.now();
     await cleanDeliveryHistory(env, now);
     await cleanExpiredAppSessions(env, now);
+    await expireSignupRequests(env, now);
     for (const table of ['magic_links', 'oauth_states', 'auth_requests', 'codes', 'access_tokens', 'consumed_codes', 'sessions', 'invitations', 'rate_limits', 'agent_codes', 'agent_metadata_cache', 'agent_consumed_codes', 'agent_assertions', 'webauthn_challenges', 'email_changes', 'dpop_proofs'])
         await env.DB.prepare(`DELETE FROM ${table} WHERE expires_at<=?`).bind(now).run();
     // Retain expired device codes for a day so pollers receive expired_token after the sweep.

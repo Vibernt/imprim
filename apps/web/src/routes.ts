@@ -35,6 +35,8 @@ export const routes: Route[] = [
   { path: '/admin/branding', title: 'Branding', label: () => 'Branding', icon: 'palette', area: 'admin', group: 'Realm', guard: admin, tag: 'screen-branding', load: () => import('./screens/admin/branding/screen') },
   { path: '/admin/audit', title: 'Audit log', label: () => 'Audit log', icon: 'scroll-text', area: 'admin', group: 'Realm', guard: admin,
     tag: 'screen-admin-audit', load: () => import('./screens/admin/audit') },
+  { path: '/admin/signups', title: 'Sign-up requests', label: () => 'Sign-up requests', icon: 'clipboard-check', area: 'admin', group: 'Realm', guard: admin,
+    tag: 'screen-admin-signups', load: () => import('./screens/admin/signups/screen') },
   { path: '/admin/settings', title: 'Settings', label: () => 'Settings', icon: 'settings', area: 'admin', group: 'Realm', guard: admin, tag: 'screen-realm-settings', load: () => import('./screens/admin/settings') },
   { path: '/admin/keys', title: 'Signing keys', label: () => 'Signing keys', icon: 'key-round', area: 'admin', group: 'Platform', guard: platform, tag: 'screen-signing-keys', load: () => import('./screens/admin/keys') },
   { path: '/admin/realms', title: 'Realms', label: () => 'Realms', icon: 'globe', area: 'admin', group: 'Platform', guard: platform, tag: 'screen-realms', load: () => import('./screens/admin/realms/screen') },

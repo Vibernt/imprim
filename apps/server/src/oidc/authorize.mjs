@@ -9,6 +9,7 @@ import { authorizationResponse, completeAuthorization, withinMaxAge } from './re
 import { allowsMethod } from './sign-in-methods.mjs';
 import { ownIdToken } from './logout-hint.mjs';
 import { signInPage } from '../pages/sign-in.mjs';
+import { liveSignupEnabled } from '../auth/signup-policy.mjs';
 const bounded = value => typeof value === 'string' && value.length > 0 && value.length <= 512;
 import { parseUiLocales, useLocale } from '../i18n/index.mjs';
 export async function authorize(request, env) {
@@ -84,5 +85,5 @@ export async function authorize(request, env) {
             return authorizationResponse(env, query, { error: oauthErrors.has(error.code) ? error.code : 'access_denied' }, responseCookies);
         }
     }
-    return signInPage(env, id, responseCookies, client);
+    return signInPage(env, id, responseCookies, client, { signup: await liveSignupEnabled(env, client) });
 }

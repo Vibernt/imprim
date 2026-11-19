@@ -20,6 +20,7 @@ import { workspaceApi, workspaceFormPost } from './workspaces/api.mjs';
 import { sampleEmail } from './branding-email.mjs';
 import { newPath as newWorkspacePath } from './workspaces/read.mjs';
 import { clientFromForm } from './client-form.mjs';
+import { decideSignupRequest, listSignupRequests } from './signups.mjs';
 // A form the console posted and the server refused: the console says why, in place. Scripts and the admin API (which
 // do not ask for HTML) still get the JSON error from the worker.
 export async function admin(request, env, ctx) {
@@ -54,6 +55,7 @@ async function handle(request, env, ctx) {
         if (!api && section === 'branding' && id === 'email-preview' && !action) return sampleEmail(env);
         if (api) {
             if (section === 'workspaces') return workspaceApi(request, env, ctx, session, id, action, url.searchParams);
+            if (section === 'signups' && !id) return json(await listSignupRequests(env, url.searchParams));
             const response = await coreRead(env, section, id, action, url.searchParams);
             if (response) return response;
             if (section === 'branding' && !id) return json(await realmBranding(env));
@@ -80,6 +82,8 @@ async function handle(request, env, ctx) {
         delete body.csrf;
         if (!api && section === 'workspaces') return workspaceFormPost(request, env, ctx, session, id, action, body);
         const writeEnv = mutationEnvironment(env, session, destructive);
+        if (api && section === 'signups' && id && ['approve', 'decline'].includes(action))
+            return json(await decideSignupRequest(writeEnv, ctx, session.user_id, id, action, body));
         let result;
         if (section === 'clients' && !action) {
             result = await saveClient(writeEnv, session.user_id, id, api ? body : clientFromForm(body));

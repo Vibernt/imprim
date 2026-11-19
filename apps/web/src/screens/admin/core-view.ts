@@ -37,7 +37,7 @@ export const nextPage = (path: string, query: URLSearchParams, cursor: string | 
 
 export function confirmPhrase(options: {
   id: string; phrase: string; label: string; action: string; pending: boolean;
-  cancel: () => void; submit: (phrase: string, data: FormData) => void; fields?: TemplateResult;
+  cancel: () => void; submit: (phrase: string, data: FormData) => void; fields?: TemplateResult; variant?: 'primary' | 'danger';
 }) {
   const submit = (event: SubmitEvent) => {
     if (event.defaultPrevented) return;
@@ -66,7 +66,7 @@ export function confirmPhrase(options: {
         </div>
         <div class="fd-form-actions">
           <button class="fd-btn" type="button" data-variant="ghost" @click=${options.cancel}>Cancel</button>
-          <button class="fd-btn" type="submit" data-variant="danger" data-fd-confirm-submit>${options.action}</button>
+          <button class="fd-btn" type="submit" data-variant=${options.variant ?? 'danger'} data-fd-confirm-submit>${options.action}</button>
         </div>
       </fieldset>
     </form>`)}`;

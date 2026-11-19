@@ -3,11 +3,11 @@ import { invariant } from '../lib/errors.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { sendEmail } from '../services/email/send.mjs';
 
-function invitationLink(issuer, configured) {
+export function workspaceSignInLink(issuer, configured) {
     if (configured === null) return `${issuer}/login`;
     let url;
     try { url = new URL(configured); } catch { /* Invalid URL is reported below. */ }
-    invariant(url?.protocol === 'https:' && configured.startsWith('https://') && !url.username && !url.password && !/[\s\\]/.test(configured),
+    invariant(url?.protocol === 'https:' && /^https:\/\//i.test(configured) && !url.username && !url.password && !/[\s\\]/.test(configured),
         'workspace_invitation_link', 'The workspace invitation sign-in URL is invalid.', 503);
     return configured;
 }
@@ -37,6 +37,6 @@ export async function sendWorkspaceInvitation(env, ctx, invitation) {
     await sendEmail(env, {
         kind: 'workspace_invitation', to: row.email, locale,
         vars: { inviter: row.inviter_email, workspace: row.name, products },
-        links: { invitation_url: invitationLink(env.ISSUER, row.initiate_login_uri) }
+        links: { invitation_url: workspaceSignInLink(env.ISSUER, row.initiate_login_uri) }
     });
 }

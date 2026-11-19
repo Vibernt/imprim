@@ -32,6 +32,14 @@ A confidential client gets its secret once, at creation. Store it as a secret in
 4. Verify `workspace_token` on the back channel. Deduplicate `jti`, apply newer versions and use `workspaceMembers`
    to catch up. [Shared workspace specification](WORKSPACES.md)
 
+### Self-serve sign-up
+
+Enable `self_signup` for a shared app with email sign-in in a realm that enables sign-up. The app starts the
+usual `/authorize` flow. Imprim hosts the form and verifies the mailbox. In `open` mode it creates a team workspace
+immediately. In `approval` mode a realm administrator reviews the verified request first. Set `initiate_login_uri`
+so the approval email can start a fresh sign-in from the app.
+See [Self-serve sign-up](SIGNUP.md).
+
 ## 2. Sign people in
 
 ```js

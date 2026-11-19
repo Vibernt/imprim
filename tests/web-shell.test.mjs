@@ -116,7 +116,7 @@ test('the Lit shell registers all account and admin routes', () => {
     assert.deepEqual(WEB_PATHS, new Set([
         '/account', '/account/security', '/account/sessions', '/account/agents',
         '/admin', '/admin/clients', '/admin/clients/new', '/admin/clients/:id', '/admin/services',
-        '/admin/users', '/admin/users/:id', '/admin/users/:id/merge', '/admin/audit',
+        '/admin/users', '/admin/users/:id', '/admin/users/:id/merge', '/admin/audit', '/admin/signups',
         '/admin/workspaces', '/admin/workspaces/:id', '/admin/workspaces/:id/close',
         '/admin/branding', '/admin/settings', '/admin/keys', '/admin/realms'
     ]));
@@ -135,7 +135,7 @@ test('ported admin URLs serve the English Lit shell and keep the preview paths o
         return new Response(index, { headers: { 'content-type': 'text/html' } });
     } };
     const paths = ['/admin', '/admin/clients', '/admin/clients/new', '/admin/clients/app', '/admin/services',
-        '/admin/users', '/admin/users/user_test', '/admin/users/user_test/merge', '/admin/audit',
+        '/admin/users', '/admin/users/user_test', '/admin/users/user_test/merge', '/admin/audit', '/admin/signups',
         '/admin/workspaces', '/admin/workspaces?create=1', '/admin/workspaces/ws_test', '/admin/workspaces/ws_test/close',
         '/admin/branding', '/admin/settings', '/admin/keys', '/admin/realms'];
     for (const path of paths) {

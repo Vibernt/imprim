@@ -10,7 +10,7 @@ const ordered = (saved: string[], known: Record<string, string>): [string, strin
 const on = (value: ClientFields, name: keyof typeof SWITCHES) => String(value[name]) === SWITCHES[name][0];
 
 function workspaceFields(value: ClientFields) {
-  const workspaceToggle = (name: 'personal_workspaces' | 'workspace_admin', label: string, desc: string) =>
+  const workspaceToggle = (name: 'personal_workspaces' | 'workspace_admin' | 'self_signup', label: string, desc: string) =>
     toggle({ id: 'f-' + name, name, label, desc, on: 'on', checked: value[name] === 'on' });
   return html`
     <div class="fd-stack" data-gap="3" role="group" aria-labelledby="workspaces-title">
@@ -21,6 +21,7 @@ function workspaceFields(value: ClientFields) {
         pattern: '[a-z][a-z0-9\\-]{1,39}', placeholder: 'notes', hint: 'Required for shared workspaces.' })}
       ${workspaceToggle('personal_workspaces', 'Personal workspaces', 'Let people create a personal workspace in this app. Requires shared workspaces.')}
       ${workspaceToggle('workspace_admin', 'Workspace administration', 'Let this app create team workspaces and manage their products. Requires shared workspaces.')}
+      ${workspaceToggle('self_signup', 'Self-serve sign-up', 'Let people create a team workspace. Requires shared workspaces and realm sign-up.')}
       ${text({ id: 'f-initiate_login_uri', label: 'Invitation sign-in URL', name: 'initiate_login_uri', value: value.initiate_login_uri,
         mono: true, type: 'url', placeholder: 'https://notes.example/sign-in', hint: 'Use HTTPS on the same origin as a redirect URL.' })}
     </div>`;

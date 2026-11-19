@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { smokeServer } from './smoke-server.mjs';
+import { seedSignupRequest } from './signup-fixture.mjs';
 
 const browser = await chromium.launch();
 test.after(() => browser.close());
@@ -163,6 +164,35 @@ test('platform screens rotate and revoke signing keys and create, update and adm
     await page.getByLabel('Type owner@example.net to confirm').fill('owner@example.net');
     await page.getByRole('button', { name: 'Remove administrator', exact: true }).click();
     await toast('Administrator removed');
+});
+
+test('sign-up requests require inline confirmation and move approved requests out of Pending', async t => {
+    const { page, go, server, toast, fits } = await open(t, 375, 'dark');
+    const db = server.env.DB.db, { id, email, name } = seedSignupRequest(db);
+    await go('/admin/signups');
+    const table = page.getByRole('table', { name: 'Sign-up requests' });
+    const row = table.getByRole('row').filter({ hasText: email });
+    await row.getByText(name, { exact: true }).waitFor();
+    await fits('Pending sign-up requests');
+    await row.getByRole('button', { name: 'Approve', exact: true }).click();
+    const confirmation = table.locator('.fd-confirm-inline');
+    await confirmation.waitFor();
+    const confirm = confirmation.getByRole('button', { name: 'Approve request' });
+    assert.equal(await confirm.isDisabled(), true);
+    const input = confirmation.getByRole('textbox', { name: 'Type the email to confirm' });
+    assert.ok(await input.evaluate(element => element === document.activeElement));
+    await input.fill('wrong@example.net');
+    assert.equal(await confirm.isDisabled(), true);
+    await input.fill(email);
+    await confirm.click();
+    await toast('Request approved');
+    await page.getByRole('heading', { name: 'No requests in this status' }).waitFor();
+    await page.getByRole('button', { name: 'Pending', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Approved', exact: true }).click();
+    await row.getByText('Approved', { exact: true }).waitFor();
+    await fits('Approved sign-up requests');
+    assert.equal(db.prepare('SELECT status FROM signup_requests WHERE id=?').get(id).status, 'approved');
+    assert.equal(db.prepare('SELECT count(*) AS n FROM workspaces WHERE name=?').get(name).n, 1);
 });
 
 test('admin screens fit a dark phone viewport, including the workspace-off state', async t => {

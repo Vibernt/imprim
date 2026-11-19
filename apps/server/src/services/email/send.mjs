@@ -1,5 +1,5 @@
 // Sending one email: its locale, brand, both parts and the inline logo. Callers pick the kind (messages.mjs) and the
-// values; links are built here from the issuer, so no caller can put another address in a button.
+// values; callers supply issuer links or validated app URLs.
 import { localeOf, brandCopyIn, htmlLang } from '../../i18n/index.mjs';
 import { resolveBranding } from '../../branding/tokens.mjs';
 import { realmId } from '../../realms/realm.mjs';

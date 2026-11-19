@@ -15,6 +15,7 @@ export interface ClientFields {
   product: string | null;
   personal_workspaces: string;
   workspace_admin: string;
+  self_signup: string;
   initiate_login_uri: string | null;
   mfa: string;
   mfa_trusted_device_days: number;
@@ -48,6 +49,7 @@ export const methodLabel = (method: string) => Object.hasOwn(METHODS, method) ? 
 export const SWITCHES = {
   dev: ['1', 0], agent_access: ['on', 'off'], user_events: ['on', 'off'], agent_consent_mfa: ['required', 'off'],
   agent_dpop: ['required', 'optional'], classic_oidc: ['on', 'off'], personal_workspaces: ['on', 'off'], workspace_admin: ['on', 'off'],
+  self_signup: ['on', 'off'],
 } as const;
 const lists = ['redirect_uris', 'post_logout_uris', 'allowed_domains', 'google_hosted_domains', 'agent_allowlist', 'agent_resource_prefixes'] as const;
 

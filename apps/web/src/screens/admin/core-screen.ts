@@ -49,7 +49,7 @@ export abstract class AdminScreen<T> extends FireLight {
   };
 
   protected async write<U extends object>(
-    path: string, body: object, success: string, apply: (result: U) => void | Promise<void>,
+    path: string, body: object, success: string | ((result: U) => string), apply: (result: U) => void | Promise<void>,
   ) {
     if (this.pending) return;
     const current = this.path;
@@ -60,7 +60,7 @@ export abstract class AdminScreen<T> extends FireLight {
       if (!this.isConnected || read !== this.read) return;
       await apply(result);
       const delivery = (result as { delivery?: { message?: string } }).delivery;
-      toast({ title: success, description: delivery?.message, tone: 'success' });
+      toast({ title: typeof success === 'string' ? success : success(result), description: delivery?.message, tone: 'success' });
     } catch (error) {
       if (this.isConnected && read === this.read && !redirecting(error)) {
         toast({ title: 'Change could not be saved', description: describe(error), tone: 'danger' });

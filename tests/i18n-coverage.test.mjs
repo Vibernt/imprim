@@ -9,8 +9,9 @@ import { registerPseudo, usePseudo, visibleText, assertTranslated, PSEUDO } from
 import { composeEmail } from '../apps/server/src/services/email/send.mjs';
 import { EMAILS } from '../apps/server/src/services/email/messages.mjs';
 import { LANGUAGE_NAMES } from '../apps/server/src/i18n/index.mjs';
+import { mint, signupWorld, verify } from './support/signup.mjs';
 const DATA = ['Vibernt', 'Imprim', 'Example App', 'Example Agent', 'agent.example', resource, 'person@example.com', 'Test phone', PSEUDO, 'Chrome', 'Read workspace', 'read',
-    ...Object.values(LANGUAGE_NAMES), 'GitHub', 'Google', 'BCDF-GHJK'];
+    ...Object.values(LANGUAGE_NAMES), 'GitHub', 'Google', 'BCDF-GHJK', 'Notes'];
 test.before(() => { registerPseudo(); });
 async function check(w, path, init, where = path) {
     const response = await w.call(path, init), html = await response.text();
@@ -50,13 +51,25 @@ test('agent consent and its results', async t => {
     const flow = await w.start();
     await check(w, `/agent/consent?request_id=${flow.id}`, { headers: { cookie: flow.cookie } });
 });
+test('the sign-up approval waiting page uses the catalogue for visible copy', async t => {
+    const w = await signupWorld(t, { realmSignup: 'approval' });
+    usePseudo(w);
+    const flow = await mint(w);
+    const result = await verify(w, flow);
+    assert.equal(result.status, 303);
+    const url = new URL(result.headers.get('location'));
+    const { response } = await check(w, url.pathname + url.search, { headers: { cookie: flow.cookie } });
+    assert.equal(response.status, 200);
+    await w.drain();
+});
 test('every email kind, both parts', async t => {
     const w = await world(t);
     w.env.REALM.branding = { legal_name: 'Vibernt Ltd', support_email: 'help@vibernt.example', privacy_url: 'https://vibernt.example/privacy', terms_url: 'https://vibernt.example/terms' };
     for (const kind of Object.keys(EMAILS)) {
         const mail = await composeEmail(w.env, { kind, to: 'p@example.com', locale: PSEUDO,
-            vars: { device: 'Chrome on macOS', place: 'Berlin', time: Date.UTC(2026, 0, 1), reason: 'Lost phone', agent: 'Example Agent', app: 'Example App', workspace: 'team-one', scopes: 'read', name: 'Test phone', email: 'person@example.com', old: 'person@example.com', new: 'person@example.com', inviter: 'person@example.com', products: 'notes' },
-            links: { link: 'https://id.example.com/login#token=abc', agents_url: 'https://id.example.com/account/agents', invitation_url: 'https://app.example/start' } });
+            vars: { device: 'Chrome on macOS', place: 'Berlin', time: Date.UTC(2026, 0, 1), reason: 'Lost phone', agent: 'Example Agent', app: 'Example App', client: 'app', workspace: 'team-one', scopes: 'read', name: 'Test phone', email: 'person@example.com', old: 'person@example.com', new: 'person@example.com', inviter: 'person@example.com', product: 'notes', products: 'notes' },
+            links: { link: 'https://id.example.com/login#token=abc', agents_url: 'https://id.example.com/account/agents', invitation_url: 'https://app.example/start',
+                requests_url: 'https://id.example.com/admin/signups', app_url: 'https://app.example/start' } });
         assertTranslated(`${mail.subject}\n${mail.text}\n${visibleText(mail.html)}`, [...DATA, 'Vibernt Ltd', 'Lost phone', 'team-one', 'read', 'Berlin', 'macOS', 'Thu', 'Jan', 'abc', 'notes'], kind);
     }
 });

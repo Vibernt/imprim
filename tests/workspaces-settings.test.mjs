@@ -10,9 +10,9 @@ import { clientSeedSql } from '../scripts/seed-client.mjs';
 import { adminLogin, clientConfig } from './support/admin.mjs';
 import { turnstile, world } from './support/world.mjs';
 
-const SETTINGS = { product: 'notes-2', workspaces: 'shared', personal_workspaces: 'on', workspace_admin: 'on',
+const SETTINGS = { product: 'notes-2', workspaces: 'shared', personal_workspaces: 'on', workspace_admin: 'on', self_signup: 'on',
     initiate_login_uri: 'https://notes.example:443/login?source=invitation' };
-const DEFAULTS = { product: null, workspaces: 'app', personal_workspaces: 'off', workspace_admin: 'off', initiate_login_uri: null };
+const DEFAULTS = { product: null, workspaces: 'app', personal_workspaces: 'off', workspace_admin: 'off', self_signup: 'off', initiate_login_uri: null };
 const workspaceFields = client => Object.fromEntries(Object.keys(SETTINGS).map(name => [name, client[name]]));
 const NEGATIVES = [
     [{ product: 'Notes' }, /Product must be/],
@@ -27,6 +27,9 @@ const NEGATIVES = [
     [{ personal_workspaces: 'on' }, /require shared workspaces/],
     [{ workspace_admin: true }, /Workspace administration must be/],
     [{ workspace_admin: 'on' }, /require shared workspaces/],
+    [{ self_signup: true }, /Self-serve sign-up must be/],
+    [{ self_signup: 'on' }, /requires shared workspaces/],
+    [{ self_signup: 'on', workspaces: 'shared' }, /require a product/],
     [{ initiate_login_uri: 42 }, /initiate login URL/],
     [{ initiate_login_uri: 'https:notes.example' }, /initiate login URL/],
     [{ initiate_login_uri: 'http://notes.example/login' }, /initiate login URL/],
@@ -70,7 +73,7 @@ test('the Fire editor posts workspace settings through the guarded client write'
     assert.equal((await post('/admin/clients', form, { origin: 'https://other.example' })).status, 403);
     assert.equal((await post('/admin/clients', form, {}, 'wrong')).status, 403);
     for (const fields of [{ product: 'Notes' }, { workspaces: 'app' }, { personal_workspaces: 'yes' },
-        { workspace_admin: 'yes' }, { initiate_login_uri: 'https://other.example/login' }]) {
+        { workspace_admin: 'yes' }, { self_signup: 'yes' }, { initiate_login_uri: 'https://other.example/login' }]) {
         assert.equal((await post('/admin/clients', { ...form, ...fields })).status, 400, JSON.stringify(fields));
     }
     const created = await post('/admin/clients', form);
@@ -80,7 +83,7 @@ test('the Fire editor posts workspace settings through the guarded client write'
     const rejected = await admin.post('clients/notes', { version: saved.version, redirect_uris: ['https://new.example/cb'] });
     assert.equal(rejected.status, 400, 'redirect edits are validated against the stored login URL');
     assert.deepEqual(workspaceFields(await (await admin.get('clients/notes')).json()), SETTINGS);
-    const { id, workspace_admin, personal_workspaces, ...rest } = form;
+    const { id, workspace_admin, personal_workspaces, self_signup, ...rest } = form;
     const cleared = { ...rest, workspaces: 'app', product: '', initiate_login_uri: '', version: String(saved.version) };
     assert.equal((await post('/admin/clients/notes', cleared)).status, 200);
     assert.equal((await post('/admin/clients/notes', cleared)).status, 409);
@@ -114,13 +117,24 @@ test('the realm switch is strict, defaults off, and reaches request environments
         assert.equal(response.status, 400);
         assert.equal(getRealm(input.id), undefined);
     }
+    for (const config of [{ workspaces: 'on', signup: 'yes' }, { workspaces: 'on', signup: 'on' }, { signup: 'approval' }, { workspaces: 'off', signup: 'open' }]) {
+        assert.throws(() => validateRealmConfig(config), { code: 'realm_config' });
+        assert.equal(run(config).status, 1);
+        assert.equal((await admin.post('realms', { ...input, config })).status, 400);
+    }
     for (const workspaces of ['on', 'off']) assert.deepEqual(validateRealmConfig({ workspaces }), { workspaces });
-    const generated = run({ workspaces: 'on' });
+    const generated = run({ workspaces: 'on', signup: 'open' });
     assert.equal(generated.status, 0, generated.stderr);
     w.env.DB.db.exec(generated.stdout);
     assert.equal(realmEnv(w.env, getRealm(input.id)).REALM.workspaces, 'on');
-    const response = await admin.post(`realms/${input.id}`, { version: getRealm(input.id).version, config: { workspaces: 'off' } });
+    assert.equal(realmEnv(w.env, getRealm(input.id)).REALM.signup, 'open');
+    const approval = await admin.post(`realms/${input.id}`, { version: getRealm(input.id).version, config: { workspaces: 'on', signup: 'approval' } });
+    assert.equal(approval.status, 200, await approval.clone().text());
+    assert.equal(realmEnv(w.env, getRealm(input.id)).REALM.signup, 'approval');
+    const response = await admin.post(`realms/${input.id}`, { version: getRealm(input.id).version, config: { workspaces: 'off', signup: 'off' } });
     assert.equal(response.status, 200, await response.clone().text());
     assert.equal(realmEnv(w.env, getRealm(input.id)).REALM.workspaces, 'off');
+    assert.equal(realmEnv(w.env, getRealm(input.id)).REALM.signup, 'off');
+    assert.equal(realmEnv(w.env, getRealm('default')).REALM.signup, 'off');
     assert.equal(realmEnv(w.env, getRealm('default')).REALM.workspaces, 'off');
 });

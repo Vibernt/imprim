@@ -21,10 +21,12 @@ const openInvitation = `i.email=? AND i.expires_at>? AND i.accepted_at IS NULL A
 const invitationProduct = `EXISTS(SELECT 1 FROM workspaces w JOIN workspace_products p ON p.workspace_id=w.id
     WHERE w.id=i.workspace_id AND w.realm_id=c.realm_id AND w.status='active' AND w.kind='team' AND p.product=c.product)`;
 
+// For admission queries with a clients c alias. The invitation parameters are email and cutoff time.
+export const openWorkspaceInvitationSql = `EXISTS(SELECT 1 FROM workspace_invitations i WHERE ${openInvitation} AND ${invitationProduct})`;
+
 export async function workspaceAdmits(env, client, userId, email, proof) {
     return Boolean(await env.DB.prepare(`SELECT 1 FROM clients c WHERE c.id=? AND c.realm_id=? AND ${workspaceClientSql('c')}
-        AND (${reachesProductSql('c.realm_id', 'c.product', '?')} OR (?=1 AND EXISTS(
-            SELECT 1 FROM workspace_invitations i WHERE ${openInvitation} AND ${invitationProduct})))`)
+        AND (${reachesProductSql('c.realm_id', 'c.product', '?')} OR (?=1 AND ${openWorkspaceInvitationSql}))`)
         .bind(client.id, realmId(env), userId, Number(invitationProof(proof)), email, Date.now()).first());
 }
 

@@ -39,10 +39,12 @@ export function adminWriteGuard(env, session, destructive, now) {
     return {
         sql: `EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.hash=? AND s.user_id=?
             AND s.method='email' AND s.admin_until>? AND s.expires_at>? AND s.auth_time>=? AND s.mfa_at>?
-            AND u.status='active' AND u.merged_into IS NULL AND u.realm_id=?
+            AND u.status='active' AND u.merged_into IS NULL AND u.realm_id=? AND u.email=? AND u.email_verified=1
+            AND (EXISTS(SELECT 1 FROM mfa_factors WHERE user_id=u.id AND confirmed=1)
+                OR EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id=u.id))
             AND EXISTS(SELECT 1 FROM admins a WHERE a.realm_id=u.realm_id AND a.email=u.email AND (a.role='platform' OR ?=0)))`,
         args: [session.hash, session.user_id, now, now, destructive ? Math.floor((now - ADMIN_FRESH_MS) / 1000) + 1 : 0,
-            now - ADMIN_MFA_MS, realmId(env), session.role === 'platform' ? 1 : 0]
+            now - ADMIN_MFA_MS, realmId(env), session.email, session.role === 'platform' ? 1 : 0]
     };
 }
 // Every admin write batch rechecks the authenticating session, including after key generation.

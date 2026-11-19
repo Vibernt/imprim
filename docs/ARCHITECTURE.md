@@ -24,7 +24,7 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 
 ## D1 schema
 
-Migrations `0001` through `0024` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0026` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|
@@ -64,6 +64,7 @@ Migrations `0001` through `0024` create or extend these tables. Workspace child 
 | `brand_assets` | Realm-scoped, content-addressed logos and marks. |
 | `workspaces`, `workspace_members`, `workspace_products`, `workspace_invitations` | Realm workspaces, base roles, participating products and shared invitations. |
 | `workspace_resources`, `workspace_holds`, `workspace_event_outbox` | Registered agent resources, app holds on closing a workspace and durable workspace events. |
+| `signup_requests` | Verified sign-up requests, recipient language and realm administrator decisions. |
 
 `audit` rejects updates, and deletes of rows younger than 400 days, through triggers. App client IDs and agent client IDs use separate tables. Users imported with `scripts/import-users.mjs` keep their ids as `users.id`, which is the token `sub`.
 

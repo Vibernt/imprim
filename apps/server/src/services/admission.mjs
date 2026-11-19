@@ -13,7 +13,7 @@ export async function adminRole(env, email) {
     return row?.role ?? null;
 }
 export const isAdmin = async (env, email) => Boolean(await adminRole(env, email));
-const domainOf = email => email.split('@')[1];
+export const domainOf = email => email.split('@')[1];
 // How strongly the current sign-in proves control of the mailbox (S4):
 //   email  - a magic link reached the mailbox;
 //   google - Google is authoritative only for gmail.com or when its signed `hd` equals the email's domain;
@@ -35,6 +35,10 @@ async function policyAdmits(env, client, email, proof) {
 }
 const appAdmission = (env, client, userId) => env.DB.prepare("SELECT 1 FROM client_admissions WHERE user_id=? AND client_id=? AND source='app'")
     .bind(userId, client.id).first();
+// Used by guarded writes with clients c and a trusted expression for the email.
+export const appPolicySql = email => `(c.signup_policy='open'
+    OR (?='mailbox' AND EXISTS(SELECT 1 FROM json_each(c.allowed_domains) d WHERE d.value=?))
+    OR (?<>'claim' AND EXISTS(SELECT 1 FROM invitations i WHERE i.client_id=c.id AND i.email=${email} AND i.expires_at>?)))`;
 // Only participating apps accept workspace access. A cached workspace admission is not proof of current membership.
 export async function admitted(env, client, email, proof = 'mailbox') {
     const user = await env.DB.prepare('SELECT * FROM users WHERE realm_id=? AND email=?').bind(realmId(env), email).first();
@@ -85,8 +89,7 @@ async function writeSharedAdmission(env, client, subject, proof, hasWorkspaceAdm
     // Recheck both paths at the write. An app policy admission outranks workspace access.
     const record = env.DB.prepare(`WITH eligible AS (
         SELECT c.id AS client_id,u.id AS user_id,
-            (c.signup_policy='open' OR (?='mailbox' AND EXISTS(SELECT 1 FROM json_each(c.allowed_domains) d WHERE d.value=?))
-             OR (?<>'claim' AND EXISTS(SELECT 1 FROM invitations i WHERE i.client_id=c.id AND i.email=u.email AND i.expires_at>?))) AS app_access,
+            ${appPolicySql('u.email')} AS app_access,
             (${workspaceClientSql('c')} AND ${reachesProductSql('c.realm_id', 'c.product', 'u.id')}) AS workspace_access
         FROM clients c JOIN users u ON u.realm_id=c.realm_id
         WHERE c.id=? AND c.realm_id=? AND u.id=? AND u.email=? AND u.status='active' AND u.merged_into IS NULL
@@ -113,10 +116,15 @@ export const admissionGuard = (user, clientId) => ({
 });
 // `verified` is true only with mailbox proof. An account a provider created on its say-so stays unverified until an
 // email link reaches the mailbox (claimMailbox).
+export function newUserStatement(env, id, email, verified, now) {
+    return env.DB.prepare(`INSERT INTO users(id,realm_id,email,email_verified,status,created)
+        VALUES(?,?,?,?,'active',?) ON CONFLICT(realm_id,email) DO NOTHING`)
+        .bind(id, realmId(env), email, verified ? 1 : 0, now);
+}
+
 export async function ensureUser(env, email, verified = true) {
     const realm = realmId(env);
-    await env.DB.prepare('INSERT INTO users(id,realm_id,email,email_verified,status,created) VALUES(?,?,?,?,\'active\',?) ON CONFLICT(realm_id,email) DO NOTHING')
-        .bind(crypto.randomUUID(), realm, email, verified ? 1 : 0, Date.now()).run();
+    await newUserStatement(env, crypto.randomUUID(), email, verified, Date.now()).run();
     if (verified) await env.DB.prepare("UPDATE users SET email_verified=1 WHERE realm_id=? AND email=? AND status='active' AND merged_into IS NULL").bind(realm, email).run();
     const user = await env.DB.prepare('SELECT * FROM users WHERE realm_id=? AND email=?').bind(realm, email).first();
     invariant(user.status === 'active' && !user.merged_into, 'access_denied', 'Account unavailable.', 403);

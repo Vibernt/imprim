@@ -91,15 +91,11 @@ function writeChecks(env, client, actor, id, now, creating, joinGuard) {
     const realm = realmId(env);
     const checks = [missing(`EXISTS(${realmOn})`, [realm])];
     if (client) {
-        checks.push(missing(`EXISTS(SELECT 1 FROM clients WHERE id=? AND realm_id=? AND secret_hash=?
+        checks.push(missing(`EXISTS(SELECT 1 FROM clients WHERE id=? AND realm_id=? AND secret_hash IS ?
             AND workspaces='shared' AND product=?)`, [client.id, realm, client.secret_hash, client.product]));
     } else {
-        const admin = actor.admin;
-        const { sql, args } = adminWriteGuard(env, admin, true, Date.now());
-        checks.push(conflict(`(${sql} AND EXISTS(SELECT 1 FROM users u WHERE u.id=? AND u.email=? AND u.email_verified=1
-            AND (EXISTS(SELECT 1 FROM mfa_factors WHERE user_id=u.id AND confirmed=1)
-                OR EXISTS(SELECT 1 FROM webauthn_credentials WHERE user_id=u.id))))`,
-            [...args, admin.user_id, admin.email], 'conflict', 'Authorization or account changed; reload and reauthenticate.'));
+        const { sql, args } = adminWriteGuard(env, actor.admin, true, Date.now());
+        checks.push(conflict(sql, args, 'conflict', 'Authorization or account changed; reload and reauthenticate.'));
     }
     if (!creating) {
         const productVisibility = joinGuard ? `(${usingProduct} OR (w.status='active' AND ${joinGuard.sql}))` : usingProduct;
@@ -116,14 +112,14 @@ function writeChecks(env, client, actor, id, now, creating, joinGuard) {
 
 // The conditional write claims the next version. The assertion aborts the batch if no version was claimed,
 // unless all guards passed and the requested state already exists.
-async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, create, joinGuard,
+export async function guardedWrite(env, { client, actor, auditActor, id, now = Date.now(), checks, create, joinGuard,
     effects = [], afterEvent = [], event, eventOptions, audit, detail = {}, unjoined, writeIf, finalEffect }) {
     const guards = [...writeChecks(env, client, actor, id, now, Boolean(create), joinGuard), ...checks];
     const where = guards.map(guard => `(${guard.sql})`).join(' AND '), args = guards.flatMap(guard => guard.args);
     const condition = writeIf ? ` AND (${writeIf.sql})` : '', conditionArgs = writeIf?.args ?? [];
     const write = create
-        ? env.DB.prepare(`INSERT INTO workspaces(id,realm_id,kind,name,personal_owner,created) SELECT ?,?,?,?,?,? WHERE ${where}`)
-            .bind(id, realmId(env), create.kind, create.name, create.owner, now, ...args)
+        ? env.DB.prepare(`INSERT INTO workspaces(id,realm_id,kind,name,personal_owner,created,created_via) SELECT ?,?,?,?,?,?,? WHERE ${where}`)
+            .bind(id, realmId(env), create.kind, create.name, create.owner, now, create.via ?? null, ...args)
         : env.DB.prepare(`UPDATE workspaces SET version=version+1 WHERE id=? AND ${where}${condition}`).bind(id, ...args, ...conditionArgs);
     const assertion = writeIf
         ? env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT 0 WHERE changes()<>1 AND NOT (${where} AND NOT (${writeIf.sql}))`)
@@ -132,7 +128,7 @@ async function guardedWrite(env, { client, actor, id, now = Date.now(), checks, 
     const auditDetail = unjoined ? `json_patch(?, CASE WHEN (${unjoined.sql}) THEN '{"unjoined":true}' ELSE '{}' END)` : '?';
     const record = env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id)
         SELECT ?,?,?,json_set(${auditDetail},'$.version',version),?,realm_id FROM workspaces WHERE id=?${condition}`)
-        .bind(audit ?? event, actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, ...(client ? { client_id: client.id } : { source: 'admin_console' }) }),
+        .bind(audit ?? event, auditActor ?? actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, ...(client ? { client_id: client.id } : { source: 'admin_console' }) }),
             ...(unjoined?.args ?? []), now, id, ...conditionArgs);
     let result;
     try {
@@ -172,9 +168,14 @@ const unjoinedAppRule = (client, id) => client && {
     args: [id, client.id]
 };
 
-function addProducts(env, id, products, now) {
+export function addProducts(env, id, products, now) {
     return env.DB.prepare(`INSERT INTO workspace_products(workspace_id,product,created)
         SELECT ?,j.value,? FROM json_each(?) j WHERE true ON CONFLICT(workspace_id,product) DO NOTHING`).bind(id, now, JSON.stringify(products));
+}
+
+export function addWorkspaceOwner(env, id, owner, now) {
+    return env.DB.prepare("INSERT INTO workspace_members(workspace_id,user_id,role,created,updated) VALUES(?,?,'owner',?,?)")
+        .bind(id, owner, now, now);
 }
 
 function creationProducts(client, personal, products) {
@@ -207,8 +208,7 @@ export async function createWorkspace(env, client, actor, body) {
         'personal_workspace_exists', 'This person already has a personal workspace.'));
     if (!personal) checks.push(conflict('EXISTS(SELECT 1 FROM users WHERE id=? AND email=?)',
         [actor.user.id, actor.user.email], 'conflict', 'Actor email changed. Reload and try again.'));
-    const ownerStatement = owner && env.DB.prepare("INSERT INTO workspace_members(workspace_id,user_id,role,created,updated) VALUES(?,?,'owner',?,?)")
-        .bind(id, owner, now, now);
+    const ownerStatement = owner && addWorkspaceOwner(env, id, owner, now);
     const workspace = await guardedWrite(env, { client, actor, id, now, checks, create: { kind, name, owner: personal ? owner : null },
         effects: [addProducts(env, id, products, now), ownerStatement || invitation.statement],
         event: owner ? 'workspace-member-added' : 'workspace-updated',

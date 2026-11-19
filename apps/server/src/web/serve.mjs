@@ -24,6 +24,7 @@ export const WEB_PATHS = new Set([
     '/admin/users/:id',
     '/admin/users/:id/merge',
     '/admin/audit',
+    '/admin/signups',
     '/admin/workspaces',
     '/admin/workspaces/:id',
     '/admin/workspaces/:id/close',
