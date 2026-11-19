@@ -23,7 +23,7 @@ export async function workspacesEnabled(env) {
 const productList = `(SELECT json_group_array(product) FROM
     (SELECT product FROM workspace_products WHERE workspace_id=w.id ORDER BY product))`;
 const usingProduct = 'EXISTS(SELECT 1 FROM workspace_products WHERE workspace_id=w.id AND product=?)';
-const workspaceRead = (env, client, id) => env.DB.prepare(`SELECT w.id AS workspace_id,w.name,w.kind,w.status,w.version,${productList} AS products
+const workspaceRead = (env, client, id) => env.DB.prepare(`SELECT w.id AS workspace_id,w.name,w.kind,w.created_via,w.status,w.version,${productList} AS products
     FROM workspaces w WHERE w.id=? AND w.realm_id=? AND ${usingProduct}`).bind(id, realmId(env), client.product);
 const withProducts = row => ({ ...row, products: JSON.parse(row.products) });
 const foundWorkspace = row => {
@@ -32,7 +32,7 @@ const foundWorkspace = row => {
 };
 
 export async function memberships(env, client, sub) {
-    const { results } = await env.DB.prepare(`SELECT w.id AS workspace_id,w.name,w.kind,m.role,w.version,${productList} AS products
+    const { results } = await env.DB.prepare(`SELECT w.id AS workspace_id,w.name,w.kind,w.created_via,m.role,w.version,${productList} AS products
         FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id
         WHERE w.realm_id=? AND w.status='active' AND m.user_id=? AND ${usingProduct} ORDER BY w.created,w.id`)
         .bind(realmId(env), sub, client.product).all();
@@ -134,7 +134,7 @@ export async function guardedWrite(env, { client, actor, auditActor, id, now = D
     try {
         result = await env.DB.batch([write, assertion, ...effects, ...workspaceEventStatements(env, id, event, { ...eventOptions, writeIf }),
             ...afterEvent, record, ...(finalEffect ? [finalEffect] : []),
-            env.DB.prepare(`SELECT w.id AS workspace_id,w.name,w.kind,w.status,w.version,${productList} AS products FROM workspaces w WHERE w.id=?`).bind(id)]);
+            env.DB.prepare(`SELECT w.id AS workspace_id,w.name,w.kind,w.created_via,w.status,w.version,${productList} AS products FROM workspaces w WHERE w.id=?`).bind(id)]);
     } catch (error) {
         if (![error.message, error.cause?.message].some(message => message?.includes('CHECK constraint failed: admin_assertions'))) throw error;
         const failed = await env.DB.prepare(`SELECT CASE ${guards.map((guard, i) => `WHEN NOT (${guard.sql}) THEN ${i}`).join(' ')} END AS failure`)

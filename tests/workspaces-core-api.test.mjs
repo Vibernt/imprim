@@ -19,7 +19,7 @@ test('workspace and membership reads need the realm switch, a confidential share
     const owner = await w.actor('owner@example.com');
     const created = await w.team(owner);
     assert.match(created.workspace_id, /^ws_[0-9a-f]{32}$/);
-    assert.deepEqual(created, { workspace_id: created.workspace_id, name: 'Team', kind: 'team', status: 'active', products: ['notes'], version: 1 });
+    assert.deepEqual(created, { workspace_id: created.workspace_id, name: 'Team', kind: 'team', created_via: null, status: 'active', products: ['notes'], version: 1 });
     const path = root + '/' + created.workspace_id;
     await error(await w.api('GET', path, undefined, null), 'invalid_client', 401);
     await error(await w.api('GET', path, undefined, basic('app', 'bad')), 'invalid_client', 401);
@@ -31,7 +31,7 @@ test('workspace and membership reads need the realm switch, a confidential share
     assert.deepEqual(await response(await w.api('GET', '/v1/memberships?sub=' + owner.id, undefined, basic('other'))), { memberships: [] });
     assert.deepEqual(await response(await w.api('GET', path)), created);
     assert.deepEqual(await response(await w.api('GET', '/v1/memberships?sub=' + owner.id)), {
-        memberships: [{ workspace_id: created.workspace_id, name: 'Team', kind: 'team', role: 'owner', products: ['notes'], version: 1 }]
+        memberships: [{ workspace_id: created.workspace_id, name: 'Team', kind: 'team', created_via: null, role: 'owner', products: ['notes'], version: 1 }]
     });
     for (const suffix of ['', '?sub=', '?sub=one&sub=two']) await error(await w.api('GET', '/v1/memberships' + suffix), 'invalid_request', 400);
     await error(await w.api('GET', '/v1/memberships?sub=one&client_id=app&client_secret=secret', undefined, null), 'invalid_client', 401);
@@ -420,7 +420,7 @@ test('holds belong to each app, prevent close while present, and all writes reje
     await error(await close(owner), 'workspace_held', 409);
     assert.equal((await response(await w.api('DELETE', holds, undefined, basic('other')))).version, 7);
     const closed = await response(await close(owner));
-    assert.deepEqual(closed, { workspace_id, name: 'Team', kind: 'team', status: 'closed', products: ['notes', 'tasks'], version: 8 });
+    assert.deepEqual(closed, { workspace_id, name: 'Team', kind: 'team', created_via: null, status: 'closed', products: ['notes', 'tasks'], version: 8 });
     const actor_token = owner.actor_token;
     const closedWrites = [
         ['PATCH', path, { name: 'Changed', actor_token }],

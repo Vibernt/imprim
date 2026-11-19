@@ -3,6 +3,13 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-19.3
+
+No migration.
+
+- Workspace reads (`GET /v1/workspaces/{id}`, `GET /v1/memberships`, create responses) include `created_via`:
+  `"signup"` for a self-serve sign-up workspace, otherwise `null`. Client 0.8.3 adds the type.
+
 ## 2026-11-19.2
 
 Migrations `0025` and `0026`.

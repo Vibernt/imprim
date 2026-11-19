@@ -34,7 +34,7 @@ export interface WorkspaceEventClaims {
 }
 export type BackchannelEvent = { kind: 'logout'; claims: LogoutClaims } | { kind: 'revocation'; claims: RevocationClaims } |
     { kind: 'user'; claims: UserEventClaims } | { kind: 'workspace'; claims: WorkspaceEventClaims };
-export interface WorkspaceSummary { workspace_id: string; name: string; kind: WorkspaceKind; products: string[]; version: number; }
+export interface WorkspaceSummary { workspace_id: string; name: string; kind: WorkspaceKind; created_via: 'signup' | null; products: string[]; version: number; }
 export interface WorkspaceDetails extends WorkspaceSummary { status: 'active' | 'closed'; }
 export interface WorkspaceMembership extends WorkspaceSummary { role: WorkspaceRole; }
 export interface WorkspaceMember { sub: string; email: string; role: WorkspaceRole; }

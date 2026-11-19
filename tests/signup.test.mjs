@@ -41,6 +41,10 @@ test('signup creates one verified owner and delivers version 1 to the product ap
 
     const exchanged = await (await w.exchange(authCode(response))).json();
     assert.equal(claims(exchanged.id_token).sub, user.id);
+    const appRead = path => w.call(path, { headers: { authorization: basic() } }).then(r => r.json());
+    const listed = await appRead('/v1/memberships?' + new URLSearchParams({ sub: user.id }));
+    assert.deepEqual(listed.memberships.map(row => [row.workspace_id, row.created_via]), [[workspace.id, 'signup']]);
+    assert.equal((await appRead('/v1/workspaces/' + workspace.id)).created_via, 'signup');
     const sso = await w.authorize({ client_id: 'other', prompt: 'none' }, cookieJar(response));
     assert.equal(sso.status, 303);
     const second = await (await w.exchange(authCode(sso), {}, basic('other'))).json();

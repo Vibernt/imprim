@@ -45,7 +45,7 @@ test('a nonmember operator resends an owner invitation, revokes it, and closes a
     await error(await w.revoke(), 'not_found', 404);
     assert.equal((await response(await w.revoke(resent.invitation_id))).version, 3);
     assert.deepEqual(await response(await w.api('GET', w.invitationsPath)), { invitations: [] });
-    assert.deepEqual(await response(await w.close()), { workspace_id, name: 'Team', kind: 'team', status: 'closed', products: ['notes'], version: 4 });
+    assert.deepEqual(await response(await w.close()), { workspace_id, name: 'Team', kind: 'team', created_via: null, status: 'closed', products: ['notes'], version: 4 });
 
     assert.deepEqual(w.events(), [1, 2, 3, 4].map(version => ({
         event: version === 4 ? 'workspace-closed' : 'workspace-updated', client_id: 'app', user_id: null, version,

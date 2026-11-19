@@ -312,7 +312,7 @@ test('a workspace invitation from alpha admits a beta member and delivers versio
     assert.equal(accepted.accepted_by, sub);
     const { version, members } = await beta.workspaceMembers(group.id);
     assert.ok(members.some(row => row.sub === sub && row.email === memberEmail && row.role === 'member'));
-    const expected = { workspace_id: group.id, name: teamName, kind: 'team', role: 'member', products: ['alpha', 'beta'], version };
+    const expected = { workspace_id: group.id, name: teamName, kind: 'team', created_via: null, role: 'member', products: ['alpha', 'beta'], version };
     for (const app of [alpha, beta, console]) assert.deepEqual(await app.memberships(sub), { memberships: [expected] });
 
     const joined = eventsOf(await w.deliveries(), 'workspace', 'workspace-member-added');
@@ -443,7 +443,7 @@ test('personal workspace creation is unique, gated by the app and does not allow
         members: [{ sub: owner.claims.sub, email: ownerEmail, role: 'owner' }], next_cursor: null, version: personal.version
     });
     assert.deepEqual(await alpha.memberships(owner.claims.sub), { memberships: [{
-        workspace_id: id, kind: 'personal', name: fields.name, role: 'owner', products: ['alpha'], version: personal.version
+        workspace_id: id, kind: 'personal', created_via: null, name: fields.name, role: 'owner', products: ['alpha'], version: personal.version
     }] });
     assert.deepEqual(await beta.memberships(owner.claims.sub), { memberships: [] });
 });

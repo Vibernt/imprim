@@ -1,6 +1,6 @@
 # Shared workspaces
 
-Status: built (migration `0024`, client `0.8.2`). This page is the specification; the code matches it.
+Status: built (migration `0024`, client `0.8.3`). This page is the specification; the code matches it.
 
 By default each app keeps its own workspaces, memberships and roles, and Imprim only admits people per app. A realm
 can instead hold **shared workspaces** for a family of products. Imprim then keeps each workspace's members, base
@@ -98,8 +98,8 @@ join an active workspace in its realm by adding its own product. Bodies are JSON
 
 | Call | Who | Does |
 |---|---|---|
-| `GET /v1/memberships?sub=` | app | `{ memberships: [{ workspace_id, name, kind, role, products, version }] }` for active workspaces using the app's product |
-| `GET /v1/workspaces/{id}` | app | `{ workspace_id, name, kind, status, products, version }` |
+| `GET /v1/memberships?sub=` | app | `{ memberships: [{ workspace_id, name, kind, created_via, role, products, version }] }` for active workspaces using the app's product |
+| `GET /v1/workspaces/{id}` | app | `{ workspace_id, name, kind, created_via, status, products, version }`; `created_via` is `"signup"` for a [sign-up](SIGNUP.md) workspace, otherwise `null` |
 | `GET /v1/workspaces/{id}/members?limit=&cursor=` | app | `{ members: [{ sub, email, role }], next_cursor, version }`, oldest first; cursor as in `/v1/grants` |
 | `POST /v1/workspaces` | app with `workspace_admin` on, or any shared app for `kind: "personal"` with `personal_workspaces` on | Team body `{ name, products, first_owner_email, actor_token }`. Omit `products` to use the app's product, or pass exactly that product in a one-item array. The first owner is invited as `owner`, or added at once when it is the actor. Personal body `{ kind: "personal", name, actor_token }`. The actor becomes owner, one per person (`409` if one exists). |
 | `PATCH /v1/workspaces/{id}` | actor admin+ | `{ name, actor_token }` |
@@ -183,10 +183,11 @@ One invitation email, `workspace_invitation`, in every language Imprim ships, wi
 the workspace name, the products it uses, and a button to the inviting app's `initiate_login_uri` (or, if unset, the
 issuer's `/login`).
 
-## Client `0.8.2`
+## Client `0.8.3`
 
 Client `0.8.0` added these calls; `0.8.1` lets `handleCallback(url, values, { idToken: true })` return
-`{ claims, idToken }` for `actor_token`; and `0.8.2` refuses redirects so the client works inside Cloudflare Workers.
+`{ claims, idToken }` for `actor_token`; `0.8.2` refuses redirects so the client works inside Cloudflare Workers; and `0.8.3` types
+`created_via`.
 
 `memberships(sub)`, `workspace(id)`, `workspaceMembers(id, { limit, cursor })`, `createWorkspace`, `renameWorkspace`,
 `setWorkspaceProducts`, `inviteToWorkspace`, `workspaceInvitations`, `revokeWorkspaceInvitation`, `setMemberRole`,
