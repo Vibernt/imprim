@@ -27,7 +27,7 @@ A confidential client gets its secret once, at creation. Store it as a secret in
 2. Register the app's back-channel URL and set `initiate_login_uri` to its sign-in page for invitation emails.
    Enable `personal_workspaces` for personal workspace creation and `workspace_admin` when the app needs team
    creation or product management.
-3. Use client 0.9.1 on the server to read memberships and manage workspaces. For actions on a person's behalf,
+3. Use client 0.10.0 on the server to read memberships and manage workspaces. For actions on a person's behalf,
    pass the ID token issued to the app as `actorToken`. Keep app-specific permissions and check them on each request.
 4. Verify `workspace_token` on the back channel. Deduplicate `jti`, apply newer versions and use `workspaceMembers`
    to catch up. [Shared workspace specification](WORKSPACES.md)
@@ -80,6 +80,10 @@ Imprim POSTs signed events to `backchannel_uri` when someone signs out, is block
 when a person's account changes (`event_token`). Verify each with `identity.verifyBackchannel(form)`. Store its `jti` and apply its effect in one transaction, then return 2xx. The
 [package README](https://github.com/Vibernt/imprim/blob/main/packages/imprim-client/README.md) has a complete handler. Delivery is at least once and is
 retried for 24 hours.
+
+After verifying a `user-updated` event, call `await identity.user(event.sub)` from your server with a confidential
+client. The event identifies the changed fields, and the lookup returns the current email, verification status
+and name. A `404 not_found` means the profile is unavailable to your app. [Protocol](PROTOCOL.md#machines-introspection-revocation-and-the-app-grant-api)
 
 If your app was down or missed an agent revocation, it is still safe: the agent's refresh stopped the moment the
 person revoked, and its access token expires within 60 seconds. To catch up after an outage, list the live grants

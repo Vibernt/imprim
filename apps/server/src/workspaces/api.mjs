@@ -1,4 +1,4 @@
-import { json, readBody, uniqueParams } from '../lib/http.mjs';
+import { json, readBody, uniqueParams, validSub } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { b64url, from64 } from '../lib/crypto.mjs';
 import { limitAddress } from '../auth/rate-limit.mjs';
@@ -15,7 +15,6 @@ import {
 const membershipsPath = (method, path) => method === 'GET' && path === '/v1/memberships';
 export const workspaceApiPath = (method, path) => membershipsPath(method, path) || /^\/v1\/workspaces(?:\/|$)/.test(path);
 const workspacePath = /^\/v1\/workspaces\/([A-Za-z0-9_-]{1,64})(?:\/(members|products|invitations|close|holds|resources)(?:\/([^/]+))?)?$/;
-const validSub = value => typeof value === 'string' && value.length > 0 && value.length <= 200 && !/[\x00-\x1f]/.test(value);
 
 function pathId(value) {
     let decoded;

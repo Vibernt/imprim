@@ -66,6 +66,7 @@ export interface IdentityClient {
     handleUserEvent(request: Request): Promise<{ sub: string; event: UserEventName; data: UserEventClaims['data']; toe: number; jti: string }>;
     logoutUrl(options?: { idTokenHint?: string; postLogoutRedirectUri?: string; state?: string }): Promise<string>;
     inviteEmail(email: string): Promise<{ accepted: boolean; expires_at: number }>;
+    user(sub: string): Promise<{ sub: string; email: string; email_verified: boolean; name: string | null }>;
     listGrants(options: { resource: string; sub?: string; limit?: number; cursor?: string | null }): Promise<{ grants: AgentGrant[]; next_cursor: string | null }>;
     revokeGrant(grantId: string): Promise<{ grant_id: string; revoked: true }>;
     introspect(token: string, options?: { tokenTypeHint?: 'access_token' | 'refresh_token' }): Promise<Introspection>;

@@ -1,4 +1,4 @@
-# imprim-client 0.9.1
+# imprim-client 0.10.0
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
 named `@vibernt/identity-client`. To move an app from that version, follow
@@ -104,6 +104,14 @@ export async function agentRequest(token, resource, appStore) {
 its durable commit. Key replay records by trusted issuer and `jti` if accepting multiple issuers. Identity can re-sign
 an outbox event later with the same `jti`; preserve replay records while retries are possible. Grant denials must
 cover all unexpired tokens, and logout/denial effects must remain idempotent on retries. No storage is held by the SDK.
+
+## User profiles (0.10.0)
+
+After verifying a `user-updated` event, use a confidential client to fetch the person's current profile.
+
+| Method | Arguments and result |
+|---|---|
+| `user` | `sub`. Returns `{ sub, email, email_verified, name }` for a person the app currently admits. `name` is `null` when unset. |
 
 ## Agent grants (0.7.0)
 

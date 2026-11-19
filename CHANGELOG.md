@@ -3,6 +3,13 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-20.2
+
+No migration.
+
+- Confidential apps can read an admitted person's current profile with `GET /v1/users?sub=<sub>` or
+  `user(sub)` in `imprim-client` 0.10.0 after receiving a value-free `user-updated` event.
+
 ## 2026-11-20.1
 
 No migration.

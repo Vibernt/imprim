@@ -150,6 +150,13 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
             if (typeof email !== 'string' || !email.includes('@')) fail('configuration', 'Invalid email.');
             return responseJson(await request(`${issuerText}/v1/invitations`, { method: 'POST', headers: { authorization: appCredentials('Invitations'), 'content-type': 'application/json' }, body: JSON.stringify({ email }) }), 'invitation');
         },
+        async user(sub) {
+            if (typeof sub !== 'string' || !sub) fail('configuration', 'A subject is required.');
+            const query = new URLSearchParams({ sub });
+            return responseJson(await request(`${issuerText}/v1/users?${query}`, {
+                method: 'GET', headers: { authorization: appCredentials('The user profile') }
+            }), 'user');
+        },
         // The live agent grants on one of this app's resources, a page at a time: { grants, next_cursor }.
         async listGrants({ resource, sub, limit, cursor } = {}) {
             if (typeof resource !== 'string' || !resource.startsWith('https://')) fail('configuration', 'resource is an HTTPS URL.');

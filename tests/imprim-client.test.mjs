@@ -200,8 +200,25 @@ test('client invitation and missing ID token', async t => {
 test('vendored body hash matches header', async () => {
     const file = await readFile(new URL('../dist/imprim-client.mjs', import.meta.url), 'utf8');
     const [header, ...body] = file.split('\n');
-    assert.match(header, /^\/\/ imprim-client 0\.9\.1 body-sha256 [a-f0-9]{64}/);
+    assert.match(header, /^\/\/ imprim-client 0\.10\.0 body-sha256 [a-f0-9]{64}/);
     assert.equal(header.split(' ').at(-1), createHash('sha256').update(body.join('\n')).digest('hex'));
+});
+test('user reads the current profile with an encoded subject and confidential credentials', async () => {
+    const issuer = 'https://id.example.com', sub = 'old/sub?#';
+    const profile = { sub, email: 'person@example.com', email_verified: true, name: null };
+    const calls = [];
+    const client = createClient({ issuer, clientId: 'app:id', clientSecret: 'key +:', fetch: async (url, init) => {
+        calls.push([url, init]);
+        return Response.json(profile);
+    } });
+    assert.deepEqual(await client.user(sub), profile);
+    assert.deepEqual(calls, [[issuer + '/v1/users?sub=old%2Fsub%3F%23', {
+        method: 'GET', headers: { authorization: 'Basic ' + btoa('app%3Aid:key%20%2B%3A') }, redirect: 'manual'
+    }]]);
+    const publicClient = createClient({ issuer, clientId: 'app', fetch: () => assert.fail('Unexpected transport call') });
+    await assert.rejects(publicClient.user(sub), { code: 'configuration' });
+    await assert.rejects(client.user(''), { code: 'configuration' });
+    assert.equal(calls.length, 1);
 });
 test('every client request refuses redirects with redirect manual, never error (Workers reject it)', async () => {
     const sources = await Promise.all(['index.mjs', 'jwt.mjs', 'backchannel.mjs', 'workspaces.mjs', 'resources.mjs', 'dpop.mjs']
@@ -218,6 +235,7 @@ test('every client request refuses redirects with redirect manual, never error (
         const client = createClient({ issuer: 'https://id.example.com', clientId: 'app', clientSecret: 'secret', fetch });
         if (redirected === 'opaque' || redirected.status === 302) {
             await assert.rejects(client.memberships('sub'), error => error instanceof IdentityError && error.code === 'network');
+            await assert.rejects(client.user('sub'), error => error instanceof IdentityError && error.code === 'network');
             await assert.rejects(client.introspect('token'), error => error instanceof IdentityError && error.code === 'network');
         }
     }

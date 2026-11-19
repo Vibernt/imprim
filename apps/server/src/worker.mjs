@@ -24,6 +24,7 @@ import { registrationOptions, register, assertionOptions, assertionVerify, remov
 import { passkeyScriptFor } from './webauthn/script.mjs';
 import { providerStart, providerCallback, UPSTREAM_COOKIE } from './providers/upstream.mjs';
 import { introspect, revoke, appGrants } from './machines/endpoints.mjs';
+import { appUser } from './machines/users.mjs';
 import { githubStart, githubCallback, OAUTH_COOKIE } from './auth/github-sign-in.mjs';
 import { googleStart, googleCallback, GOOGLE_COOKIE } from './auth/google-sign-in.mjs';
 import { cookie, getSession } from './auth/session.mjs';
@@ -100,6 +101,7 @@ async function route(request, env, ctx, url) {
         case 'POST /introspect': return introspect(request, env);
         case 'POST /revoke': return revoke(request, env, ctx);
         case 'GET /v1/grants': case 'POST /v1/grants/revoke': return appGrants(request, env, ctx);
+        case 'GET /v1/users': return appUser(request, env, url);
         case 'POST /v1/auth/magic/request': return requestMagic(request, env, ctx);
         case 'POST /v1/auth/magic/verify': return verifyMagic(request, env, ctx);
         case 'POST /v1/auth/password': return passwordSignIn(request, env);
@@ -129,11 +131,11 @@ async function route(request, env, ctx, url) {
             throw new AppError(404, 'not_found', 'Endpoint not found.');
     }
 }
-// Public metadata is unlimited (and memoised); /token, /userinfo and /v1/invitations limit by the authenticated client
+// Public metadata is unlimited (and memoised); endpoints such as /token and /v1/users limit by the authenticated client
 // inside the handler, because Worker-hosted apps share Cloudflare egress addresses (S2).
 const unlimited = new Set(['GET /.well-known/openid-configuration', 'GET /.well-known/oauth-authorization-server', 'GET /.well-known/jwks.json',
     'GET /assets/local.css', 'GET /assets/sign-in.js', 'GET /assets/passkey.js', 'GET /assets/theme.css', 'POST /token', 'GET /userinfo', 'POST /userinfo', 'POST /v1/invitations',
-    'POST /introspect', 'POST /revoke', 'GET /v1/grants', 'POST /v1/grants/revoke']);
+    'POST /introspect', 'POST /revoke', 'GET /v1/grants', 'POST /v1/grants/revoke', 'GET /v1/users']);
 export function limiterFor(method, path) {
     if (unlimited.has(`${method} ${path}`) || workspaceApiPath(method, path)) return null;
     return path.startsWith('/v1/auth/') || path.startsWith('/login/provider/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';
@@ -166,7 +168,8 @@ export async function handleRequest(request, base, ctx) {
         const code = known ? error.code : 'server_error', status = known ? error.status : 500;
         // A person's browser may POST an authorization request (OIDC Core 3.1.2.1); refusals before the redirect is trusted are pages.
         const workspaceRequest = workspaceApiPath(request.method, url.pathname);
-        const jsonRequest = workspaceRequest || /^\/(?:v1\/(?:me$|account\/|i18n\/)|admin\/api\/)/.test(url.pathname);
+        const jsonRequest = workspaceRequest || (request.method === 'GET' && url.pathname === '/v1/users') ||
+            /^\/(?:v1\/(?:me$|account\/|i18n\/)|admin\/api\/)/.test(url.pathname);
         const html = !jsonRequest && (request.method === 'GET' || ['/authorize', '/workspace-join'].includes(url.pathname)) &&
             request.headers.get('accept')?.includes('text/html');
         // People read the message on an error page, or in the sign-in and account scripts, so it is translated there.

@@ -505,6 +505,15 @@ five-minute lifetime, `toe` = when the change happened) per change. Apply events
 | `user-merged` | `{into}` | An admin merged them into another account |
 | `mfa-reset` | `{}` | An admin reset their second factor |
 
+When a `user-updated` event arrives, read current values with `GET /v1/users?sub=<sub>` or `user(sub)` in
+`imprim-client` 0.10.0. The endpoint uses the same confidential client Basic authentication as `GET /v1/grants`.
+It returns `{ sub, email, email_verified, name }`, with a boolean `email_verified` and the same `name` as UserInfo
+when set, or `null`. The person must be active and unmerged in the request's realm, with a current admission to
+the calling app. An app-source admission qualifies, and a workspace-source admission qualifies while the person
+still belongs to an active workspace that uses the shared app's product. Every unavailable person yields the
+same `404 not_found` with `Person not found.` A missing, duplicate or invalid subject parameter yields
+`400 invalid_request`.
+
 Delivery uses the same durable outbox, queue, retry, 24-hour window and dead-letter queue as logout. Verify the event
 with `imprim-client` 0.6.0 (`handleUserEvent(request)` or `verifyBackchannel(form)` → `kind: 'user'`) and
 deduplicate `jti`.

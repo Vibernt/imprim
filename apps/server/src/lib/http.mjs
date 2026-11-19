@@ -9,6 +9,7 @@ export function uniqueParams(params) {
     for (const key of params.keys()) invariant(params.getAll(key).length === 1, 'invalid_request', 'Duplicate parameters are not allowed.');
     return Object.fromEntries(params);
 }
+export const validSub = value => typeof value === 'string' && value.length > 0 && value.length <= 200 && !/[\x00-\x1f]/.test(value);
 export async function readBody(request, format = 'json', limit = 16384) {
     const type = request.headers.get('content-type')?.split(';')[0].trim();
     invariant(type === (format === 'json' ? 'application/json' : 'application/x-www-form-urlencoded'), 'invalid_request', 'Unsupported content type.', 415);
