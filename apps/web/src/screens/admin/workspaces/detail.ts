@@ -1,31 +1,24 @@
 import { html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
-import { card, setting } from '../../page-layout';
+import { card, fieldWithAction, setting } from '../../page-layout';
 import { confirmInline } from '../realm-ui';
-import { nameField, productField, submitButton } from './forms';
+import { productField } from './forms';
 import { invitations, members } from './members';
 import { activity, summary } from './summary';
 import { workspacePath, type Submit, type Workspace } from './types';
 
 const configuration = (workspace: Workspace, pending: boolean, submit: Submit) => html`
   ${card('Name', html`
-    <form method="post" @submit=${(event: SubmitEvent) => submit('rename', event)}>
-      <fieldset class="fd-setting" ?disabled=${pending}>
-        <legend class="fd-sr-only">Name</legend>
-        <div class="fd-setting-text">${nameField(workspace.name)}</div>
-        <div class="fd-setting-control">${submitButton('Save name')}</div>
-      </fieldset>
+    <form class="fd-form" method="post" ?inert=${pending} @submit=${(event: SubmitEvent) => submit('rename', event)}>
+      ${fieldWithAction('workspace-name', 'Workspace name', undefined, html`
+        <input class="fd-input fd-grow" id="workspace-name" name="name" required maxlength="120" .value=${workspace.name}>`, html`
+        <button class="fd-btn" type="submit" data-variant="outline" ?disabled=${pending}>Save name</button>`)}
     </form>`)}
   ${card('Edit products', html`
-    <form method="post" @submit=${(event: SubmitEvent) => submit('products', event)}>
-      <fieldset class="fd-setting" ?disabled=${pending}>
-        <legend class="fd-sr-only">Edit products</legend>
-        <div class="fd-setting-text fd-stack" data-gap="3">
-          ${productField('add', 'Add products')}
-          ${productField('remove', 'Remove products')}
-        </div>
-        <div class="fd-setting-control">${submitButton('Save products')}</div>
-      </fieldset>
+    <form class="fd-form" method="post" ?inert=${pending} @submit=${(event: SubmitEvent) => submit('products', event)}>
+      ${productField('add', 'Add products')}
+      ${productField('remove', 'Remove products')}
+      <div class="fd-form-actions"><button class="fd-btn" type="submit" data-variant="outline" ?disabled=${pending}>Save products</button></div>
     </form>`)}
 `;
 

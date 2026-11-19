@@ -1,6 +1,6 @@
 import { html, nothing, type PropertyValues } from 'lit';
 import { navigate, type View } from '../../lib/router';
-import { codeBlock, setting } from '../page-layout';
+import { codeBlock, fieldWithAction, setting } from '../page-layout';
 import { text } from './core-fields';
 import { AdminScreen, corePage } from './core-screen';
 import { card, confirmPhrase, empty, facts, mono, segment, status } from './core-view';
@@ -90,9 +90,10 @@ class UserDetail extends AdminScreen<User> {
         ${card('Two-factor', setting('Verification methods', '', this.reviewButton('reset-mfa'), true),
           'Removes authenticators and passkeys so the person can enrol again.')}
         ${card('Merge into another user', html`
-          <form class="fd-setting" data-tone="danger" method="get" @submit=${(event: SubmitEvent) => this.merge(user, event)}>
-            <div class="fd-setting-text">${text({ id: 'surviving_id', name: 'surviving_id', label: 'Surviving user ID', required: true, mono: true })}</div>
-            <div class="fd-setting-control"><button class="fd-btn" type="submit" data-variant="outline" ?disabled=${this.pending || Boolean(review)}>Review merge</button></div>
+          <form class="fd-form" method="get" @submit=${(event: SubmitEvent) => this.merge(user, event)}>
+            ${fieldWithAction('surviving_id', 'Surviving user ID', undefined, html`
+              <input class="fd-input fd-grow" id="surviving_id" name="surviving_id" data-mono required autocomplete="off" spellcheck="false">`, html`
+              <button class="fd-btn" type="submit" data-variant="outline" ?disabled=${this.pending || Boolean(review)}>Review merge</button>`)}
           </form>`, 'This user is deleted. The other user keeps their ID, apps and sign-in methods.')}
         ${card('Account', html`
           ${user.status === 'blocked' ? setting('Sign-in is blocked', '', html`

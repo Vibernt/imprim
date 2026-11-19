@@ -3,6 +3,14 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-20.3
+
+No migration.
+
+- Layout: a value you type (Profile name, language and email; passkey name; admin merge, workspace name, products and
+  invitation) is now a field with its button beside the input, in a form that stops at a readable width. Before, the
+  input sat inside a settings row, stretched across the card and left the button aligned with the description.
+
 ## 2026-11-20.2
 
 No migration.

@@ -36,6 +36,17 @@ export function setting(title: string | TemplateResult, description: string | Te
   </div>`;
 }
 
+// A value someone types, with its button beside the input (Fire GUIDE.md: "A field with a button beside it"): the label
+// above, the input (class fd-grow, aria-describedby id-hint) and the button in one row, the hint below. Put it in a
+// form.fd-form, which stops at a readable width. An input never goes inside fd-setting.
+export function fieldWithAction(id: string, label: string, hint: string | undefined, control: TemplateResult, action: TemplateResult) {
+  return html`<div class="fd-field">
+    <label class="fd-field-label" for=${id}>${label}</label>
+    <div class="fd-row" data-gap="3">${control}${action}</div>
+    ${hint ? html`<p class="fd-field-hint" id=${id + '-hint'}>${hint}</p>` : nothing}
+  </div>`;
+}
+
 // Fire's code block script rewrites the text inside it (highlighting), so Lit must not update that text in place:
 // keyed on the text, a changed value gets a fresh block (Fire owns what it writes: spec/EXPORT.md O1, O2).
 export const codeBlock = (label: string, value: unknown) => {

@@ -1,7 +1,7 @@
 import { html, nothing } from 'lit';
 import { card } from '../../page-layout';
 import { cap, field, when } from '../realm-ui';
-import { roleField, submitButton } from './forms';
+import { roleField } from './forms';
 import { optionalTable } from './summary';
 import type { Submit, Workspace } from './types';
 
@@ -33,15 +33,10 @@ export function invitations(workspace: Workspace, pending: boolean, submit: Subm
           <input type="hidden" name="invitation_id" .value=${invite.id}>
           <button class="fd-btn" type="submit" data-variant="outline" data-size="sm" aria-label=${'Revoke invitation for ' + invite.email} ?disabled=${pending}>Revoke</button>
         </form>`] : [])]), 'Invitations appear here until they are accepted, revoked or expire.')}
-    ${workspace.can_invite ? html`<form method="post" @submit=${(event: SubmitEvent) => submit('invite', event)}>
-      <fieldset class="fd-setting" ?disabled=${pending}>
-        <legend class="fd-sr-only">Send invitation</legend>
-        <div class="fd-setting-text fd-stack" data-gap="3">
-          ${field('workspace-invite-email', 'Email', { name: 'email', type: 'email', required: true, max: 254 })}
-          ${roleField('workspace-invite-role', 'Invitation role', 'member', workspace.can_grant_owner)}
-        </div>
-        <div class="fd-setting-control">${submitButton('Send invitation')}</div>
-      </fieldset>
+    ${workspace.can_invite ? html`<form class="fd-form" method="post" ?inert=${pending} @submit=${(event: SubmitEvent) => submit('invite', event)}>
+      ${field('workspace-invite-email', 'Email', { name: 'email', type: 'email', required: true, max: 254 })}
+      ${roleField('workspace-invite-role', 'Invitation role', 'member', workspace.can_grant_owner)}
+      <div class="fd-form-actions"><button class="fd-btn" type="submit" data-variant="outline" ?disabled=${pending}>Send invitation</button></div>
     </form>` : nothing}
   `);
 }

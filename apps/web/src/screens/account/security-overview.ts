@@ -1,6 +1,6 @@
 import { html, nothing } from 'lit';
 import { t, tPlural } from '../../lib/i18n';
-import { card, setting } from '../page-layout';
+import { card, fieldWithAction, setting } from '../page-layout';
 import { day, empty, list, section } from './access-view';
 import type { Password } from './security-setup';
 
@@ -50,15 +50,10 @@ export function overview(data: Security, pending: boolean, actions: Actions) {
         trail: remove('passkey', p),
       }))) : empty(t('No passkeys yet'), t('Add one to use your fingerprint, face or device PIN.'))}
       ${!enabled ? nothing : typeof PublicKeyCredential === 'undefined' ? html`<p class="fd-small fd-muted">${t('This browser cannot add passkeys.')}</p>` : html`
-        <form class="fd-setting" method="post" @submit=${actions.passkey}>
-          <div class="fd-setting-text fd-field">
-            <label class="fd-field-label" for="passkey-name">${t('Passkey name')}</label>
-            <input class="fd-input" id="passkey-name" name="name" maxlength="60" placeholder=${t('Work laptop')} aria-describedby="passkey-name-hint">
-            <p class="fd-field-hint" id="passkey-name-hint">${t('Leave blank to name it “Passkey”.')}</p>
-          </div>
-          <div class="fd-setting-control">
-            <button class="fd-btn" data-variant="outline" type="submit" ?disabled=${pending}>${t('Add passkey')}</button>
-          </div>
+        <form class="fd-form" method="post" @submit=${actions.passkey}>
+          ${fieldWithAction('passkey-name', t('Passkey name'), t('Leave blank to name it “Passkey”.'), html`
+            <input class="fd-input fd-grow" id="passkey-name" name="name" maxlength="60" placeholder=${t('Work laptop')} aria-describedby="passkey-name-hint">`, html`
+            <button class="fd-btn" data-variant="outline" type="submit" ?disabled=${pending}>${t('Add passkey')}</button>`)}
         </form>`}`)}
     ${hasFactor ? section(t('Recovery codes'), t('Each code works once, for when you can’t use your app or passkey.'), html`
       <div class="fd-setting"><div class="fd-setting-text">

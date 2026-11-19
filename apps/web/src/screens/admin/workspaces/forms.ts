@@ -22,9 +22,6 @@ export const roleField = (id: string, label: string, role: Role, canGrantOwner: 
     </select></label>
   </div>`;
 
-export const submitButton = (title: string) => html`
-  <div class="fd-row"><button class="fd-btn" type="submit" data-variant="outline">${title}</button></div>`;
-
 export const createForm = (pending: boolean, submit: Submit) => html`
   <form class="fd-form" data-size="full" ?inert=${pending} method="post" @submit=${(event: SubmitEvent) => submit('create', event)}>
     ${formSection('workspace-create-team', 'Team', html`${nameField()}${productField('products', 'Products')}`)}

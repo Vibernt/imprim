@@ -1,6 +1,6 @@
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, nothing } from 'lit';
 import { t } from '../../lib/i18n';
-import { card } from '../page-layout';
+import { card, fieldWithAction } from '../page-layout';
 
 export interface Profile {
   email: string;
@@ -12,18 +12,6 @@ export interface Profile {
 
 export type Action = 'profile' | 'language' | 'email' | 'delete';
 type Submit = (action: Action, event: SubmitEvent) => void;
-
-function row(id: string, label: string, description: string, input: TemplateResult, button: TemplateResult) {
-  return html`
-    <div class="fd-setting">
-      <div class="fd-setting-text fd-field">
-        <label class="fd-setting-title" for=${id}>${label}</label>
-        <p class="fd-setting-desc" id=${`${id}-desc`}>${description}</p>
-        ${input}
-      </div>
-      <div class="fd-setting-control">${button}</div>
-    </div>`;
-}
 
 export function profileFields(profile: Profile, pending: Action | null, submit: Submit) {
   const disabled = pending !== null;
@@ -38,28 +26,28 @@ export function profileFields(profile: Profile, pending: Action | null, submit: 
         </dd>`}
       </div>
     </dl>
-    ${card(t('Personal information'), html`
-      <form method="post" @submit=${(event: SubmitEvent) => submit('profile', event)}>
-        ${row('display_name', t('Name'), t('Apps that ask for your profile see this name.'), html`
-          <input class="fd-input" id="display_name" name="display_name" maxlength="100" autocomplete="name"
-            aria-describedby="display_name-desc" .value=${profile.display_name ?? ''} ?disabled=${disabled}>`, html`
+    ${card(t('Personal information'), html`<div class="fd-stack" data-gap="5">
+      <form class="fd-form" method="post" @submit=${(event: SubmitEvent) => submit('profile', event)}>
+        ${fieldWithAction('display_name', t('Name'), t('Apps that ask for your profile see this name.'), html`
+          <input class="fd-input fd-grow" id="display_name" name="display_name" maxlength="100" autocomplete="name"
+            aria-describedby="display_name-hint" .value=${profile.display_name ?? ''} ?disabled=${disabled}>`, html`
           <button class="fd-btn" type="submit" data-variant="primary" ?disabled=${disabled}>${t('Save name')}</button>`)}
       </form>
-      <form method="post" @submit=${(event: SubmitEvent) => submit('language', event)}>
-        ${row('locale', t('Language'), t('For these pages and the emails we send you.'), html`
-          <label class="fd-select"><select id="locale" name="locale" aria-describedby="locale-desc" ?disabled=${disabled}>
+      <form class="fd-form" method="post" @submit=${(event: SubmitEvent) => submit('language', event)}>
+        ${fieldWithAction('locale', t('Language'), t('For these pages and the emails we send you.'), html`
+          <label class="fd-select fd-grow"><select id="locale" name="locale" aria-describedby="locale-hint" ?disabled=${disabled}>
             <option value="" ?selected=${!profile.locale}>${t('Automatic')}</option>
             ${profile.languages.map(({ id, label }) => html`<option value=${id} lang=${id} ?selected=${profile.locale === id}>${label}</option>`)}
           </select></label>`, html`
           <button class="fd-btn" type="submit" ?disabled=${disabled}>${t('Save language')}</button>`)}
       </form>
-      <form method="post" @submit=${(event: SubmitEvent) => submit('email', event)}>
-        ${row('new_email', t('New email'), t('Needs an email-link sign-in in the last 10 minutes. We confirm the new address and tell the old one.'), html`
-          <input class="fd-input" id="new_email" name="new_email" type="email" maxlength="254" autocomplete="email"
-            placeholder=${t('name@example.com')} aria-describedby="new_email-desc" required ?disabled=${disabled}>`, html`
+      <form class="fd-form" method="post" @submit=${(event: SubmitEvent) => submit('email', event)}>
+        ${fieldWithAction('new_email', t('New email'), t('Needs an email-link sign-in in the last 10 minutes. We confirm the new address and tell the old one.'), html`
+          <input class="fd-input fd-grow" id="new_email" name="new_email" type="email" maxlength="254" autocomplete="email"
+            placeholder=${t('name@example.com')} aria-describedby="new_email-hint" required ?disabled=${disabled}>`, html`
           <button class="fd-btn" type="submit" ?disabled=${disabled}>${t('Change email')}</button>`)}
       </form>
-    `)}`;
+    </div>`)}`;
 }
 
 export function deleteSection(email: string, pending: Action | null, submit: Submit) {
