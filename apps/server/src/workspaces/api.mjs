@@ -7,7 +7,7 @@ import { GRANTS_PAGE_MAX } from '../machines/endpoints.mjs';
 import { verifyActor } from './actor.mjs';
 import { sendWorkspaceInvitation } from './email.mjs';
 import {
-    workspacesEnabled, memberships, getWorkspace, workspaceMembers, workspaceInvitations, createWorkspace,
+    workspacesEnabled, memberships, joinableWorkspaces, getWorkspace, workspaceMembers, workspaceInvitations, createWorkspace,
     renameWorkspace, setWorkspaceProducts, inviteToWorkspace, revokeWorkspaceInvitation, setWorkspaceMemberRole,
     removeWorkspaceMember, closeWorkspace, putWorkspaceHold, deleteWorkspaceHold, putWorkspaceResource, deleteWorkspaceResource
 } from './model.mjs';
@@ -81,6 +81,11 @@ export async function workspaceApi(request, env, ctx, url) {
         if (invitation) await sendInvitation(env, ctx, invitation);
         return json(workspace, 201);
     }
+    // Generated ids start with ws_. Match POST before the id regex and preserve GET for imported ids.
+    if (method === 'POST' && path === '/v1/workspaces/joinable') {
+        const actor = await verifyActor(env, client, body.actor_token);
+        return json({ workspaces: await joinableWorkspaces(env, client, actor) });
+    }
 
     const match = workspacePath.exec(path);
     invariant(match, 'not_found', 'Endpoint not found.', 404);
@@ -116,6 +121,6 @@ async function actorWrite(env, ctx, client, id, route, target, body) {
         case 'DELETE invitations/id': return json(await revokeWorkspaceInvitation(env, client, actor, id, pathId(target)));
         case 'POST members/id': return json(await setWorkspaceMemberRole(env, client, actor, id, pathId(target), body.role));
         case 'DELETE members/id': return json(await removeWorkspaceMember(env, client, actor, id, pathId(target)));
-        case 'POST close': return json(await closeWorkspace(env, client, actor, id));
+        case 'POST close': return json(await closeWorkspace(env, client, actor, id, body.confirm));
     }
 }

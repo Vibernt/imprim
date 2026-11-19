@@ -42,6 +42,7 @@ import { themeResponse } from './branding/theme.mjs';
 import { startLocale, t, tError, brandCopy } from './i18n/index.mjs';
 import { serveAsset } from './branding/assets.mjs';
 import { workspaceApi, workspaceApiPath } from './workspaces/api.mjs';
+import { workspaceJoin } from './workspaces/join.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
 async function route(request, env, ctx, url) {
     if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return admin(request, env, ctx);
@@ -71,6 +72,7 @@ async function route(request, env, ctx, url) {
         case 'POST /device_authorization': return deviceAuthorization(request, env);
         case 'GET /device': return devicePage(request, env);
         case 'GET /agent/consent': case 'POST /agent/consent': return consent(request, env);
+        case 'GET /workspace-join': case 'POST /workspace-join': return workspaceJoin(request, env);
         case 'POST /account/revoke': return account(request, env, ctx);
         case 'GET /v1/me': return viewer(request, env);
         case 'GET /v1/account/profile': case 'POST /v1/account/profile': return profileApi(request, env, ctx, 'profile');
@@ -137,7 +139,7 @@ export function limiterFor(method, path) {
     return path.startsWith('/v1/auth/') || path.startsWith('/login/provider/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';
 }
 // Browser endpoints whose errors a person reads (sign-in.js, passkey.js and the account forms show them).
-const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|device$|logout$|login$|signed-in$)/;
+const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|workspace-join$|device$|logout$|login$|signed-in$)/;
 export async function handleRequest(request, base, ctx) {
     const url = new URL(request.url);
     let env = base;
@@ -165,7 +167,8 @@ export async function handleRequest(request, base, ctx) {
         // A person's browser may POST an authorization request (OIDC Core 3.1.2.1); refusals before the redirect is trusted are pages.
         const workspaceRequest = workspaceApiPath(request.method, url.pathname);
         const jsonRequest = workspaceRequest || /^\/(?:v1\/(?:me$|account\/|i18n\/)|admin\/api\/)/.test(url.pathname);
-        const html = !jsonRequest && (request.method === 'GET' || url.pathname === '/authorize') && request.headers.get('accept')?.includes('text/html');
+        const html = !jsonRequest && (request.method === 'GET' || ['/authorize', '/workspace-join'].includes(url.pathname)) &&
+            request.headers.get('accept')?.includes('text/html');
         // People read the message on an error page, or in the sign-in and account scripts, so it is translated there.
         // Protocol endpoints keep English: RFC 6749 limits error_description to ASCII, and developers read it.
         const message = known ? (html || PEOPLE_PATHS.test(url.pathname) ? tError(env, error) : error.message)

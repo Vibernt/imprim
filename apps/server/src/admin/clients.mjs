@@ -19,10 +19,11 @@ export async function getAdminClient(env, id) {
     invariant(row, 'not_found', 'Client not found.', 404);
     return publicClient(row);
 }
-export const workspaceSettingNames = ['product', 'workspaces', 'personal_workspaces', 'workspace_admin', 'self_signup', 'initiate_login_uri'];
+export const workspaceSettingNames = ['product', 'workspaces', 'personal_workspaces', 'workspace_admin', 'self_signup',
+    'join_workspaces', 'initiate_login_uri'];
 export const validProduct = value => typeof value === 'string' && /^[a-z][a-z0-9-]{1,39}$/.test(value);
 function validateWorkspaceSettings({ product = null, workspaces = 'app', personal_workspaces = 'off', workspace_admin = 'off', self_signup = 'off',
-    initiate_login_uri = null, redirect_uris }) {
+    join_workspaces = 'off', initiate_login_uri = null, redirect_uris }) {
     invariant(product === null || validProduct(product), 'invalid_request', 'Product must be 2 to 40 lowercase letters, digits or dashes, starting with a letter.');
     invariant(['app', 'shared'].includes(workspaces), 'invalid_request', 'Workspaces must be app or shared.');
     invariant(workspaces !== 'shared' || product !== null, 'invalid_request', 'Shared workspaces require a product.');
@@ -32,6 +33,8 @@ function validateWorkspaceSettings({ product = null, workspaces = 'app', persona
         'invalid_request', 'Personal workspaces and workspace administration require shared workspaces.');
     invariant(['off', 'on'].includes(self_signup), 'invalid_request', 'Self-serve sign-up must be off or on.');
     invariant(self_signup === 'off' || workspaces === 'shared', 'invalid_request', 'Self-serve sign-up requires shared workspaces.');
+    invariant(['off', 'on'].includes(join_workspaces), 'invalid_request', 'Workspace join at sign-in must be off or on.');
+    invariant(join_workspaces === 'off' || workspaces === 'shared', 'invalid_request', 'Workspace join at sign-in requires shared workspaces.');
     if (initiate_login_uri === null) return;
     const message = 'The initiate login URL must be HTTPS, without credentials, and use a registered redirect URL’s origin.';
     invariant(typeof initiate_login_uri === 'string' && /^https:\/\/[^/]/i.test(initiate_login_uri) && !/[\s\\\x00-\x1f\x7f]/.test(initiate_login_uri),
@@ -86,7 +89,7 @@ export function clientEditorDefaults() {
     const defaults = newClient();
     return {
         ...defaults, ...validateAgentSettings(defaults), id: '', workspaces: 'app', product: null, initiate_login_uri: null,
-        personal_workspaces: 'off', workspace_admin: 'off', self_signup: 'off', mfa: 'off', mfa_trusted_device_days: 0,
+        personal_workspaces: 'off', workspace_admin: 'off', self_signup: 'off', join_workspaces: 'off', mfa: 'off', mfa_trusted_device_days: 0,
         agent_consent_mfa: 'off', agent_dpop: 'optional', classic_oidc: 'off', id_token_signed_response_alg: 'ES256',
         agent_token_rate: 3000, token_exchange_from: {}, user_events: 'off'
     };

@@ -24,7 +24,7 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 
 ## D1 schema
 
-Migrations `0001` through `0026` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0027` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|

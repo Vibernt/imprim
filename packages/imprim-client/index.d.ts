@@ -70,6 +70,7 @@ export interface IdentityClient {
     revokeGrant(grantId: string): Promise<{ grant_id: string; revoked: true }>;
     introspect(token: string, options?: { tokenTypeHint?: 'access_token' | 'refresh_token' }): Promise<Introspection>;
     memberships(sub: string): Promise<{ memberships: WorkspaceMembership[] }>;
+    joinableWorkspaces(options: WorkspaceActor): Promise<{ workspaces: WorkspaceSummary[] }>;
     workspace(id: string): Promise<WorkspaceDetails>;
     workspaceMembers(id: string, options?: { limit?: number; cursor?: string | null }): Promise<{ members: WorkspaceMember[]; next_cursor: string | null; version: number }>;
     createWorkspace(options: CreateWorkspaceOptions): Promise<unknown>;
@@ -80,7 +81,7 @@ export interface IdentityClient {
     revokeWorkspaceInvitation(id: string, invitationId: string, options: WorkspaceActor): Promise<unknown>;
     setMemberRole(id: string, sub: string, options: WorkspaceActor & { role: WorkspaceRole }): Promise<unknown>;
     removeMember(id: string, sub: string, options: WorkspaceActor): Promise<unknown>;
-    closeWorkspace(id: string, options: WorkspaceActor): Promise<unknown>;
+    closeWorkspace(id: string, options: WorkspaceActor & { confirm?: string }): Promise<unknown>;
     holdWorkspace(id: string, reason: string): Promise<unknown>;
     releaseWorkspace(id: string, reason?: string): Promise<unknown>;
     registerWorkspaceResource(id: string, resource: string): Promise<unknown>;

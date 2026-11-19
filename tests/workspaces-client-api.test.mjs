@@ -9,6 +9,7 @@ const email = 'owner@example.com', role = 'owner';
 const clientOptions = { issuer, clientId: 'app:id', clientSecret: 'key +:' };
 const requests = [
     ['memberships', [sub], 'GET', '/v1/memberships?sub=old%2Fsub%3F%23'],
+    ['joinableWorkspaces', [actor], 'POST', '/v1/workspaces/joinable', wireActor],
     ['workspace', [id], 'GET', path],
     ['workspaceMembers', [id], 'GET', path + '/members'],
     ['workspaceMembers', [id, { limit: 20, cursor: 'a+b=' }], 'GET', path + '/members?limit=20&cursor=a%2Bb%3D'],
@@ -26,6 +27,7 @@ const requests = [
     ['setMemberRole', [id, sub, { role, ...actor }], 'POST', member, { role, ...wireActor }],
     ['removeMember', [id, sub, actor], 'DELETE', member, wireActor],
     ['closeWorkspace', [id, actor], 'POST', path + '/close', wireActor],
+    ['closeWorkspace', [id, { confirm: 'Team', ...actor }], 'POST', path + '/close', { confirm: 'Team', ...wireActor }],
     ['holdWorkspace', [id, 'Balance due'], 'PUT', path + '/holds', { reason: 'Balance due' }],
     ['releaseWorkspace', [id, 'Settled'], 'DELETE', path + '/holds', { reason: 'Settled' }],
     ['releaseWorkspace', [id], 'DELETE', path + '/holds', {}],
@@ -34,7 +36,8 @@ const requests = [
 ];
 
 for (const [method, args, verb, target, body] of requests) test(`workspace client ${method} sends ${verb} ${target}`, async () => {
-    const response = method === 'inviteToWorkspace' ? { invitation_id: 'invitation', expires_at: 123 } : { result: true };
+    const responses = { inviteToWorkspace: { invitation_id: 'invitation', expires_at: 123 }, joinableWorkspaces: { workspaces: [] } };
+    const response = responses[method] ?? { result: true };
     const calls = [];
     const client = createClient({ ...clientOptions, fetch: async (url, init) => {
         calls.push([url, init]);
@@ -55,6 +58,7 @@ test('workspace client refuses missing credentials, missing actor and unsafe or 
     const client = createClient({ ...clientOptions, fetch });
     const publicClient = createClient({ issuer, clientId: 'app', fetch });
     await assert.rejects(publicClient.workspace(id), { code: 'configuration' });
+    await assert.rejects(publicClient.joinableWorkspaces(actor), { code: 'configuration' });
     for (const [method, args] of requests.filter(([, , , , body]) => body?.actor_token)) {
         const missing = [...args];
         missing[missing.length - 1] = { ...missing.at(-1), actorToken: undefined, actor_token: 'not-an-actor-option' };
@@ -64,6 +68,7 @@ test('workspace client refuses missing credentials, missing actor and unsafe or 
     await assert.rejects(client.memberships(''), { code: 'configuration' });
     await assert.rejects(client.workspaceMembers(id, { limit: 201 }), { code: 'configuration' });
     await assert.rejects(client.workspaceMembers(id, { cursor: 2 }), { code: 'configuration' });
+    await assert.rejects(client.closeWorkspace(id, { ...actor, confirm: 2 }), { code: 'configuration' });
     await assert.rejects(client.createWorkspace({ kind: 'other', ...actor }), { code: 'configuration' });
 });
 

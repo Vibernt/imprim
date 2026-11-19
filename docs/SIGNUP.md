@@ -59,6 +59,8 @@ for the requesting app, writes `workspace-member-added` events for the product's
 `workspace_signup` audit event with the approver as actor in approval mode. A person may own one sign-up
 workspace per product, including closed workspaces they still own.
 
+An app with `join_workspaces='on'` can offer its product to a sign-up workspace's owner during [hosted sign-in](WORKSPACES.md#adding-a-product-to-an-existing-workspace).
+
 Apps with `workspace_admin` enabled can also create a team workspace and invite the first owner through
 [Shared workspaces](WORKSPACES.md).
 

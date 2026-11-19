@@ -189,7 +189,7 @@ The account and admin URLs are unchanged.
 
 `0024` adds workspace tables, five per-app settings and an admission source column. It needs no new binding or secret.
 Nothing changes until a realm sets `"workspaces": "on"` and an app opts in with `workspaces='shared'` and a product.
-Use client `0.8.3`. See [Shared workspaces](WORKSPACES.md) and use
+Use client `0.9.0`. See [Shared workspaces](WORKSPACES.md) and use
 [`scripts/import-workspaces.mjs`](../scripts/import-workspaces.mjs) to move an app's own workspaces in; run a dry run first.
 
 ## Upgrading to migration 0023

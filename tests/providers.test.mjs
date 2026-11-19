@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { world, begin, cookieJar } from './support/world.mjs';
 import { forgetRealms, validateRealmConfig } from '../apps/server/src/realms/realm.mjs';
+import { addTeam, configureJoin, joinPath } from './support/workspace-join.mjs';
 const b64 = value => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url');
 async function fakeProvider(t, { type = 'oidc', issuer = 'https://sso.acme.test', tenant = 'common', tid = '11111111-1111-1111-1111-111111111111', claims = {}, header = {}, discoveryIssuer } = {}) {
     const rsa = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
@@ -61,6 +62,19 @@ async function signIn(w, id, { code = 'good-code', method = 'GET', fake } = {}) 
     return { start, authorize, jar, callback, params };
 }
 const acme = { type: 'oidc', issuer: 'https://sso.acme.test', client_id: 'client-123', client_secret: { env: 'ACME_SECRET' }, name: 'Acme SSO' };
+test('an authoritative registry provider can offer a hosted join for an owner without app access', async t => {
+    const w = await world(t, 'invited'), db = w.env.DB.db;
+    w.env.ACME_SECRET = 'shh';
+    configureJoin(db, 'other', 'app');
+    db.exec("INSERT INTO users(id,email,email_verified,created) VALUES('owner','person@example.com',1,0)");
+    addTeam(db, 'team', 'owner');
+    const fake = await fakeProvider(t);
+    await configure(w, 'acme', { ...acme, trusted_domains: ['example.com'] });
+    const { callback } = await signIn(w, 'acme', { fake });
+    assert.equal(callback.status, 303, await callback.clone().text());
+    assert.equal(new URL(callback.headers.get('location')).pathname, joinPath);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM client_admissions').get().n, 0);
+});
 test('a generic OIDC provider signs in with PKCE, state and nonce; its email is a provider claim, not mailbox proof', async t => {
     const w = await world(t); w.env.ACME_SECRET = 'shh';
     const fake = await fakeProvider(t);

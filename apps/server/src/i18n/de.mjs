@@ -1,5 +1,15 @@
 // German (de). Drafted with AI assistance, awaiting native review before production (docs/TRANSLATING.md).
 export default Object.freeze({
+    "This sign-in request belongs to another account.": "Diese Anmeldeanfrage gehört zu einem anderen Konto.",
+    "Use a workspace for {app}": "Arbeitsbereich für {app} verwenden",
+    "{app} works with your team’s workspace. Your workspace’s members will be able to sign in to {app}.": "{app} funktioniert mit dem Arbeitsbereich Ihres Teams. Die Mitglieder dieses Arbeitsbereichs können sich bei {app} anmelden.",
+    "No workspaces are available. Go back to the app to start again.": "Es sind keine Arbeitsbereiche verfügbar. Kehren Sie zur App zurück und starten Sie erneut.",
+    "Not now": "Nicht jetzt",
+    "Use this workspace": "Diesen Arbeitsbereich verwenden",
+    "Workspace join is unavailable for this sign-in request.": "Mit dieser Anmeldeanfrage können Sie die App keinem Arbeitsbereich hinzufügen.",
+    "This request was already answered or has expired.": "Diese Anfrage wurde bereits beantwortet oder ist abgelaufen.",
+    "Choose Use this workspace or Not now.": "Wählen Sie Diesen Arbeitsbereich verwenden oder Nicht jetzt.",
+    "Workspace not found.": "Arbeitsbereich nicht gefunden.",
     "Self-serve sign-up is unavailable for this app.": "Die Selbstregistrierung ist für diese App nicht verfügbar.",
     "Enter a workspace name up to 120 characters.": "Geben Sie einen Arbeitsbereichsnamen mit bis zu 120 Zeichen ein.",
     "Workspace name": "Name des Arbeitsbereichs",

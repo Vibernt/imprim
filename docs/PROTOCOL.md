@@ -29,6 +29,7 @@ apps can opt in to membership and base roles managed by Imprim. Users imported w
 | `POST /v1/auth/password` | JSON `{request_id, email, password, turnstile}`; password sign-in (below). |
 | `POST /v1/auth/passkey/options`, `/v1/auth/passkey/verify` | Passkey sign-in ceremony (below). |
 | `GET`/`POST /mfa` | Second-factor challenge for a pending authorization, agent consent or the console. The page asks for the 6-digit authenticator code in one-time-code boxes; `?recovery=1` shows a field for a recovery code instead. The POST accepts either in `code`. |
+| `GET`/`POST /workspace-join` | [Hosted workspace choice](WORKSPACES.md#adding-a-product-to-an-existing-workspace) for a pending interactive app authorization. Requires its browser and signed-in account. The form posts `request_id`, `workspace_id`, `action` and CSRF from the issuer's Origin. |
 | `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. |
 | `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; the signed-in page requires a current identity session. |
 | `GET /account`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, security, sessions and apps, connected agents, and the password, factor and email-change pages (below). |
@@ -509,8 +510,10 @@ with `imprim-client` 0.6.0 (`handleUserEvent(request)` or `verifyBackchannel(for
 deduplicate `jti`.
 
 **Shared workspace API.** `GET /v1/memberships?sub=` and the routes under `/v1/workspaces` use confidential client
-credentials. A participating app can access workspaces that use its product. Writes on someone's behalf include
-`actor_token` in the JSON body, an ID token issued to that app for a live Imprim session. See the full [App API](WORKSPACES.md#app-api).
+credentials. A participating app can access workspaces that use its product. `POST /v1/workspaces/joinable` lets an
+app with `workspace_admin` enabled list active team workspaces that the person owns and that do not use its product.
+This list and writes on someone's behalf include `actor_token` in the JSON body, an ID token issued to that app for
+a live Imprim session. See the full [App API](WORKSPACES.md#app-api).
 
 **Workspace events.** The back channel receives a form-encoded `workspace_token`: an ES256 `secevent+jwt` with
 an issuer-relative event type, the app as `aud`, a stable `jti`, a five-minute lifetime and the workspace id and

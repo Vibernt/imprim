@@ -35,7 +35,7 @@ export async function googleCallback(request, env) {
     // Re-read current policy after network I/O, before linking or issuing any session.
     const current = await pendingRequest(env, request, row.request_id);
     requireMethod(current.client, 'google', profile.hd, true);
-    const user = await providerIdentity(env, current.client, 'google', profile, await getSession(request, env));
+    const user = await providerIdentity(env, current.client, 'google', profile, await getSession(request, env), current);
     const signed = await issueSession(env, user, 'google', profile.hd);
     await audit(env, 'sign_in', user.id, { method: 'google' });
     return completeAuthorization(env, request, row.request_id, signed.session, [...signed.cookies, cookie(GOOGLE_COOKIE, '', 0)]);

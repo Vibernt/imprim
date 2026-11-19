@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { world, begin, cookieJar } from './support/world.mjs';
+import { addTeam, configureJoin, joinPath } from './support/workspace-join.mjs';
 import { PASSWORD_FAILURE_LIMIT } from '../apps/server/src/auth/rate-limit.mjs';
 const GOOD = 'correct horse battery staple', BREACHED = 'password1234567';
 const sha1 = value => createHash('sha1').update(value).digest('hex').toUpperCase();
@@ -45,6 +46,20 @@ const signIn = async (w, password = GOOD, email = 'person@example.com', extra = 
     const flow = await begin(w);
     return { flow, response: await w.post('/v1/auth/password', { request_id: flow.request_id, email, password, turnstile: crypto.randomUUID(), ...extra }, flow.cookie) };
 };
+
+test('a correct password can start a hosted join for an owner without an app admission', async t => {
+    const { w } = await passwordWorld(t), db = w.env.DB.db;
+    assert.equal((await setPassword(w)).saved.status, 303);
+    configureJoin(db, 'other', 'app');
+    const { id } = db.prepare("SELECT id FROM users WHERE email='person@example.com'").get();
+    addTeam(db, 'team', id);
+    db.exec("UPDATE clients SET signup_policy='invited' WHERE id='app'; DELETE FROM client_admissions WHERE client_id='app'");
+    assert.equal((await signIn(w, 'wrong password')).response.status, 401);
+    const { response } = await signIn(w);
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.equal(new URL((await response.json()).redirect).pathname, joinPath);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM client_admissions WHERE client_id='app'").get().n, 0);
+});
 
 test('a password is set only after an email link proves the mailbox, then sign-in continues to the app as pwd', async t => {
     const { w } = await passwordWorld(t);

@@ -7,7 +7,7 @@ Status: built. This page is the specification for Fire 0.9.1 and the Lit account
 - **The Worker stays dependency-free.** It imports nothing from npm at run time. It serves the protocol, the APIs, the
   screens that handle credentials, and the built interface as static files.
 - **Server-rendered, unchanged in kind:** sign-in, check email, signed in and signed out, sign-in stopped, magic-link
-  confirm, the second-factor challenge, device-code entry and result, agent consent, logout confirm and result, the
+  confirm, the second-factor challenge, workspace join, device-code entry and result, agent consent, logout confirm and result, the
   signed-out account page, every OIDC endpoint and every email. These handle credentials, post forms that work
   without JavaScript, carry a per-page `form-action`, take the brand per request and run mid-protocol.
 - **Built with Lit and Vite:** the account area (`/account/*`) and the admin console (`/admin/*`). They form one

@@ -341,6 +341,7 @@ What each version changed:
 | 0.3.0 | Wire change: agent revocation events are `secevent+jwt`. `iss` is required on the authorization response. Error text handling, JWKS refresh after 10 minutes, a failed discovery is not cached. Details below. |
 | 0.4.0 | Step-up: `startLogin({ acrValues, maxAge })`; ID tokens carry `acr`. |
 | 0.5.0 | `verifyAccessToken` checks a DPoP proof for a bound token (`dpop`, `requireDpop`) and returns `dpop_jti`. |
+| 0.9.0 | `joinableWorkspaces({ actorToken })` lists team workspaces the person owns and can add the app's product to. `closeWorkspace(id, { actorToken, confirm })` lets an enabled operator app close a workspace on behalf of a realm admin with the current name as confirmation. |
 | 0.8.3 | Types only: workspace reads include `created_via` (`'signup'` or `null`). Nothing else changes. |
 | 0.8.2 | Every request uses `redirect: 'manual'` and treats any redirect as a failure, so the client works inside Cloudflare Workers, which reject `redirect: 'error'`. Nothing else changes. |
 | 0.8.1 | `handleCallback` can return the ID token for `actor_token`. Nothing else changes. |
@@ -351,11 +352,12 @@ What each version changed:
 Nothing new is on until an app's client turns it on: second factor, passwords, passkeys, DPoP, token exchange and
 user events all default to off. Shared workspaces require opt-in on the realm and the app.
 
-## Client 0.8.0 workspace methods
+## Workspace client methods
 
 | Operation | Methods |
 |---|---|
 | Read | `memberships(sub)`, `workspace(id)`, `workspaceMembers(id, { limit, cursor })`, `workspaceInvitations(id)` |
+| Discover workspaces to add the app's product to | `joinableWorkspaces({ actorToken })` (0.9.0) |
 | Manage workspaces | `createWorkspace(options)`, `renameWorkspace(id, options)`, `setWorkspaceProducts(id, options)`, `closeWorkspace(id, options)` |
 | Manage people | `inviteToWorkspace(id, options)`, `revokeWorkspaceInvitation(id, invitationId, options)`, `setMemberRole(id, sub, options)`, `removeMember(id, sub, options)` |
 | Manage app holds and resources | `holdWorkspace(id, reason)`, `releaseWorkspace(id, reason?)`, `registerWorkspaceResource(id, resource)`, `unregisterWorkspaceResource(id, resource)` |

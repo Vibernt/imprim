@@ -2,10 +2,11 @@ import { admitted, ensureUser, isAdmin, mailboxProof, recordAdmission } from '..
 import { invariant } from '../lib/errors.mjs';
 import { claimMailbox } from '../services/access.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
 // A stable provider subject retains its owner across email changes, unless that email belongs to someone else.
 // A new provider subject links to an existing account only when the provider is authoritative for the mailbox, or
 // when this browser already holds a session for that account (S4). A stale "verified" flag never takes over an account.
-export async function providerIdentity(env, client, provider, profile, session = null) {
+export async function providerIdentity(env, client, provider, profile, session = null, pending = null) {
     const realm = realmId(env);
     const linked = await env.DB.prepare(`SELECT u.* FROM user_identities i JOIN users u ON u.id=i.user_id
         WHERE i.realm_id=? AND i.provider=? AND i.provider_id=? AND u.realm_id=i.realm_id`).bind(realm, provider, profile.providerId).first();
@@ -18,7 +19,10 @@ export async function providerIdentity(env, client, provider, profile, session =
     if (!linked && matching?.status === 'active' && !matching.merged_into)
         invariant(proof === 'mailbox' || session?.user_id === matching.id, 'link_required',
             'An account already uses this email. Sign in with an email link first, then continue with this provider in the same browser.', 403);
-    invariant((!linked || (linked.status === 'active' && !linked.merged_into)) && await admitted(env, client, email, proof), 'access_denied', 'Account unavailable.', 403);
+    invariant(!linked || (linked.status === 'active' && !linked.merged_into), 'access_denied', 'Account unavailable.', 403);
+    const allowed = await admitted(env, client, email, proof);
+    invariant(allowed || await canSignInForWorkspaceJoin(env, pending, { userId: linked?.id ?? matching?.id, email }),
+        'access_denied', 'Account unavailable.', 403);
     // Mailbox proof for an unverified account clears identities linked on another provider's word.
     if (!linked && proof === 'mailbox' && matching?.status === 'active' && !matching.merged_into) await claimMailbox(env, matching);
     const user = linked || await ensureUser(env, email, proof === 'mailbox');
@@ -29,6 +33,6 @@ export async function providerIdentity(env, client, provider, profile, session =
     invariant(owner?.user_id === user.id, 'access_denied', 'Account unavailable.', 403);
     // Admission was just decided with this sign-in's proof; record it, because the session's method alone (a provider
     // id) does not carry that proof when the authorization completes.
-    if (client) await recordAdmission(env, client, user, email, proof);
+    if (client && allowed) await recordAdmission(env, client, user, email, proof);
     return user;
 }

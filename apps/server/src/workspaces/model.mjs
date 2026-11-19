@@ -7,6 +7,7 @@ import { adminWriteGuard } from '../admin/auth.mjs';
 import { liveActorSession } from './actor.mjs';
 import { workspaceEventStatements } from './events.mjs';
 import { accessEndStatements } from './teardown.mjs';
+import { joinableTeamWorkspaces, productList, usingProduct, withProducts } from './queries.mjs';
 
 const PRODUCT = /^[a-z][a-z0-9-]{1,39}$/;
 const ownProductRequired = 'An app may only use its own product.';
@@ -20,12 +21,8 @@ export async function workspacesEnabled(env) {
     return Boolean(await env.DB.prepare(realmOn).bind(realmId(env)).first());
 }
 
-const productList = `(SELECT json_group_array(product) FROM
-    (SELECT product FROM workspace_products WHERE workspace_id=w.id ORDER BY product))`;
-const usingProduct = 'EXISTS(SELECT 1 FROM workspace_products WHERE workspace_id=w.id AND product=?)';
 const workspaceRead = (env, client, id) => env.DB.prepare(`SELECT w.id AS workspace_id,w.name,w.kind,w.created_via,w.status,w.version,${productList} AS products
     FROM workspaces w WHERE w.id=? AND w.realm_id=? AND ${usingProduct}`).bind(id, realmId(env), client.product);
-const withProducts = row => ({ ...row, products: JSON.parse(row.products) });
 const foundWorkspace = row => {
     invariant(row, 'not_found', 'Workspace not found.', 404);
     return withProducts(row);
@@ -113,7 +110,7 @@ function writeChecks(env, client, actor, id, now, creating, joinGuard) {
 // The conditional write claims the next version. The assertion aborts the batch if no version was claimed,
 // unless all guards passed and the requested state already exists.
 export async function guardedWrite(env, { client, actor, auditActor, id, now = Date.now(), checks, create, joinGuard,
-    effects = [], afterEvent = [], event, eventOptions, audit, detail = {}, unjoined, writeIf, finalEffect }) {
+    effects = [], afterEvent = [], event, eventOptions, audit, detail = {}, auditFlags = {}, writeIf, finalEffect }) {
     const guards = [...writeChecks(env, client, actor, id, now, Boolean(create), joinGuard), ...checks];
     const where = guards.map(guard => `(${guard.sql})`).join(' AND '), args = guards.flatMap(guard => guard.args);
     const condition = writeIf ? ` AND (${writeIf.sql})` : '', conditionArgs = writeIf?.args ?? [];
@@ -125,11 +122,13 @@ export async function guardedWrite(env, { client, actor, auditActor, id, now = D
         ? env.DB.prepare(`INSERT INTO admin_assertions(ok) SELECT 0 WHERE changes()<>1 AND NOT (${where} AND NOT (${writeIf.sql}))`)
             .bind(...args, ...conditionArgs)
         : env.DB.prepare('INSERT INTO admin_assertions(ok) SELECT CASE WHEN changes()=1 THEN 1 ELSE 0 END');
-    const auditDetail = unjoined ? `json_patch(?, CASE WHEN (${unjoined.sql}) THEN '{"unjoined":true}' ELSE '{}' END)` : '?';
+    const flags = Object.entries(auditFlags).filter(([, guard]) => guard);
+    const auditDetail = flags.reduce((json, [key, guard]) =>
+        `json_patch(${json}, CASE WHEN (${guard.sql}) THEN '{"${key}":true}' ELSE '{}' END)`, '?');
     const record = env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id)
         SELECT ?,?,?,json_set(${auditDetail},'$.version',version),?,realm_id FROM workspaces WHERE id=?${condition}`)
         .bind(audit ?? event, auditActor ?? actor?.user.id ?? client.id, id, JSON.stringify({ ...detail, ...(client ? { client_id: client.id } : { source: 'admin_console' }) }),
-            ...(unjoined?.args ?? []), now, id, ...conditionArgs);
+            ...flags.flatMap(([, guard]) => guard.args), now, id, ...conditionArgs);
     let result;
     try {
         result = await env.DB.batch([write, assertion, ...effects, ...workspaceEventStatements(env, id, event, { ...eventOptions, writeIf }),
@@ -153,11 +152,20 @@ export async function guardedWrite(env, { client, actor, auditActor, id, now = D
 const membership = (rolesSql = '') => `EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id=? ${rolesSql})`;
 const adminMember = membership("AND role IN ('owner','admin')");
 const ownerMember = membership("AND role='owner'");
+const realmAdmin = `EXISTS(SELECT 1 FROM users u JOIN admins a ON a.realm_id=u.realm_id AND a.email=u.email
+    WHERE u.id=? AND u.email_verified=1)`;
 const actorRole = (id, actor, sql = adminMember, unjoined) => unjoined
     ? denied(`(${sql} OR (${unjoined.sql}))`, [id, actor.user.id, ...unjoined.args])
     : denied(sql, [id, actor.user.id]);
 const manage = (id, actor, unjoined) => actor.admin ? [] : [actorRole(id, actor, adminMember, unjoined)];
 const flag = (client, name) => denied(`EXISTS(SELECT 1 FROM clients WHERE id=? AND ${name}='on')`, [client.id], 'App is not enabled for this workspace operation.');
+
+export async function joinableWorkspaces(env, client, actor) {
+    const { sql, args, code, message, status } = flag(client, 'workspace_admin');
+    invariant(await env.DB.prepare(`SELECT 1 WHERE ${sql}`).bind(...args).first(), code, message, status);
+
+    return joinableTeamWorkspaces(env, realmId(env), actor.user.id, client.product, 100);
+}
 
 // Product visibility and the live actor are checked by writeChecks. These writes leave the roster intact,
 // so the audit can use the same predicate as the permission guard.
@@ -224,18 +232,30 @@ export function renameWorkspace(env, client, actor, id, value) {
         event: 'workspace-updated', detail: { name } });
 }
 
-export function setWorkspaceProducts(env, client, actor, id, body) {
+export function setWorkspaceProducts(env, client, actor, id, body, signIn = null) {
     const add = validProducts(body.add, client), remove = validProducts(body.remove, client);
     invariant(!add.some(product => remove.includes(product)), 'invalid_request', 'A product cannot be added and removed together.');
-    const realmAdmin = `EXISTS(SELECT 1 FROM users u JOIN admins a ON a.realm_id=u.realm_id AND a.email=u.email
-        WHERE u.id=? AND u.email_verified=1)`;
-    const checks = actor.admin ? [] : [flag(client, 'workspace_admin'), denied(`(${ownerMember} OR ${realmAdmin})`, [id, actor.user.id, actor.user.id])];
+    const checks = actor.admin ? [] : [
+        flag(client, signIn ? 'join_workspaces' : 'workspace_admin'),
+        signIn ? actorRole(id, actor, ownerMember) : denied(`(${ownerMember} OR ${realmAdmin})`, [id, actor.user.id, actor.user.id])
+    ];
     // Only adding the calling product can make an otherwise hidden workspace eligible for this write.
     const joinGuard = client && add.length ? {
         sql: checks.map(guard => guard.sql).join(' AND '),
         args: checks.flatMap(guard => guard.args)
     } : null;
     const now = Date.now();
+    if (signIn) {
+        checks.push(
+            missing("EXISTS(SELECT 1 FROM workspaces WHERE id=? AND kind='team')", [id]),
+            check(signIn.guard.sql, signIn.guard.args, 'invalid_request', 'This request was already answered or has expired.'));
+        // Keep the product absent until events and audit are written so the same condition suppresses every
+        // workspace change when another owner already added it. In either case consume the hosted decision.
+        const writeIf = { sql: 'NOT EXISTS(SELECT 1 FROM workspace_products WHERE workspace_id=? AND product=?)', args: [id, client.product] };
+        return guardedWrite(env, { client, actor, id, now, checks, joinGuard, writeIf,
+            afterEvent: [signIn.claim], finalEffect: addProducts(env, id, add, now),
+            event: 'workspace-products-changed', eventOptions: { extraProducts: add }, detail: { add, remove, via: 'sign_in' } });
+    }
     // Capture recipients after adding and before deleting. The event payload projects the final product list.
     return guardedWrite(env, { client, actor, id, now, checks, joinGuard,
         effects: [addProducts(env, id, add, now)],
@@ -251,7 +271,7 @@ export async function inviteToWorkspace(env, client, actor, id, body) {
     const checks = [...(role === 'owner' ? [actorRole(id, actor, ownerMember, unjoined)] : manage(id, actor)),
         conflict("EXISTS(SELECT 1 FROM workspaces WHERE id=? AND kind='team')", [id],
             'personal_workspace', 'A personal workspace does not take invitations.')];
-    await guardedWrite(env, { client, actor, id, now, checks, unjoined,
+    await guardedWrite(env, { client, actor, id, now, checks, auditFlags: { unjoined },
         effects: [env.DB.prepare(`UPDATE workspace_invitations SET revoked_at=? WHERE workspace_id=? AND email=?
             AND accepted_at IS NULL AND revoked_at IS NULL`).bind(now, id, email), invitation.statement],
         event: 'workspace-updated', audit: 'workspace-invited', detail: { invitation_id: invitation.message.invitationId, role } });
@@ -261,7 +281,7 @@ export async function inviteToWorkspace(env, client, actor, id, body) {
 export function revokeWorkspaceInvitation(env, client, actor, id, invitationId) {
     const open = 'id=? AND workspace_id=? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>?', now = Date.now();
     const unjoined = unjoinedAppRule(client, id);
-    return guardedWrite(env, { client, actor, id, now, unjoined, checks: [...manage(id, actor, unjoined),
+    return guardedWrite(env, { client, actor, id, now, auditFlags: { unjoined }, checks: [...manage(id, actor, unjoined),
         missing(`EXISTS(SELECT 1 FROM workspace_invitations WHERE ${open})`, [invitationId, id, now], 'Invitation not found.')],
         effects: [env.DB.prepare(`UPDATE workspace_invitations SET revoked_at=? WHERE ${open}`).bind(now, invitationId, id, now)],
         event: 'workspace-updated', audit: 'workspace-invitation-revoked', detail: { invitation_id: invitationId } });
@@ -297,6 +317,8 @@ export function removeWorkspaceMember(env, client, actor, id, sub) {
 }
 
 export async function closeWorkspace(env, client, actor, id, confirm) {
+    invariant(confirm === undefined || (typeof confirm === 'string' && !confirm.includes('\0') && [...confirm].length <= 120),
+        'invalid_request', 'Confirmation must be text of at most 120 characters.');
     const now = Date.now();
     const { results } = await env.DB.prepare(`SELECT m.user_id FROM workspace_members m JOIN workspaces w ON w.id=m.workspace_id
         WHERE w.id=? AND w.realm_id=? ORDER BY m.user_id`).bind(id, realmId(env)).all();
@@ -306,13 +328,25 @@ export async function closeWorkspace(env, client, actor, id, confirm) {
         return 'Workspace is held. Reasons include ' + holds.map(hold => hold.reason).join(', ');
     });
     const unjoined = unjoinedAppRule(client, id);
-    const checks = [...(actor.admin ? [] : [actorRole(id, actor, ownerMember, unjoined)]), held,
+    const standardClose = actorRole(id, actor, ownerMember, unjoined);
+    const appFlag = client && flag(client, 'workspace_admin');
+    // Keep the exact-name check separate so an eligible actor with a typo gets the same 400 as an owner.
+    const adminClose = appFlag && confirm !== undefined && {
+        sql: `(${realmAdmin} AND ${appFlag.sql})`, args: [actor.user.id, ...appFlag.args]
+    };
+    const permission = adminClose
+        ? denied(`(${standardClose.sql} OR ${adminClose.sql})`, [...standardClose.args, ...adminClose.args])
+        : standardClose;
+    const checks = [...(actor.admin ? [] : [permission]), held,
         ...(confirm === undefined ? [] : [check('EXISTS(SELECT 1 FROM workspaces WHERE id=? AND name=?)',
             [id, confirm], 'invalid_request', 'The confirmation must match the workspace name.', 400)]),
         conflict(`NOT EXISTS(SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id NOT IN (SELECT value FROM json_each(?)))
             AND (SELECT count(*) FROM workspace_members WHERE workspace_id=?)=?`,
         [id, JSON.stringify(members), id, members.length], 'conflict', 'Workspace membership changed. Reload and try again.')];
-    return guardedWrite(env, { client, actor, id, now, checks, unjoined,
+    const realmAdminOnly = adminClose && {
+        sql: `NOT (${standardClose.sql}) AND ${adminClose.sql}`, args: [...standardClose.args, ...adminClose.args]
+    };
+    return guardedWrite(env, { client, actor, id, now, checks, auditFlags: { unjoined, realm_admin: realmAdminOnly },
         effects: [...members.flatMap(sub => accessEndStatements(env, id, sub)),
             env.DB.prepare("UPDATE workspaces SET status='closed',closed_at=? WHERE id=?").bind(now, id)],
         event: 'workspace-closed' });

@@ -17,6 +17,7 @@ import { liveSignupEnabled, liveSignupMode, requireSignup, signupOff, signupWork
 import { completeOpenSignup } from '../workspaces/signup.mjs';
 import { recordSignupRequest } from '../workspaces/signup-requests.mjs';
 import { notifySignupAdmins } from '../workspaces/signup-email.mjs';
+import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
 const linkKinds = { sign_in: 'sign_in_link', password: 'password_link', signup: 'signup_link' };
 
 export async function requestMagic(request, env, ctx) {
@@ -56,7 +57,7 @@ async function deliverMagic(env, request, email, browser, pending, challengeMode
     }
     const allowed = await admitted(env, pending?.client, email);
     if (purpose === 'signup' && allowed) purpose = 'sign_in';
-    if (!allowed) {
+    if (!allowed && !(purpose === 'sign_in' && await canSignInForWorkspaceJoin(env, pending, { email }))) {
         if (purpose !== 'signup' || challengeMode === 'degraded') return;
         const unavailable = await env.DB.prepare(`SELECT 1 FROM users WHERE realm_id=? AND email=?
             AND (status<>'active' OR merged_into IS NOT NULL)`).bind(realmId(env), email).first();
@@ -112,7 +113,9 @@ export async function verifyMagic(request, env, ctx) {
 }
 
 async function verifiedUser(env, pending, row) {
-    invariant(await admitted(env, pending?.client, row.email), 'access_denied', 'Account unavailable.', 403);
+    invariant(await admitted(env, pending?.client, row.email) ||
+        (row.purpose === 'sign_in' && await canSignInForWorkspaceJoin(env, pending, { email: row.email })),
+        'access_denied', 'Account unavailable.', 403);
     const existing = await env.DB.prepare('SELECT * FROM users WHERE realm_id=? AND email=?').bind(realmId(env), row.email).first();
     if (existing?.status === 'active' && !existing.merged_into) await claimMailbox(env, existing);
     return ensureUser(env, row.email);

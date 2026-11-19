@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { world, login, begin } from './support/world.mjs';
 import { authenticator } from './support/webauthn.mjs';
 import { assertFireMarkup } from './support/admin.mjs';
+import { addTeam, configureJoin, joinPath } from './support/workspace-join.mjs';
 import { decodeCbor } from '../apps/server/src/lib/cbor.mjs';
 const jarOf = (...parts) => parts.filter(Boolean).join('; ');
 const csrfOf = jar => jar.match(/__Host-vi_csrf=([^;]+)/)[1];
@@ -37,6 +38,21 @@ test('a passkey registers, then signs in without a password, counting as a secon
     const claims = JSON.parse(Buffer.from((await (await w.exchange(code)).json()).id_token.split('.')[1], 'base64url'));
     assert.deepEqual(claims.amr.sort(), ['mfa', 'swk', 'user']);
     assert.equal(claims.acr, 'urn:imprim:acr:mfa');
+});
+
+test('a verified passkey can start a hosted join for an owner without an app admission', async t => {
+    const w = await world(t), db = w.env.DB.db;
+    const { device } = await registered(w, t);
+    const { id } = db.prepare("SELECT id FROM users WHERE email='person@example.com'").get();
+    configureJoin(db, 'other', 'app');
+    addTeam(db, 'team', id);
+    db.exec("UPDATE clients SET signup_policy='invited' WHERE id='app'; DELETE FROM client_admissions WHERE client_id='app'");
+    const flow = await begin(w);
+    const options = await (await w.post('/v1/auth/passkey/options', { request_id: flow.request_id }, flow.cookie)).json();
+    const response = await w.post('/v1/auth/passkey/verify', await device.get(options.publicKey), flow.cookie);
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.equal(new URL((await response.json()).redirect).pathname, joinPath);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM client_admissions WHERE client_id='app'").get().n, 0);
 });
 test('assertions are refused for a wrong origin, no user verification, a reused challenge or a counter that goes back', async t => {
     const w = await world(t);

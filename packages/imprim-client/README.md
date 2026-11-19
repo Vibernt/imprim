@@ -1,4 +1,4 @@
-# imprim-client 0.8.3
+# imprim-client 0.9.0
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
 named `@vibernt/identity-client`. To move an app from that version, follow
@@ -124,6 +124,7 @@ for actions on a person's behalf.
 | Method | Arguments |
 |---|---|
 | `memberships` | `sub` |
+| `joinableWorkspaces` (0.9.0) | `{ actorToken }`. Returns `{ workspaces }` for up to 100 active team workspaces the person owns that do not use the app's product. The app needs `workspace_admin` enabled. |
 | `workspace` | `id` |
 | `workspaceMembers` | `id, { limit?, cursor? }` |
 | `createWorkspace` | `{ name, products, firstOwnerEmail, actorToken }` for a team or `{ kind: 'personal', name, actorToken }`. For a team, pass the app's own product in a one-item array. The App API also defaults to that product when the field is omitted. |

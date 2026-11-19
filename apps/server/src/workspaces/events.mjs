@@ -4,8 +4,8 @@ import { invariant } from '../lib/errors.mjs';
 export const WORKSPACE_EVENTS = ['workspace-member-added', 'workspace-member-removed', 'workspace-role-changed',
     'workspace-updated', 'workspace-products-changed', 'workspace-closed'];
 // One outbox row per recipient: every shared app in the workspace's realm with a back-channel URI whose product the
-// workspace uses. Read the version inside the batch. For product changes, the caller can capture recipients after
-// insertions and before deletions, with removeProducts projecting the final list into the event's payload.
+// workspace uses. Read the version inside the batch. For product changes, extraProducts includes products about to
+// be added and removeProducts excludes products about to be deleted from the final list in the payload.
 export function workspaceEventStatements(env, workspaceId, event, { userId = null, payload = {}, extraProducts = [], removeProducts = [], writeIf } = {}) {
     invariant(WORKSPACE_EVENTS.includes(event), 'event_config', 'Unknown workspace event.', 503);
     const now = Date.now();
@@ -14,9 +14,11 @@ export function workspaceEventStatements(env, workspaceId, event, { userId = nul
     if (event === 'workspace-updated') eventPayload = `json_set(${eventPayload},'$.name',w.name)`;
     if (event === 'workspace-products-changed' && !Object.hasOwn(payload, 'products')) {
         eventPayload = `json_set(${eventPayload},'$.products',json((SELECT json_group_array(product) FROM
-            (SELECT product FROM workspace_products WHERE workspace_id=w.id
-                AND product NOT IN (SELECT value FROM json_each(?)) ORDER BY product))))`;
-        args.push(JSON.stringify(removeProducts));
+            (SELECT product FROM (
+                SELECT product FROM workspace_products WHERE workspace_id=w.id
+                UNION SELECT value AS product FROM json_each(?)
+            ) WHERE product NOT IN (SELECT value FROM json_each(?)) ORDER BY product))))`;
+        args.push(JSON.stringify(extraProducts), JSON.stringify(removeProducts));
     }
     return [env.DB.prepare(`INSERT INTO workspace_event_outbox(id,client_id,workspace_id,user_id,event,payload,version,uri,created)
         SELECT lower(hex(randomblob(16))),c.id,w.id,?,?,${eventPayload},w.version,c.backchannel_uri,?

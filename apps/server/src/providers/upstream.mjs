@@ -154,7 +154,7 @@ export async function providerCallback(request, env, id) {
     const authoritative = (provider.trusted_domains || []).includes(domain) && (provider.type === 'microsoft' ? pinned : verified);
     const current = await pendingRequest(env, request, row.request_id);
     requireMethod(current.client, id);
-    const user = await providerIdentity(env, current.client, id, { providerId: claims.sub, email, login: null, authoritative, verified: verified || authoritative }, await getSession(request, env));
+    const user = await providerIdentity(env, current.client, id, { providerId: claims.sub, email, login: null, authoritative, verified: verified || authoritative }, await getSession(request, env), current);
     const signed = await issueSession(env, user, id);
     await audit(env, 'sign_in', user.id, { method: id });
     return completeAuthorization(env, request, row.request_id, signed.session, [...signed.cookies, stateCookie(provider, '', 0)]);

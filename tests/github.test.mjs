@@ -5,6 +5,7 @@ import { world, begin, cookieJar } from './support/world.mjs';
 import { challengeOf, sha256 } from '../apps/server/src/lib/crypto.mjs';
 import { ensureUser } from '../apps/server/src/services/admission.mjs';
 import { issueSession } from '../apps/server/src/auth/session.mjs';
+import { addTeam, configureJoin, joinPath } from './support/workspace-join.mjs';
 async function start(w, jar = '') {
     const flow = await begin(w, jar, jar ? { prompt: 'login' } : {}), response = await w.call(`/v1/auth/github/start?request_id=${flow.request_id}`, { headers: { cookie: [flow.cookie, jar].filter(Boolean).join('; ') } });
     return { ...flow, response, url: new URL(response.headers.get('location')), cookie: flow.cookie + '; ' + cookieJar(response) };
@@ -22,6 +23,18 @@ function github(t, profile = {}) {
     return calls;
 }
 const callback = (w, flow, changes = {}, cookie = flow.cookie) => w.call('/auth/github/callback?' + new URLSearchParams({ code: 'github-code', state: flow.url.searchParams.get('state'), ...changes }), { headers: { cookie } });
+test('an already linked GitHub owner can start a hosted join without app admission', async t => {
+    const w = await world(t, 'invited'), db = w.env.DB.db;
+    github(t);
+    configureJoin(db, 'other', 'app');
+    const owner = await ensureUser(w.env, 'person@example.com');
+    addTeam(db, 'team', owner.id);
+    db.prepare("INSERT INTO user_identities(provider,provider_id,user_id,created) VALUES('github','42',?,0)").run(owner.id);
+    const signed = await callback(w, await start(w));
+    assert.equal(signed.status, 303, await signed.clone().text());
+    assert.equal(new URL(signed.headers.get('location')).pathname, joinPath);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM client_admissions').get().n, 0);
+});
 test('GitHub state is hashed, browser-bound, uses S256 and exchanges verifier before linking numeric id', async t => {
     const w = await world(t), calls = github(t), flow = await start(w);
     const row = w.env.DB.db.prepare('SELECT * FROM oauth_states').get();

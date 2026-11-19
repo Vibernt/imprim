@@ -1,5 +1,15 @@
 // Spanish (es). Drafted with AI assistance, awaiting native review before production (docs/TRANSLATING.md).
 export default Object.freeze({
+    "This sign-in request belongs to another account.": "Esta solicitud de inicio de sesión pertenece a otra cuenta.",
+    "Use a workspace for {app}": "Usa un espacio de trabajo para {app}",
+    "{app} works with your team’s workspace. Your workspace’s members will be able to sign in to {app}.": "{app} funciona con el espacio de trabajo de tu equipo. Los miembros de ese espacio podrán iniciar sesión en {app}.",
+    "No workspaces are available. Go back to the app to start again.": "No hay espacios de trabajo disponibles. Vuelve a la aplicación para empezar de nuevo.",
+    "Not now": "Ahora no",
+    "Use this workspace": "Usar este espacio de trabajo",
+    "Workspace join is unavailable for this sign-in request.": "No puedes añadir esta aplicación a un espacio de trabajo desde esta solicitud de inicio de sesión.",
+    "This request was already answered or has expired.": "Esta solicitud ya se respondió o caducó.",
+    "Choose Use this workspace or Not now.": "Selecciona Usar este espacio de trabajo o Ahora no.",
+    "Workspace not found.": "No se encontró el espacio de trabajo.",
     "Self-serve sign-up is unavailable for this app.": "El registro no está disponible para esta aplicación.",
     "Enter a workspace name up to 120 characters.": "Escribe un nombre de hasta 120 caracteres para el espacio de trabajo.",
     "Workspace name": "Nombre del espacio de trabajo",

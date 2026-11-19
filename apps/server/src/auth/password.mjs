@@ -11,6 +11,7 @@ import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
 import { requireMethod } from '../oidc/sign-in-methods.mjs';
 import { audit } from '../services/audit.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
 const WRONG = 'Email or password is incorrect.';
 export async function passwordSignIn(request, env) {
     assertOrigin(request, env);
@@ -37,7 +38,8 @@ export async function passwordSignIn(request, env) {
     }
     await clearFailures(env, key);
     // A password proves knowledge, not current control of the mailbox, so domain rules do not admit by it.
-    invariant(await admitted(env, pending.client, email, 'provider'), 'access_denied', 'Account unavailable.', 403);
+    invariant(await admitted(env, pending.client, email, 'provider') ||
+        await canSignInForWorkspaceJoin(env, pending, { userId: user.id }), 'access_denied', 'Account unavailable.', 403);
     if (needsRehash(stored)) {
         const next = await hashPassword(body.password);
         await env.DB.prepare('UPDATE user_passwords SET algorithm=?,iterations=?,salt=?,hash=?,updated=? WHERE user_id=? AND hash=?')

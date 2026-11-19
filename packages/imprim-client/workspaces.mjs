@@ -7,7 +7,7 @@ export function workspaceMethods(send, fail) {
         catch { fail('configuration', 'Invalid workspace API identifier.'); }
     }
     const workspacePath = id => `/v1/workspaces/${segment(id)}`;
-    function write(method, path, actorToken, body = {}) {
+    function sendAsActor(method, path, actorToken, body = {}) {
         if (typeof actorToken !== 'string' || !actorToken) fail('configuration', 'An actor token is required.');
         return send(method, path, { ...body, actor_token: actorToken });
     }
@@ -15,6 +15,9 @@ export function workspaceMethods(send, fail) {
         async memberships(sub) {
             if (typeof sub !== 'string' || !sub) fail('configuration', 'A subject is required.');
             return send('GET', `/v1/memberships?${new URLSearchParams({ sub })}`);
+        },
+        async joinableWorkspaces({ actorToken } = {}) {
+            return sendAsActor('POST', '/v1/workspaces/joinable', actorToken);
         },
         async workspace(id) {
             return send('GET', workspacePath(id));
@@ -31,31 +34,32 @@ export function workspaceMethods(send, fail) {
         async createWorkspace({ kind, name, products, firstOwnerEmail, actorToken } = {}) {
             if (kind !== undefined && kind !== 'team' && kind !== 'personal') fail('configuration', 'Invalid workspace kind.');
             const body = kind === 'personal' ? { kind, name } : { name, products, first_owner_email: firstOwnerEmail };
-            return write('POST', '/v1/workspaces', actorToken, body);
+            return sendAsActor('POST', '/v1/workspaces', actorToken, body);
         },
         async renameWorkspace(id, { name, actorToken } = {}) {
-            return write('PATCH', workspacePath(id), actorToken, { name });
+            return sendAsActor('PATCH', workspacePath(id), actorToken, { name });
         },
         async setWorkspaceProducts(id, { add, remove, actorToken } = {}) {
-            return write('POST', `${workspacePath(id)}/products`, actorToken, { add, remove });
+            return sendAsActor('POST', `${workspacePath(id)}/products`, actorToken, { add, remove });
         },
         async inviteToWorkspace(id, { email, role, actorToken } = {}) {
-            return write('POST', `${workspacePath(id)}/invitations`, actorToken, { email, role });
+            return sendAsActor('POST', `${workspacePath(id)}/invitations`, actorToken, { email, role });
         },
         async workspaceInvitations(id) {
             return send('GET', `${workspacePath(id)}/invitations`);
         },
         async revokeWorkspaceInvitation(id, invitationId, { actorToken } = {}) {
-            return write('DELETE', `${workspacePath(id)}/invitations/${segment(invitationId)}`, actorToken);
+            return sendAsActor('DELETE', `${workspacePath(id)}/invitations/${segment(invitationId)}`, actorToken);
         },
         async setMemberRole(id, sub, { role, actorToken } = {}) {
-            return write('POST', `${workspacePath(id)}/members/${segment(sub)}`, actorToken, { role });
+            return sendAsActor('POST', `${workspacePath(id)}/members/${segment(sub)}`, actorToken, { role });
         },
         async removeMember(id, sub, { actorToken } = {}) {
-            return write('DELETE', `${workspacePath(id)}/members/${segment(sub)}`, actorToken);
+            return sendAsActor('DELETE', `${workspacePath(id)}/members/${segment(sub)}`, actorToken);
         },
-        async closeWorkspace(id, { actorToken } = {}) {
-            return write('POST', `${workspacePath(id)}/close`, actorToken);
+        async closeWorkspace(id, { actorToken, confirm } = {}) {
+            if (confirm !== undefined && typeof confirm !== 'string') fail('configuration', 'Invalid workspace confirmation.');
+            return sendAsActor('POST', `${workspacePath(id)}/close`, actorToken, confirm === undefined ? {} : { confirm });
         },
         async holdWorkspace(id, reason) {
             return send('PUT', `${workspacePath(id)}/holds`, { reason });

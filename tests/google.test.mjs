@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import { world, cookieJar } from './support/world.mjs';
 import { fakeGoogle, googleCallback } from './support/google.mjs';
 import { challengeOf, sha256 } from '../apps/server/src/lib/crypto.mjs';
+import { addTeam, configureJoin, joinPath } from './support/workspace-join.mjs';
+
+test('Google sign-in offers a hosted join only after proving the owner account', async t => {
+    const w = await world(t, 'invited'), db = w.env.DB.db;
+    const fake = fakeGoogle(t, w, { hd: undefined });
+    configureJoin(db, 'other', 'app');
+    db.exec("INSERT INTO users(id,email,email_verified,created) VALUES('owner','person@example.com',1,0)");
+    addTeam(db, 'team', 'owner');
+    const unlinked = await googleCallback(w, await fake.start());
+    assert.equal(unlinked.status, 403);
+    assert.equal((await unlinked.json()).error, 'link_required');
+    db.exec("INSERT INTO user_identities(provider,provider_id,user_id,created) VALUES('google','google-42','owner',0)");
+    const signed = await googleCallback(w, await fake.start());
+    assert.equal(signed.status, 303, await signed.clone().text());
+    assert.equal(new URL(signed.headers.get('location')).pathname, joinPath);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM client_admissions').get().n, 0);
+});
 test('Google code flow binds state, nonce and PKCE, links verified email and emits google amr', async t => {
     const w = await world(t), fake = fakeGoogle(t, w), flow = await fake.start();
     w.env.DB.db.exec("INSERT INTO users(id,email,email_verified,created) VALUES('imported','person@example.com',1,0)");

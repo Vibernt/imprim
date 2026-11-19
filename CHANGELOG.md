@@ -3,6 +3,17 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-20
+
+Migration `0027`.
+
+- `POST /v1/workspaces/joinable` and client 0.9.0 let an app show workspace owners where they can
+  [add the app's product](docs/WORKSPACES.md#adding-a-product-to-an-existing-workspace).
+- An app with workspace administration enabled can close a workspace on behalf of a realm admin by confirming
+  its current name. Client 0.9.0 accepts `confirm` in `closeWorkspace`.
+- Shared apps can enable `join_workspaces` to let a team workspace owner add the app's product during
+  [hosted sign-in](docs/WORKSPACES.md#adding-a-product-to-an-existing-workspace).
+
 ## 2026-11-19.3
 
 No migration.

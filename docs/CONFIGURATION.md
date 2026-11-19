@@ -46,6 +46,7 @@ and never writes D1. JSON columns are shown decoded.
 | `allowed_domains` | `[]` | Exact email domains admitted under `invited`, with mailbox proof. |
 | `sign_in_methods` | `["email"]` (the column default); the seed script requires an explicit list | Ordered, distinct: `email`, `password`, `passkey`, `github`, `google`, or a provider id from the realm's config such as `microsoft`. |
 | `google_hosted_domains` | `[]` | Signed Google `hd` values this app accepts. |
+| `join_workspaces` | `off` | Set to `on` to let team workspace owners add this app's product during hosted sign-in. Requires shared workspaces and a product. |
 | `mfa` | `off` | `off`, `optional` (required once the person has a factor) or `required`. |
 | `mfa_trusted_device_days` | `0` | 0 to 90 days a browser may skip this app's second factor; 0 means never. |
 | `agent_consent_mfa` | `off` | `required` asks for a second factor within 15 minutes before approving an agent. |

@@ -1,6 +1,6 @@
 # Shared workspaces
 
-Status: built (migration `0024`, client `0.8.3`). This page is the specification; the code matches it.
+Status: built (migrations `0024` and `0027`, client `0.9.0`). This page is the specification; the code matches it.
 
 By default each app keeps its own workspaces, memberships and roles, and Imprim only admits people per app. A realm
 can instead hold **shared workspaces** for a family of products. Imprim then keeps each workspace's members, base
@@ -81,24 +81,27 @@ ALTER TABLE client_admissions ADD COLUMN source TEXT NOT NULL DEFAULT 'app' CHEC
 
 ## Proving who is acting (`actor_token`)
 
-Every call that changes a workspace on a person's behalf carries `actor_token`: an ID token Imprim issued to the
-calling app for that person. Imprim verifies it as `ownIdToken` does (`oidc/logout-hint.mjs`): its own signature, `aud`
+Every call that changes a workspace on a person's behalf, and the joinable workspace list, carries `actor_token`.
+This is an ID token Imprim issued to the calling app for that person. Imprim verifies it as `ownIdToken` does
+(`oidc/logout-hint.mjs`): its own signature, `aud`
 equal to the calling client, and a `sid` naming a session that is still live in `sessions` for that `sub`, whose user
 is active. An expired ID token is accepted while its session lives; a signed-out session is refused. The acting
-person's role is then read from `workspace_members`, never taken from the app. Calls without a person (holds,
-resources, reads) use the app's credentials alone.
+person's role is then read from `workspace_members`, never taken from the app. Calls without a person, such as holds,
+resources and membership reads, use the app's credentials alone.
 
 ## App API
 
 All calls authenticate the app with its client credentials (Basic or `client_secret_post`), are limited by
 `API_LIMITER` like `/v1/grants`, and need the app to be `shared` with a `product` in a realm with workspaces on. An
-app sees only workspaces that use its product (`404` otherwise). The products endpoint also lets an eligible app
-join an active workspace in its realm by adding its own product. Bodies are JSON. Errors use the existing
+app normally sees only workspaces that use its product (`404` otherwise). The joinable list shows workspaces the
+person owns where the app's product is absent. The products endpoint lets an eligible app join an active workspace
+in its realm by adding its own product. Bodies are JSON. Errors use the existing
 `{ error, error_description }` shape.
 
 | Call | Who | Does |
 |---|---|---|
 | `GET /v1/memberships?sub=` | app | `{ memberships: [{ workspace_id, name, kind, created_via, role, products, version }] }` for active workspaces using the app's product |
+| `POST /v1/workspaces/joinable` | app with `workspace_admin` on, acting for an owner | Body `{ actor_token }` → `{ workspaces: [{ workspace_id, name, kind, created_via, products, version }] }` for active team workspaces in the realm that the person owns and that do not use the app's product. Ordered by name, then id. At most 100 results, with no pagination. |
 | `GET /v1/workspaces/{id}` | app | `{ workspace_id, name, kind, created_via, status, products, version }`; `created_via` is `"signup"` for a [sign-up](SIGNUP.md) workspace, otherwise `null` |
 | `GET /v1/workspaces/{id}/members?limit=&cursor=` | app | `{ members: [{ sub, email, role }], next_cursor, version }`, oldest first; cursor as in `/v1/grants` |
 | `POST /v1/workspaces` | app with `workspace_admin` on, or any shared app for `kind: "personal"` with `personal_workspaces` on | Team body `{ name, products, first_owner_email, actor_token }`. Omit `products` to use the app's product, or pass exactly that product in a one-item array. The first owner is invited as `owner`, or added at once when it is the actor. Personal body `{ kind: "personal", name, actor_token }`. The actor becomes owner, one per person (`409` if one exists). |
@@ -109,18 +112,44 @@ join an active workspace in its realm by adding its own product. Bodies are JSON
 | `DELETE /v1/workspaces/{id}/invitations/{invitation_id}` | actor admin+ | `{ actor_token }` |
 | `POST /v1/workspaces/{id}/members/{sub}` | actor admin+ (owner to grant or take `owner`) | `{ role, actor_token }` |
 | `DELETE /v1/workspaces/{id}/members/{sub}` | actor admin+, or the member themself | `{ actor_token }`; refused if it would leave no owner |
-| `POST /v1/workspaces/{id}/close` | actor owner | `{ actor_token }`; `409 workspace_held` with the reasons while any hold exists |
+| `POST /v1/workspaces/{id}/close` | actor owner, or an eligible app acting under the unjoined or realm-admin rules below | `{ actor_token, confirm? }`; if supplied, `confirm` must exactly match the current workspace name. Returns `409 workspace_held` with the reasons while any hold exists. |
 | `PUT` / `DELETE /v1/workspaces/{id}/holds` | app | `{ reason }`; one hold per app per workspace |
 | `PUT` / `DELETE /v1/workspaces/{id}/resources` | app | `{ resource }`; the resource must sit under the app's own `agent_resource_prefixes`. Re-registering the same resource to the same workspace by the same app returns `200` with the current workspace snapshot and changes nothing. A registration held by another workspace or app returns `409`. |
 
 An app with `workspace_admin='on'` and a valid `actor_token` can send or resend an `owner` invitation, revoke an
 invitation, or close an active team workspace that uses its product and has zero members. Any hold still blocks
-close. The write checks that the roster is still empty and records `unjoined: true` in the audit detail. Once anyone
-joins, the usual owner and admin permissions apply.
+close. The write checks that the roster is still empty and records `unjoined: true` in the audit detail.
+
+For product operator consoles, an app with `workspace_admin='on'` can also close a workspace that uses its product
+on behalf of a realm admin. The actor must have a verified email on that realm's admin roster and send the current
+workspace name as `confirm`. A close authorized only by this rule records `realm_admin: true` in the audit detail.
+Closing removes members' workspace-sourced admissions to apps whose products they no longer reach and queues
+back-channel logout for those apps. It also revokes members' live agent grants on registered workspace resources.
+The workspace and its resource registrations are retained.
 
 Rules every change enforces in one `DB.batch`, guarded so concurrent writes cannot break them: the workspace is
 active; `version` rises by one; a joined team workspace keeps at least one owner (`409 last_owner`); a personal workspace
 never gains a second member; the matching events go into the outbox; an `audit` row records actor and change.
+
+## Adding a product to an existing workspace
+
+Set `join_workspaces='on'` on a shared app to offer an existing team workspace during sign-in. If normal
+admission refuses an interactive app request, Imprim offers up to 20 active team workspaces the signed-in person
+owns in the realm and whose products do not include the app's product. The owner can choose a workspace or decline.
+Confirming adds the product and resumes the same authorization request through normal admission and any required MFA.
+Declining returns `access_denied` to the app. Agent requests and `prompt=none` requests skip this step.
+The hosted setting grants only this owner-confirmed action and can be enabled independently of `workspace_admin`.
+
+Use the app API when the person can already sign in to the calling app and the app provides its own product-joining
+interface. This path requires `workspace_admin='on'`.
+
+1. Call `joinableWorkspaces({ actorToken })` from the app server with the ID token issued to this app. Realm admins see
+   only the workspaces they own and can manage other workspaces in the console.
+2. Ask the person “Use &lt;workspace&gt; for &lt;product&gt;?” When they confirm, call
+   `setWorkspaceProducts(id, { add: [ownProduct], remove: [], actorToken })`.
+Both paths queue [`workspace-products-changed`](#events) events for the workspace's products' back-channel apps.
+The joining app provisions its own product for the workspace, and the workspace appears in that app's memberships.
+Hosted joins record `via: 'sign_in'` in the workspace audit detail.
 
 ## Signing in to a shared app
 
@@ -183,17 +212,18 @@ One invitation email, `workspace_invitation`, in every language Imprim ships, wi
 the workspace name, the products it uses, and a button to the inviting app's `initiate_login_uri` (or, if unset, the
 issuer's `/login`).
 
-## Client `0.8.3`
+## Client `0.9.0`
 
 Client `0.8.0` added these calls; `0.8.1` lets `handleCallback(url, values, { idToken: true })` return
-`{ claims, idToken }` for `actor_token`; `0.8.2` refuses redirects so the client works inside Cloudflare Workers; and `0.8.3` types
-`created_via`.
+`{ claims, idToken }` for `actor_token`. Client `0.8.2` refuses redirects so the client works inside Cloudflare Workers.
+Client `0.8.3` types `created_via`. Client `0.9.0` adds `joinableWorkspaces`.
 
-`memberships(sub)`, `workspace(id)`, `workspaceMembers(id, { limit, cursor })`, `createWorkspace`, `renameWorkspace`,
-`setWorkspaceProducts`, `inviteToWorkspace`, `workspaceInvitations`, `revokeWorkspaceInvitation`, `setMemberRole`,
+`memberships(sub)`, `joinableWorkspaces({ actorToken })`, `workspace(id)`, `workspaceMembers(id, { limit, cursor })`,
+`createWorkspace`, `renameWorkspace`, `setWorkspaceProducts`, `inviteToWorkspace`, `workspaceInvitations`,
+`revokeWorkspaceInvitation`, `setMemberRole`,
 `removeMember`, `closeWorkspace`, `holdWorkspace`, `releaseWorkspace`, `registerWorkspaceResource`,
 `unregisterWorkspaceResource`; and `verifyBackchannel` returns `kind: 'workspace'` for a `workspace_token`, with
-`{ event, workspaceId, sub, version, payload, jti }`. Calls that change things take `actorToken`.
+`{ event, workspaceId, sub, version, payload, jti }`. Calls on a person's behalf take `actorToken`.
 
 ## Self-serve sign-up
 

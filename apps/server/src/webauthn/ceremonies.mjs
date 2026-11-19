@@ -7,6 +7,7 @@ import { randomToken, sha256, b64url, from64 } from '../lib/crypto.mjs';
 import { cookies, BROWSER_COOKIE, getSession, requireCsrf, assertOrigin, issueSession, sessionByHash } from '../auth/session.mjs';
 import { verifyRegistration, verifyAssertion } from './verify.mjs';
 import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
+import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
 import { requireMethod } from '../oidc/sign-in-methods.mjs';
 import { admitted, isAdmin } from '../services/admission.mjs';
 import { confirmedFactors, mfaStatement, forgetDevices, recoveryStatements, FRESH_MFA_MS, clearOrphanedRecovery } from '../auth/mfa.mjs';
@@ -164,7 +165,8 @@ export async function assertionVerify(request, env, ctx) {
     requireMethod(pending.client, 'passkey');
     const user = await env.DB.prepare("SELECT * FROM users WHERE id=? AND realm_id=? AND status='active' AND merged_into IS NULL").bind(credential.user_id, realmId(env)).first();
     invariant(user && !await isAdmin(env, user.email), 'access_denied', 'Account unavailable.', 403);
-    invariant(await admitted(env, pending.client, user.email, 'provider'), 'access_denied', 'Account unavailable.', 403);
+    invariant(await admitted(env, pending.client, user.email, 'provider') ||
+        await canSignInForWorkspaceJoin(env, pending, { userId: user.id }), 'access_denied', 'Account unavailable.', 403);
     const signed = await issueSession(env, user, 'passkey');
     await env.DB.prepare('UPDATE sessions SET mfa_at=?,amr=? WHERE hash=?').bind(Date.now(), JSON.stringify([...amr, 'mfa']), signed.session.hash).run();
     await audit(env, 'sign_in', user.id, { method: 'passkey' });

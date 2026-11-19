@@ -42,6 +42,8 @@ export function otp({ id, label, name, hint, error, autofocus, length = 6 }) {
 }
 export const checkbox = (name, label, { value = '1', checked, required } = {}) =>
     `<label class="fd-checkbox"><input type="checkbox"${attrs({ name, value, checked, required })}><span class="fd-checkbox-box"></span><span class="fd-checkbox-text"><span class="fd-checkbox-label">${e(label)}</span></span></label>`;
+export const radio = (name, label, { value, checked, required, description } = {}) =>
+    `<label class="fd-radio"><input type="radio"${attrs({ name, value, checked, required })}><span class="fd-radio-box"></span><span class="fd-radio-text"><span class="fd-radio-label">${e(label)}</span>${description ? `<span class="fd-radio-desc">${e(description)}</span>` : ''}</span></label>`;
 export const hidden = (name, value) => `<input type="hidden" name="${e(name)}" value="${e(value ?? '')}">`;
 const TONE_ICON = { danger: 'circle-alert', warning: 'triangle-alert', success: 'circle-check', info: 'info' };
 export const callout = (title, body = '', { tone, role = tone === 'danger' ? 'alert' : 'note' } = {}) =>

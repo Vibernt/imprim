@@ -34,7 +34,7 @@ export async function githubCallback(request, env) {
     const profile = await githubProfile(env, query.code, row.verifier);
     const current = await pendingRequest(env, request, row.request_id);
     requireMethod(current.client, 'github');
-    const user = await githubIdentity(env, current.client, profile, await getSession(request, env)), signed = await issueSession(env, user, 'github');
+    const user = await githubIdentity(env, current.client, profile, await getSession(request, env), current), signed = await issueSession(env, user, 'github');
     await audit(env, 'sign_in', user.id, { method: 'github' });
     return completeAuthorization(env, request, row.request_id, signed.session, [...signed.cookies, cookie(OAUTH_COOKIE, '', 0)]);
 }
