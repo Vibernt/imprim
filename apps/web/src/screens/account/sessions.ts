@@ -1,6 +1,7 @@
 import { html, nothing } from 'lit';
 import { api } from '../../lib/api';
 import { t } from '../../lib/i18n';
+import { setting } from '../page-layout';
 import { AccountScreen, post, success } from './account-screen';
 import { day, when, empty, list, section } from './access-view';
 
@@ -49,10 +50,9 @@ class ScreenSessions extends AccountScreen<Access> {
           trail: s.current ? html`<span class="fd-badge" data-tone="success">${t('This browser')}</span>` :
             this.action(t('Sign out'), t('Sign out {device}', { device: s.device }), () => this.end('sessions', { sid: s.sid }, t('Session signed out'))),
         })))}
-        ${sessions.length > 1 ? html`<div class="fd-form-actions">
+        ${sessions.length > 1 ? setting(t('Other sessions'), '', html`
           <button class="fd-btn" data-variant="outline" type="button" ?disabled=${this.pending}
-            @click=${() => this.end('sessions', { sid: 'others' }, t('Signed out of other sessions'))}>${t('Sign out other sessions')}</button>
-        </div>` : nothing}`)}
+            @click=${() => this.end('sessions', { sid: 'others' }, t('Signed out of other sessions'))}>${t('Sign out other sessions')}</button>`) : nothing}`)}
       ${section(t('Apps'), t('Signing out of an app ends its session on every device.'), apps.length ? list(t('Apps'), apps.map(a => ({
         title: a.name, description: t('Signed in {time}', { time: when(a.signed_in) }),
         trail: this.action(t('Sign out'), t('Sign out of {name}', { name: a.name }), () => this.end('apps', { client_id: a.client_id }, t('Signed out of the app'))),

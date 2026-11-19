@@ -1,39 +1,41 @@
 import { html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { t } from '../../lib/i18n';
+import { formSection } from '../page-layout';
 
 export interface Setup { factor_id: string; name: string; secret: string; qr: string }
 export interface Password { updated: number | null; current_password_required: boolean }
 
 export function setupView(setup: Setup, pending: boolean, cancel: () => void, submit: (event: SubmitEvent) => void, otpChanged: (event: CustomEvent<{ value: string }>) => void) {
   return html`
-    <div class="fd-stack" data-gap="4">
-      <figure class="fd-qr" aria-label=${t('Authenticator setup code')}>
-        <img src=${`data:image/svg+xml,${encodeURIComponent(setup.qr)}`} alt=${t('Authenticator setup code')}>
-      </figure>
-      <div class="fd-stack" data-gap="2">
-        <p class="fd-small fd-muted">${t('Can’t scan it? Enter this setup key in the app instead.')}</p>
-        ${keyed(setup.factor_id, html`<div class="fd-secret" data-fd-secret data-mask="full" data-noun=${t('setup key')}>
-          <code class="fd-secret-value">${setup.secret}</code>
-          <div class="fd-secret-actions">
-            <button class="fd-btn" data-variant="ghost" data-size="sm" data-icon-only type="button" data-fd-field-action="reveal" aria-label=${t('Show setup key')}><fd-icon icon="eye"></fd-icon></button>
-            <button class="fd-btn" data-variant="ghost" data-size="sm" data-icon-only type="button" data-fd-field-action="copy" aria-label=${t('Copy setup key')}><fd-icon icon="copy"></fd-icon></button>
-          </div>
-        </div>`)}
-      </div>
-    </div>
-    <form method="post" class="fd-form" @submit=${submit}>
-      <div class="fd-field">
-        <label class="fd-field-label" for="totp-name">${t('Name')}</label>
-        <input class="fd-input" id="totp-name" name="name" .value=${setup.name} maxlength="60" required aria-describedby="totp-name-hint">
-        <p class="fd-field-hint" id="totp-name-hint">${t('Shown in your list, so you can tell your apps apart.')}</p>
-      </div>
-      <div class="fd-field">
-        <label class="fd-field-label" for="totp-code" id="totp-code-label">${t('Code')}</label>
-        ${keyed(setup.factor_id, html`<div class="fd-otp" data-fd-otp data-length="6" role="group" aria-labelledby="totp-code-label" @fd:change=${otpChanged}>
-          <input class="fd-input" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
-        </div>`)}
-      </div>
+    <form method="post" class="fd-form" data-size="full" @submit=${submit}>
+      ${formSection('authenticator-setup', t('Authenticator setup code'), html`
+        <figure class="fd-qr" aria-label=${t('Authenticator setup code')}>
+          <img src=${`data:image/svg+xml,${encodeURIComponent(setup.qr)}`} alt=${t('Authenticator setup code')}>
+        </figure>
+        <div class="fd-stack" data-gap="2">
+          <p class="fd-small fd-muted">${t('Can’t scan it? Enter this setup key in the app instead.')}</p>
+          ${keyed(setup.factor_id, html`<div class="fd-secret" data-fd-secret data-mask="full" data-noun=${t('setup key')}>
+            <code class="fd-secret-value">${setup.secret}</code>
+            <div class="fd-secret-actions">
+              <button class="fd-btn" data-variant="ghost" data-size="sm" data-icon-only type="button" data-fd-field-action="reveal" aria-label=${t('Show setup key')}><fd-icon icon="eye"></fd-icon></button>
+              <button class="fd-btn" data-variant="ghost" data-size="sm" data-icon-only type="button" data-fd-field-action="copy" aria-label=${t('Copy setup key')}><fd-icon icon="copy"></fd-icon></button>
+            </div>
+          </div>`)}
+        </div>
+
+        <div class="fd-field">
+          <label class="fd-field-label" for="totp-name">${t('Name')}</label>
+          <input class="fd-input" id="totp-name" name="name" .value=${setup.name} maxlength="60" required aria-describedby="totp-name-hint">
+          <p class="fd-field-hint" id="totp-name-hint">${t('Shown in your list, so you can tell your apps apart.')}</p>
+        </div>
+        <div class="fd-field">
+          <label class="fd-field-label" for="totp-code" id="totp-code-label">${t('Code')}</label>
+          ${keyed(setup.factor_id, html`<div class="fd-otp" data-size="sm" data-fd-otp data-length="6" role="group" aria-labelledby="totp-code-label" @fd:change=${otpChanged}>
+            <input class="fd-input" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+          </div>`)}
+        </div>
+      `)}
       <div class="fd-form-actions">
         <button class="fd-btn" data-variant="ghost" type="button" ?disabled=${pending} @click=${cancel}>${t('Cancel')}</button>
         <button class="fd-btn" data-variant="primary" type="submit" ?disabled=${pending}>${t('Add authenticator app')}</button>
@@ -73,10 +75,12 @@ function passwordField(id: 'current_password' | 'password', label: string) {
 }
 
 export function passwordView(password: Password, pending: boolean, cancel: () => void, submit: (event: SubmitEvent) => void) {
-  return keyed(password.current_password_required, html`<form class="fd-form" method="post" @submit=${submit}>
-    ${password.current_password_required ? passwordField('current_password', t('Current password')) : nothing}
-    ${passwordField('password', t('New password'))}
-    <p class="fd-small fd-muted">${t('We check new passwords against known data breaches. Saving signs out your other sessions and forgets remembered browsers.')}</p>
+  return keyed(password.current_password_required, html`<form class="fd-form" data-size="full" method="post" @submit=${submit}>
+    ${formSection('password-setup', t('Password'), html`
+      ${password.current_password_required ? passwordField('current_password', t('Current password')) : nothing}
+      ${passwordField('password', t('New password'))}
+      <p class="fd-small fd-muted">${t('We check new passwords against known data breaches. Saving signs out your other sessions and forgets remembered browsers.')}</p>
+    `)}
     <div class="fd-form-actions">
       <button class="fd-btn" type="button" data-variant="ghost" ?disabled=${pending} @click=${cancel}>${t('Cancel')}</button>
       <button class="fd-btn" type="submit" data-variant="primary" ?disabled=${pending}>${t('Save password')}</button>

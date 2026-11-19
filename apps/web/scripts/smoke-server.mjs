@@ -70,6 +70,9 @@ export async function smokeServer(t, role) {
     });
     // localhost, not 127.0.0.1: Chromium accepts Secure (and so __Host-) cookies over plain HTTP only on localhost.
     const origin = `http://localhost:${server.address().port}`;
+    // Browser contexts close before the server does, so a request still in flight ends as aborted rather than refused.
+    const contexts = new Set();
+    t.after(async () => { for (const context of contexts) await context.close().catch(() => {}); });
     t.after(() => new Promise(resolve => {
         server.close(resolve);
         server.closeAllConnections();
@@ -80,5 +83,5 @@ export async function smokeServer(t, role) {
         return { name, value, domain: 'localhost', path: '/', secure: true, sameSite: 'Lax',
             httpOnly: name !== '__Host-vi_csrf' };
     });
-    return { ...w, origin, cookies };
+    return { ...w, origin, cookies, track: context => { contexts.add(context); return context; } };
 }

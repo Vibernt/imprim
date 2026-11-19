@@ -4,6 +4,7 @@ import { ApiError, api } from '../../lib/api';
 import { FireLight } from '../../lib/fire-light';
 import { icon } from '../../lib/icon';
 import { href, type View } from '../../lib/router';
+import { pageHead } from '../page-layout';
 
 const { toast } = overlays;
 const redirecting = (error: unknown) => error instanceof ApiError && error.redirecting;
@@ -84,22 +85,12 @@ export abstract class AdminScreen<T> extends FireLight {
 
 export function corePage(title: string, description: string, content: TemplateResult, options: {
   back?: { path: string; label: string }; actions?: TemplateResult; busy?: boolean;
-  art?: 'grid' | 'waves' | 'orbit' | 'rain';
 } = {}) {
   return html`
     <main class="fd-page">
       <div class="fd-frame">
-        ${options.back ? html`<section class="fd-band" data-pad="sm">
-          <a class="fd-back" href=${href(options.back.path)}>${icon('arrow-left')}<span>${options.back.label}</span></a>
-        </section>` : nothing}
-        <section class="fd-band fd-page-hero">
-          ${options.art ? html`<div class="fd-page-hero-art" aria-hidden="true">
-            <div class="fd-ascii" data-fd-ascii=${options.art}></div>
-          </div>` : nothing}
-          <h1 class="fd-display">${title}</h1>
-          <p class="fd-page-hero-desc">${description}</p>
-          ${options.actions ? html`<div class="fd-page-hero-actions">${options.actions}</div>` : nothing}
-        </section>
+        ${pageHead(title, description, options.back ? html`
+          <a class="fd-back" href=${href(options.back.path)}>${icon('arrow-left')}<span>${options.back.label}</span></a>` : nothing, options.actions)}
         <section class="fd-band" data-grow aria-busy=${options.busy ?? false}>${content}</section>
       </div>
     </main>`;

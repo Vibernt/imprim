@@ -1,8 +1,9 @@
 import { html, nothing, type PropertyValues } from 'lit';
 import { navigate, type View } from '../../lib/router';
+import { codeBlock, setting } from '../page-layout';
 import { text } from './core-fields';
 import { AdminScreen, corePage } from './core-screen';
-import { card, confirmPhrase, facts, mono, segment, status } from './core-view';
+import { card, confirmPhrase, empty, facts, mono, segment, status } from './core-view';
 import type { UserSummary } from './users';
 
 type SessionRow = { sid: string; method: string; auth_time: number; expires_at: number };
@@ -60,16 +61,12 @@ class UserDetail extends AdminScreen<User> {
 
   private sessions(user: User) {
     return user.sessions.length ? html`
-      <ul class="fd-list" aria-label="Sessions">
-        ${user.sessions.map(session => html`
-          <li class="fd-list-row">
-            <div class="fd-list-body"><span class="fd-list-title">${session.method || 'Session'}</span>
-              <span class="fd-list-desc">${mono(session.sid)}</span></div>
-            <div class="fd-list-trail"><button class="fd-btn" type="button" data-variant="ghost" data-size="sm"
-              aria-label=${'Revoke session ' + session.sid} ?disabled=${this.pending || Boolean(this.review)}
-              @click=${() => this.setReview({ action: 'revoke-session', sid: session.sid })}>Revoke</button></div>
-          </li>`)}
-      </ul>` : html`<p class="fd-muted">No active sessions.</p>`;
+      <div role="group" aria-label="Sessions">
+        ${user.sessions.map(session => setting(session.method || 'Session', mono(session.sid), html`
+          <button class="fd-btn" type="button" data-variant="ghost" data-size="sm"
+            aria-label=${'Revoke session ' + session.sid} ?disabled=${this.pending || Boolean(this.review)}
+            @click=${() => this.setReview({ action: 'revoke-session', sid: session.sid })}>Revoke</button>`))}
+      </div>` : empty('No active sessions.', 'Signed-in sessions appear here.');
   }
 
   private reviewButton(action: Review['action']) {
@@ -88,31 +85,30 @@ class UserDetail extends AdminScreen<User> {
     return html`
       <div class="fd-stack" data-gap="6">
         ${facts([['User ID', mono(user.id)], ['Status', status(user.status)]])}
+        ${card('Sessions', this.sessions(user))}
+        ${card('Record', codeBlock('User record', user))}
+        ${card('Two-factor', setting('Verification methods', '', this.reviewButton('reset-mfa'), true),
+          'Removes authenticators and passkeys so the person can enrol again.')}
+        ${card('Merge into another user', html`
+          <form class="fd-setting" data-tone="danger" method="get" @submit=${(event: SubmitEvent) => this.merge(user, event)}>
+            <div class="fd-setting-text">${text({ id: 'surviving_id', name: 'surviving_id', label: 'Surviving user ID', required: true, mono: true })}</div>
+            <div class="fd-setting-control"><button class="fd-btn" type="submit" data-variant="outline" ?disabled=${this.pending || Boolean(review)}>Review merge</button></div>
+          </form>`, 'This user is deleted. The other user keeps their ID, apps and sign-in methods.')}
+        ${card('Account', html`
+          ${user.status === 'blocked' ? setting('Sign-in is blocked', '', html`
+            <button class="fd-btn" type="button" data-variant="outline" ?disabled=${this.pending || Boolean(review)}
+              @click=${() => this.act(user, 'unblock')}>Unblock user</button>`)
+            : setting('Block sign-in', '', this.reviewButton('block'), true)}
+          ${setting('Permanently delete this user', '', this.reviewButton('delete'), true)}
+        `, 'Blocking and deleting end every session and agent grant.')}
         ${review ? card(labels[review.action] + '?', this.confirm(user, review),
           review.sid ? 'This ends session ' + review.sid + '.' : undefined) : nothing}
-        ${card('Sessions', this.sessions(user))}
-        <div class="fd-grid" data-min="lg" data-cols="2" data-gap="6">
-          ${card('Account', html`<div class="fd-row" data-wrap data-gap="2">
-            ${user.status === 'blocked' ? html`<button class="fd-btn" type="button" data-variant="outline"
-              ?disabled=${this.pending || Boolean(review)} @click=${() => this.act(user, 'unblock')}>Unblock user</button>` : this.reviewButton('block')}
-            ${this.reviewButton('delete')}
-          </div>`, 'Blocking and deleting end every session and agent grant.')}
-          ${card('Two-factor', this.reviewButton('reset-mfa'), 'Removes authenticators and passkeys so the person can enrol again.')}
-          ${card('Merge into another user', html`
-            <form class="fd-stack" data-gap="3" method="get" @submit=${(event: SubmitEvent) => this.merge(user, event)}>
-              ${text({ id: 'surviving_id', name: 'surviving_id', label: 'Surviving user ID', required: true, mono: true })}
-              <div class="fd-row"><button class="fd-btn" type="submit" data-variant="outline" ?disabled=${this.pending || Boolean(review)}>Review merge</button></div>
-            </form>`, 'This user is deleted. The other user keeps their ID, apps and sign-in methods.')}
-          ${card('Record', html`<div class="fd-table-scroll" role="region" aria-label="User record" tabindex="0">
-            <pre class="fd-codeblock-body fd-code">${JSON.stringify(user, null, 2)}</pre>
-          </div>`)}
-        </div>
       </div>`;
   }
 
   protected override render() {
     return corePage(this.data?.email ?? 'User detail', 'Sessions, status and sign-in methods.',
-      this.content(user => this.details(user)), { back, art: 'orbit', busy: this.pending || (!this.data && !this.failure) });
+      this.content(user => this.details(user)), { back, busy: this.pending || (!this.data && !this.failure) });
   }
 }
 

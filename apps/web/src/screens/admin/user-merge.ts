@@ -24,7 +24,7 @@ class UserMerge extends AdminScreen<Preview> {
                 'Users merged', () => { void navigate(userPath(survivor.id), { replace: true }); });
             },
           }), 'The deleted user’s sessions and agent grants end. Their sign-in methods move to the kept user.')}
-        </div>`), { back, art: 'orbit', busy: this.pending || (!this.data && !this.failure) });
+        </div>`), { back, busy: this.pending || (!this.data && !this.failure) });
   }
 }
 

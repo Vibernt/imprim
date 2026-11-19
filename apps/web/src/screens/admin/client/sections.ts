@@ -1,5 +1,5 @@
 import { html } from 'lit';
-import { text, shown, list, pairs, jsonField, choice, checks, toggle, amount, cols, formSection, advanced } from '../core-fields';
+import { text, shown, list, pairs, jsonField, choice, checks, toggle, amount, formSection, advanced } from '../core-fields';
 import { METHODS, SWITCHES, exchangePairs, type ClientFields } from './model';
 
 const HOST = '^[a-z0-9-]+(\\.[a-z0-9-]+)+$';
@@ -40,10 +40,10 @@ export function clientSections(value: ClientFields, isNew: boolean, providers: R
       choice({ id: 'f-signup_policy', label: 'Who can sign up', name: 'signup_policy', value: value.signup_policy, options: [['invited', 'Invited only'], ['open', 'Anyone']] }),
       list({ id: 'f-allowed_domains', label: 'Allowed email domains', name: 'allowed_domains', values: value.allowed_domains, pattern: HOST, placeholder: 'example.com', hint: 'People with these domains join without an invitation.' }),
       list({ id: 'f-google_hosted_domains', label: 'Google Workspace domains', name: 'google_hosted_domains', values: value.google_hosted_domains, pattern: HOST, placeholder: 'example.com', hint: 'Only these Workspace domains may sign in with Google. Leave empty to allow any Google account.' }),
-      cols(choice({ id: 'f-mfa', label: 'Two-factor', name: 'mfa', value: value.mfa, options: [['off', 'Off'], ['optional', 'Optional'], ['required', 'Required']] }),
-          amount({ id: 'f-mfa_trusted_device_days', label: 'Remember browsers for', name: 'mfa_trusted_device_days', value: value.mfa_trusted_device_days, unit: 'days', min: 0, max: 90, hint: '0 asks every time.' })),
+      choice({ id: 'f-mfa', label: 'Two-factor', name: 'mfa', value: value.mfa, options: [['off', 'Off'], ['optional', 'Optional'], ['required', 'Required']] }),
+          amount({ id: 'f-mfa_trusted_device_days', label: 'Remember browsers for', name: 'mfa_trusted_device_days', value: value.mfa_trusted_device_days, unit: 'days', min: 0, max: 90, hint: '0 asks every time.' }),
       toggle({ id: 'f-classic_oidc', label: 'Classic OpenID Connect', desc: 'Lets this app leave out PKCE and the nonce, as OpenID Connect libraries written before OAuth 2.1 do. Keep it off unless the app’s library needs it.', name: 'classic_oidc', on: SWITCHES.classic_oidc[0], checked: on(value, 'classic_oidc') }),
-      choice({ id: 'f-id_token_signed_response_alg', label: 'ID token signature', name: 'id_token_signed_response_alg', value: value.id_token_signed_response_alg ?? 'ES256', options: [['ES256', 'ES256 (recommended)'], ['RS256', 'RS256, for libraries that need it']] }));
+      choice({ id: 'f-id_token_signed_response_alg', label: 'ID token signature', stacked: true, name: 'id_token_signed_response_alg', value: value.id_token_signed_response_alg ?? 'ES256', options: [['ES256', 'ES256 (recommended)'], ['RS256', 'RS256, for libraries that need it']] }));
   const agents = formSection('agents', 'Agents', 'AI agents acting for a person in this app.',
       toggle({ id: 'f-agent_access', label: 'Agent access', desc: 'Turning it off revokes every agent grant for this app.', name: 'agent_access', on: SWITCHES.agent_access[0], checked: on(value, 'agent_access') }),
       checks({ id: 'f-agent_registration_methods', label: 'How agents register', name: 'agent_registration_methods', options: ordered(value.agent_registration_methods, { metadata_document: 'Metadata document', dynamic: 'Dynamic registration' }),

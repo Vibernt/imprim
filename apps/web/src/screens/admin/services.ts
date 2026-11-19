@@ -1,8 +1,9 @@
 import { html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
-import { overlays } from 'fire-design';
+import { focusQuiet, overlays } from 'fire-design';
 import { AdminScreen, corePage } from './core-screen';
-import { card, confirmPhrase, empty, mono, segment, status, table } from './core-view';
+import { card, confirmPhrase, mono, segment, status, table } from './core-view';
+import { listCount } from './list-view';
 import { newService, serviceForm, serviceInput, type Service } from './service-form';
 
 const endpoint = '/admin/api/services';
@@ -22,8 +23,13 @@ class ServicesScreen extends AdminScreen<{ services: Service[] }> {
   private review(service: Service, action: 'edit' | 'delete') {
     if (action === 'edit') this.editing = service;
     else this.deleting = service;
-    const heading = action === 'edit' ? '#service-editor-title' : '#confirm-service-delete';
-    void this.updateComplete.then(() => this.querySelector<HTMLElement>(heading)?.focus());
+    void this.updateComplete.then(() => {
+      if (action === 'delete') this.querySelector<HTMLInputElement>('#confirm-service-delete')?.focus();
+      else {
+        const heading = this.querySelector<HTMLElement>('#service-editor-title');
+        if (heading) focusQuiet(heading);
+      }
+    });
   }
 
   private save = (event: SubmitEvent) => {
@@ -56,7 +62,8 @@ class ServicesScreen extends AdminScreen<{ services: Service[] }> {
     const locked = Boolean(this.editing || this.deleting) || this.pending;
     return html`
       <div class="fd-stack" data-gap="6">
-        ${services.length ? table('Service clients', ['Name', 'Client ID', 'App', 'Scopes', 'Owner', 'Status', 'Actions'],
+        ${listCount(services.length, 'service client', 'service clients')}
+        ${table('Service clients', ['Name', 'Client ID', 'App', 'Scopes', 'Owner', 'Status', 'Actions'],
           services.map(service => [service.name, mono(service.id), mono(service.app_id), service.scopes.join(' '),
             service.owner_email, status(service.status), html`
               <div class="fd-row" data-gap="2">
@@ -65,9 +72,9 @@ class ServicesScreen extends AdminScreen<{ services: Service[] }> {
                 <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
                   aria-label=${'Delete ' + service.id} @click=${() => this.review(service, 'delete')}>Delete</button>
               </div>`,
-          ])) : empty('No service clients yet', 'Create one to let a service authenticate with its public key.')}
+          ]), ['No service clients yet', 'Create one to let a service authenticate with its public key.'])}
         ${this.editing ? keyed(this.editing, html`<section class="fd-stack" data-gap="3">
-          <h2 class="fd-title" tabindex="-1" id="service-editor-title">${this.editing.id ? 'Edit service client' : 'Create service client'}</h2>
+          <h2 class="fd-title" id="service-editor-title">${this.editing.id ? 'Edit service client' : 'Create service client'}</h2>
           ${serviceForm(this.editing, this.pending, this.save, this.close)}
         </section>`) : nothing}
         ${this.deleting ? card('Delete service client?', confirmPhrase({
@@ -80,7 +87,7 @@ class ServicesScreen extends AdminScreen<{ services: Service[] }> {
   protected override render() {
     return corePage('Service clients', 'Machines acting as themselves for one app, with client credentials and a signed key.',
       this.content(({ services }) => this.listing(services)), {
-        art: 'waves', busy: this.pending || (!this.data && !this.failure),
+        busy: this.pending || (!this.data && !this.failure),
         actions: this.data && !this.editing && !this.deleting ? html`
           <button class="fd-btn" type="button" data-variant="primary" @click=${() => this.review(newService, 'edit')}>Create service client</button>` : undefined,
       });

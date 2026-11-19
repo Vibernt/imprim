@@ -15,8 +15,8 @@ Status: built. This page is the specification for Fire 0.9.1 and the Lit account
 
 ## Fire
 
-- Fire v0.9.1 (commit `7bca159`), MIT, from its public repository: both the root `package.json` (a dev dependency, for
-  the Worker, scripts and tests) and `apps/web/package.json` pin `"fire-design": "github:vidhatanand/firedesign#v0.9.1"`.
+- Fire v0.10.1 (commit `bb3c551`), MIT, from its public repository: both the root `package.json` (a dev dependency, for
+  the Worker, scripts and tests) and `apps/web/package.json` pin `"fire-design": "github:vidhatanand/firedesign#v0.10.1"`.
   Upgrading Fire means changing that tag in both and recording it here and in `docs/fire/README.md`.
 - The Worker imports Fire's modules (`icons.js`, `palettes.js`, `typefaces.js`) as `fire-design/fire/js/…`; Wrangler
   bundles them. They are the only imports outside `apps/server/src` that `npm run check` allows.
@@ -74,6 +74,23 @@ Status: built. This page is the specification for Fire 0.9.1 and the Lit account
 - Built from Fire templates or parts: the client editor (`templates/form.html`); Branding (`templates/settings.html`,
   `fd-dropzone`, Tweaks); account Security (`fd-codes`, `fd-secret`), set and change password
   (`fd-secret data-mode="entry"`); workspace create, detail and close (`fd-confirm-inline`); user merge.
+
+## Layout
+
+Every screen follows one of Fire's page templates (`templates/` in Fire's repository). The app has one page head, one
+form pattern and one list pattern; a screen never invents its own page layout.
+
+| Template | Pattern | Screens |
+|---|---|---|
+| `settings.html` | Compact page head (back link on a detail page, h1, one line, primary action at the right). A key-value summary when the screen has one, then full-width cards stacked in one column, each with a title and description; actions are `fd-setting` rows (text left, control at its natural width right); empty states sit inside their card; destructive actions come last, in a danger card, confirmed with `fd-confirm-inline` | Account Profile, Security, Sessions and apps, Agents; admin User detail, Workspace detail, Settings, Branding |
+| `form.html` | One `form.fd-form[data-size="full"]` at full content width; `fd-form-section` only as its direct children, never in a grid; inputs and textareas fill the section; one `fd-form-actions` at the end | Client new and edit, Workspace create, Realm create and edit (administrators as a card below the form) |
+| `api-keys.html`, `audit.html` | Page head with the primary action, a toolbar (search, filters), one table in `.fd-table-wrap > .fd-table-scroll`, row actions in the last column, the empty state inside the table area | Clients, Services, Users, Audit log, Workspaces, Signing keys (rotate in the head, revoke as a row action), Realms |
+
+Rules: a callout always has its `fd-callout-icon`; a code block is an `fd-codeblock` with its body; buttons keep their
+natural width; nothing scrolls sideways at 375px. `npx fire lint --surface app apps/web/src` and the review gate
+(`apps/web/scripts/fire-review.test.mjs`: every screen at 1440 and 375, light and dark, with Fire's structural and
+composition rules) must report no errors, and someone looks at every picture in `apps/web/.fire-review/index.html`
+before a release.
 
 ## Rules for the codebase
 

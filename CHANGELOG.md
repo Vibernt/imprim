@@ -7,6 +7,20 @@ describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
 Nothing yet.
 
+## 2026-11-19.1
+
+No migration.
+
+- Fire v0.10.1: its fieldset reset and `focusQuiet` replace Imprim's two stopgaps; its agent rules and class
+  reference are in `docs/fire`.
+- Every account and admin screen follows one Fire page template ([Interface](docs/WEB.md#layout)): one compact page
+  head, lists as a table with row actions, forms in one column, detail screens as stacked cards.
+- Fixed: the page title no longer shows a focus ring after navigating; callouts carry their icon; a screen that shows
+  a code block no longer stops updating after an action (Fire's code block rewrites its text, so the block is
+  re-created when the value changes).
+- `fire review` gates the app: every screen at 1440 and 375, light and dark, with Fire's structural and composition
+  rules, in `npm --prefix apps/web run check`.
+
 ## 2026-11-19
 
 No migration.

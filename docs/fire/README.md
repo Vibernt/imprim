@@ -1,7 +1,7 @@
 # Fire in Imprim
 
-Every Imprim page uses **Fire v0.9.1** (commit `7bca159`), MIT, from the pinned package
-`"fire-design": "github:vidhatanand/firedesign#v0.9.1"` (root and `apps/web` `package.json`).
+Every Imprim page uses **Fire v0.10.1** (commit `bb3c551`), MIT, from the pinned package
+`"fire-design": "github:vidhatanand/firedesign#v0.10.1"` (root and `apps/web` `package.json`).
 `scripts/build-fire.mjs` copies its CSS, ES modules and other static assets into `apps/server/public/fire/`,
 the generated directory served by Workers Static Assets. The package includes SIL OFL notices for the fonts
 and the ISC notice for the Lucide icons.
@@ -49,6 +49,7 @@ and check the upgrade. Review the sign-in, account and console pages in light an
 
 | Fire | In Imprim since | What changed for Imprim |
 |---|---|---|
+| 0.10.0 | 2026-11-19 | Fieldset reset, quiet route focus, structural markup lint and a browser review gate. |
 | 0.9.0 | 2026-11-19 | Vendored package, translated control labels, updated palette tokens and new Tweaks settings. |
 | 0.5.0 | 2026-11-17 | No Fire module writes a `style` attribute any more, so every component works under Imprim's policy. Tweaks starts from the page's own palette and type set. Also new, not used yet: a pipeline graph, a day strip, a secret entry field. |
 | 0.4.0 | 2026-11-15 | The form controls the console uses: lists, names with values, code fields, form sections, radio choices. |

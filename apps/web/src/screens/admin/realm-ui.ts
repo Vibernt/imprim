@@ -32,19 +32,9 @@ export const keyValues = (pairs: readonly [string, Content][], cols = 2) => html
     <div class="fd-kv-item"><dt class="fd-kv-key">${label}</dt><dd class="fd-kv-value"><span class="fd-kv-text">${value}</span></dd></div>`)}
   </dl>`;
 
-export const table = (label: string, headers: string[], rows: Content[][]) => html`
-  <div class="fd-table-wrap"><div class="fd-table-scroll"><table class="fd-table" aria-label=${label}>
-    <thead><tr>${headers.map(header => html`<th scope="col">${header}</th>`)}</tr></thead>
-    <tbody>${rows.map(row => html`<tr>${row.map(cell => html`<td>${cell}</td>`)}</tr>`)}</tbody>
-  </table></div></div>`;
+export { table } from './list-view';
 
-export const formSection = (id: string, title: string, content: Content, description?: string) => html`
-  <section class="fd-form-section" aria-labelledby=${id}>
-    <header class="fd-form-section-head"><h2 class="fd-form-section-title" id=${id}>${title}</h2>
-      ${description ? html`<p class="fd-form-section-desc">${description}</p>` : nothing}
-    </header>
-    <div class="fd-form-section-body">${content}</div>
-  </section>`;
+export { formSection } from '../page-layout';
 
 export function field(id: string, label: string, {
   name = id, value = '', type = 'text', required = false, max, placeholder, hint,
@@ -60,7 +50,7 @@ export function field(id: string, label: string, {
 export function confirmInline(id: string, phrase: string, label: string, pending: boolean, submit: (event: SubmitEvent) => void, cancel: Content) {
   return keyed(phrase, html`
     <form class="fd-confirm-inline" method="post" data-fd-confirm-inline data-confirm=${phrase} @submit=${submit}>
-      <fieldset class="fd-stack im-fieldset" data-gap="3" ?disabled=${pending}>
+      <fieldset class="fd-stack" data-gap="3" ?disabled=${pending}>
         <div class="fd-field">
           <label class="fd-field-label" for=${id}>Type <span class="fd-confirm-phrase">${phrase}</span> to confirm</label>
           <input class="fd-input" id=${id} name="confirm" autocomplete="off" autocapitalize="off" spellcheck="false"

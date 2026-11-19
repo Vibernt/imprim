@@ -4,14 +4,15 @@ import { FireLight } from '../lib/fire-light';
 import { t } from '../lib/i18n';
 import { icon } from '../lib/icon';
 import { href, retry } from '../lib/router';
+import { pageHead } from '../screens/page-layout';
 
 const page = (title: string, glyph: IconName, description: string, actions: TemplateResult, tone?: string) => html`
   <main class="fd-page">
     <div class="fd-frame">
+      ${pageHead(title)}
       <section class="fd-band" aria-label=${title} data-grow>
         <div class="fd-empty" data-size="lg" data-tone=${tone ?? nothing}>
           <span class="fd-empty-icon">${icon(glyph)}</span>
-          <h1 class="fd-h1">${title}</h1>
           <p class="fd-empty-text">${description}</p>
           <div class="fd-empty-actions">${actions}</div>
         </div>

@@ -1,4 +1,5 @@
 import { html } from 'lit';
+import { card, codeBlock } from '../page-layout';
 import { AdminRealmScreen } from './realm-screen';
 import { cap, keyValues, mono, status } from './realm-ui';
 
@@ -15,7 +16,7 @@ const turnstileTone = { on: 'success', off: 'neutral', misconfigured: 'danger' }
 
 class RealmSettingsScreen extends AdminRealmScreen<Settings> {
   protected heading = 'Settings';
-  protected override description = 'Read-only deployment configuration. Change it with a reviewed deployment.';
+  protected override get description() { return 'Read-only deployment configuration. Change it with a reviewed deployment.'; }
   protected endpoint() { return '/admin/api/settings'; }
 
   protected content(settings: Settings) {
@@ -27,10 +28,7 @@ class RealmSettingsScreen extends AdminRealmScreen<Settings> {
           const count = delivery[key]?.pending ?? 0;
           return [label, status(count ? `${count} waiting` : 'None waiting', count ? 'warning' : 'success')];
         })], 3)}
-      <section class="fd-stack" data-gap="3" aria-labelledby="configuration-title">
-        <h2 class="fd-h2" id="configuration-title">Full configuration</h2>
-        <pre class="fd-codeblock-body fd-code">${JSON.stringify(settings, null, 2)}</pre>
-      </section>
+      ${card('Full configuration', codeBlock('Full configuration', settings))}
     </div>`;
   }
 }

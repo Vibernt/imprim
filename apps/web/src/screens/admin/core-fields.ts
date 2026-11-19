@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { icon } from '../../lib/icon';
+import { formSection as section } from '../page-layout';
 
 type Field = {
   id: string; label: string; name: string; value?: string | null; hint?: string; required?: boolean;
@@ -65,12 +66,15 @@ export const jsonField = (field: Control & { value: unknown }) => labelled(field
   </div>`);
 
 type Options = Control & { options: [string, string][] };
-export const choice = (field: Options & { value: string }) => html`
+export const choice = (field: Options & { value: string; stacked?: boolean }) => html`
   <div class="fd-field" role="radiogroup" aria-labelledby=${field.id + '-label'} aria-describedby=${describedBy(field)}>
     <span class="fd-field-label" id=${field.id + '-label'}>${field.label}</span>
-    <div><div class="fd-segmented">${field.options.map(([value, label]) => html`
+    ${field.stacked ? html`<div class="fd-stack" data-gap="2">${field.options.map(([value, label]) => html`
+      <label class="fd-radio"><input type="radio" name=${field.name} value=${value} ?checked=${value === field.value}>
+        <span class="fd-radio-box"></span><span class="fd-radio-text"><span class="fd-radio-label">${label}</span></span>
+      </label>`)}</div>` : html`<div><div class="fd-segmented">${field.options.map(([value, label]) => html`
       <label class="fd-segmented-item"><input type="radio" name=${field.name} value=${value} ?checked=${value === field.value}>
-        <span>${label}</span></label>`)}</div></div>
+        <span>${label}</span></label>`)}</div></div>`}
     ${hint(field)}
   </div>`;
 
@@ -103,16 +107,8 @@ export const amount = (field: Control & { value: number; unit: string; min: numb
     <span class="fd-input-affix" data-kind="unit">${field.unit}</span>
   </div>`);
 
-export const cols = (...fields: TemplateResult[]) => html`<div class="fd-form-cols">${fields}</div>`;
-
-export const formSection = (id: string, title: string, description: string, ...fields: TemplateResult[]) => html`
-  <section class="fd-form-section" aria-labelledby=${id + '-title'}>
-    <header class="fd-form-section-head">
-      <h2 class="fd-form-section-title" id=${id + '-title'}>${title}</h2>
-      <p class="fd-form-section-desc">${description}</p>
-    </header>
-    <div class="fd-form-section-body">${fields}</div>
-  </section>`;
+export const formSection = (id: string, title: string, description: string, ...fields: TemplateResult[]) =>
+  section(id + '-title', title, html`${fields}`, description);
 
 export const advanced = (title: string, content: TemplateResult) => html`
   <details class="fd-disclosure"><summary class="fd-disclosure-trigger"><span>${title}</span>${icon('chevron-down')}</summary>

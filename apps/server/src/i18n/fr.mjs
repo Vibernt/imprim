@@ -1,5 +1,7 @@
 // French (fr). Drafted with AI assistance, awaiting native review before production (docs/TRANSLATING.md).
 export default Object.freeze({
+    "Personal information": "Informations personnelles",
+    "Other sessions": "Autres sessions",
     "Never": "Jamais",
     "Automatic": "Automatique",
     "Language": "Langue",

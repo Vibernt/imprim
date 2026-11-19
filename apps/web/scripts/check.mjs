@@ -1,4 +1,4 @@
-// Check the production build, its Fire slim report and size budgets, then lint and smoke-test the browser.
+// Check the production build, its Fire slim report and size budgets, then lint, smoke-test and review the browser.
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -12,6 +12,7 @@ const steps = [
     ['npm', 'run', 'lint:markup', '--', 'src', 'index.html'],
     ['npm', 'run', 'lint:css'],
     [process.execPath, '--test', 'scripts/smoke.test.mjs', 'scripts/admin-realm-smoke.test.mjs'],
+    [process.execPath, '--test', 'scripts/fire-review.test.mjs'],
 ];
 for (const [command, ...args] of steps) {
     const result = spawnSync(command, args, { cwd, stdio: 'inherit' });

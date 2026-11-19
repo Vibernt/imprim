@@ -15,25 +15,12 @@ const tones: Record<string, string> = { active: 'success', blocked: 'danger', de
 export const status = (value: string, tone = tones[value]) => html`<span class="fd-status" data-tone=${tone ?? nothing}>${cap(value)}</span>`;
 export const when = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 
-export const table = (name: string, headings: string[], rows: Cell[][]) => html`
-  <div class="fd-table-wrap"><div class="fd-table-scroll" tabindex="0" role="region" aria-label=${name}>
-    <table class="fd-table" aria-label=${name}>
-      <thead><tr>${headings.map(heading => html`<th scope="col">${heading}</th>`)}</tr></thead>
-      <tbody>${rows.map(row => html`<tr>${row.map(value => html`<td>${value}</td>`)}</tr>`)}</tbody>
-    </table>
-  </div></div>`;
+export { table } from './list-view';
 
 export const empty = (title: string, text: string) => html`
   <div class="fd-empty"><h2 class="fd-h3">${title}</h2><p class="fd-empty-text">${text}</p></div>`;
 
-export function card(title: string, content: TemplateResult, description?: string) {
-  return html`<section class="fd-card">
-    <div class="fd-card-head"><div class="fd-card-heading"><h2 class="fd-title">${title}</h2>
-      ${description ? html`<p class="fd-card-desc">${description}</p>` : nothing}
-    </div></div>
-    ${content}
-  </section>`;
-}
+export { card } from '../page-layout';
 
 export const facts = (rows: [string, Cell][]) => html`
   <dl class="fd-kv" data-cols="2">${rows.map(([label, value]) => html`
@@ -68,7 +55,7 @@ export function confirmPhrase(options: {
   };
   return html`${keyed(`${options.id}:${options.action}:${options.phrase}`, html`
     <form class="fd-confirm-inline" method="post" data-fd-confirm-inline data-confirm=${options.phrase} @submit=${submit}>
-      <fieldset class="fd-stack im-fieldset" data-gap="3" ?disabled=${options.pending}>
+      <fieldset class="fd-stack" data-gap="3" ?disabled=${options.pending}>
         ${options.fields ?? nothing}
         <div class="fd-field">
           <label class="fd-field-label" for=${options.id}>${options.label}</label>

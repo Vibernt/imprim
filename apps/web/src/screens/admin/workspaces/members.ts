@@ -1,4 +1,5 @@
 import { html, nothing } from 'lit';
+import { card } from '../../page-layout';
 import { cap, field, when } from '../realm-ui';
 import { roleField, submitButton } from './forms';
 import { optionalTable } from './summary';
@@ -6,13 +7,12 @@ import type { Submit, Workspace } from './types';
 
 export function members(workspace: Workspace, pending: boolean, submit: Submit) {
   const editable = workspace.editable && workspace.kind === 'team';
-  return html`<section class="fd-stack" data-gap="3">
-    <h2 class="fd-h2">Members</h2>
-    ${optionalTable('Members', ['Email', 'Role', ...(editable ? ['Actions'] : [])], workspace.members.map((member, index) =>
+  return card('Members', optionalTable('Members', ['Email', 'Role', ...(editable ? ['Actions'] : [])], workspace.members.map((member, index) =>
       [member.email, cap(member.role), ...(editable ? [!member.manageable ? '—' : html`
         <div class="fd-row" data-wrap data-align="end" data-gap="3">
           <form method="post" @submit=${(event: SubmitEvent) => submit('role', event)}>
-            <fieldset class="fd-row im-fieldset" data-align="end" data-gap="2" ?disabled=${pending}>
+            <fieldset class="fd-row" data-align="end" data-gap="2" ?disabled=${pending}>
+              <legend class="fd-sr-only">Member role</legend>
               <input type="hidden" name="sub" .value=${member.id}>
               ${roleField('member-role-' + index, 'Role for ' + member.email, member.role, workspace.can_grant_owner)}
               <button class="fd-btn" type="submit" data-variant="outline" data-size="sm">Save role</button>
@@ -22,25 +22,26 @@ export function members(workspace: Workspace, pending: boolean, submit: Submit) 
             <input type="hidden" name="sub" .value=${member.id}>
             <button class="fd-btn" type="submit" data-variant="danger" data-size="sm" aria-label=${'Remove ' + member.email} ?disabled=${pending}>Remove member</button>
           </form>
-        </div>`] : [])]), 'Members appear after accepting an invitation.')}
-  </section>`;
+        </div>`] : [])]), 'Members appear after accepting an invitation.'));
 }
 
 export function invitations(workspace: Workspace, pending: boolean, submit: Submit) {
-  return html`<section class="fd-stack" data-gap="3">
-    <h2 class="fd-h2">Open invitations</h2>
+  return card('Open invitations', html`
     ${optionalTable('Open invitations', ['Email', 'Role', 'Expires', ...(workspace.editable ? ['Actions'] : [])],
       workspace.invitations.map(invite => [invite.email, cap(invite.role), when(invite.expires_at), ...(workspace.editable ? [html`
         <form method="post" @submit=${(event: SubmitEvent) => submit('revoke-invitation', event)}>
           <input type="hidden" name="invitation_id" .value=${invite.id}>
           <button class="fd-btn" type="submit" data-variant="outline" data-size="sm" aria-label=${'Revoke invitation for ' + invite.email} ?disabled=${pending}>Revoke</button>
         </form>`] : [])]), 'Invitations appear here until they are accepted, revoked or expire.')}
-    ${workspace.can_invite ? html`<form class="fd-form" method="post" @submit=${(event: SubmitEvent) => submit('invite', event)}>
-      <fieldset class="fd-stack im-fieldset" data-gap="3" ?disabled=${pending}>
-        ${field('workspace-invite-email', 'Email', { name: 'email', type: 'email', required: true, max: 254 })}
-        ${roleField('workspace-invite-role', 'Invitation role', 'member', workspace.can_grant_owner)}
-        ${submitButton('Send invitation')}
+    ${workspace.can_invite ? html`<form method="post" @submit=${(event: SubmitEvent) => submit('invite', event)}>
+      <fieldset class="fd-setting" ?disabled=${pending}>
+        <legend class="fd-sr-only">Send invitation</legend>
+        <div class="fd-setting-text fd-stack" data-gap="3">
+          ${field('workspace-invite-email', 'Email', { name: 'email', type: 'email', required: true, max: 254 })}
+          ${roleField('workspace-invite-role', 'Invitation role', 'member', workspace.can_grant_owner)}
+        </div>
+        <div class="fd-setting-control">${submitButton('Send invitation')}</div>
       </fieldset>
     </form>` : nothing}
-  </section>`;
+  `);
 }

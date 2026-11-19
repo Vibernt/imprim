@@ -16,22 +16,20 @@ export const productField = (name: string, label: string) => keyed(name, html`
 export const roleField = (id: string, label: string, role: Role, canGrantOwner: boolean) => html`
   <div class="fd-field">
     <label class="fd-field-label" for=${id}>${label}</label>
-    <span class="fd-select"><select id=${id} name="role">
+    <label class="fd-select"><select id=${id} name="role">
       ${(canGrantOwner ? ['owner', 'admin', 'member', 'viewer'] : ['admin', 'member', 'viewer']).map(value => html`
         <option value=${value} ?selected=${role === value}>${cap(value)}</option>`)}
-    </select></span>
+    </select></label>
   </div>`;
 
 export const submitButton = (title: string) => html`
   <div class="fd-row"><button class="fd-btn" type="submit" data-variant="outline">${title}</button></div>`;
 
 export const createForm = (pending: boolean, submit: Submit) => html`
-  <form class="fd-form" method="post" @submit=${(event: SubmitEvent) => submit('create', event)}>
-    <fieldset class="fd-stack im-fieldset" data-gap="4" ?disabled=${pending}>
-      ${formSection('workspace-create-team', 'Team', html`${nameField()}${productField('products', 'Products')}`)}
-      ${formSection('workspace-create-owner', 'First owner', field('first_owner_email', 'First owner email',
-        { type: 'email', required: true, max: 254 }),
-      'If you enter a different email, Imprim sends an invitation.') }
-      <div class="fd-form-actions"><button class="fd-btn" type="submit" data-variant="primary">Create workspace</button></div>
-    </fieldset>
+  <form class="fd-form" data-size="full" ?inert=${pending} method="post" @submit=${(event: SubmitEvent) => submit('create', event)}>
+    ${formSection('workspace-create-team', 'Team', html`${nameField()}${productField('products', 'Products')}`)}
+    ${formSection('workspace-create-owner', 'First owner', field('first_owner_email', 'First owner email',
+      { type: 'email', required: true, max: 254 }),
+    'If you enter a different email, Imprim sends an invitation.') }
+    <div class="fd-form-actions"><button class="fd-btn" type="submit" data-variant="primary" ?disabled=${pending}>Create workspace</button></div>
   </form>`;

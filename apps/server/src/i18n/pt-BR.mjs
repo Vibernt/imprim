@@ -1,5 +1,7 @@
 // Portuguese, Brazil (pt-BR). Drafted with AI assistance, awaiting native review before production (docs/TRANSLATING.md).
 export default Object.freeze({
+    "Personal information": "Informações pessoais",
+    "Other sessions": "Outras sessões",
     "Never": "Nunca",
     "Automatic": "Automático",
     "Language": "Idioma",

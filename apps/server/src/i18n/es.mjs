@@ -1,5 +1,7 @@
 // Spanish (es). Drafted with AI assistance, awaiting native review before production (docs/TRANSLATING.md).
 export default Object.freeze({
+    "Personal information": "Información personal",
+    "Other sessions": "Otras sesiones",
     "Never": "Nunca",
     "Automatic": "Automático",
     "Language": "Idioma",

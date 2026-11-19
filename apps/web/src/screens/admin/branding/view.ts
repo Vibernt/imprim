@@ -1,6 +1,7 @@
 import { html } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { icon } from '../../../lib/icon';
+import { card } from '../../page-layout';
 import { assetUrl } from './logos';
 import type { Branding } from './types';
 
@@ -14,14 +15,12 @@ export function specimen(brand: Branding, realmName: string) {
   const name = brand.name || realmName;
   const design = JSON.stringify({ name, mark: brand.mark && assetUrl(brand.mark),
     logo: brand.logo_light && assetUrl(brand.logo_light), logoDark: brand.logo_dark && assetUrl(brand.logo_dark) });
-  return html`
-  <section class="fd-stack" data-gap="3" aria-labelledby="branding-preview">
-    <h2 class="fd-h2" id="branding-preview">Sign-in preview</h2>
+  return card('Sign-in preview', html`
     <div class="fd-screen" role="group" aria-label="Sample sign-in">
       ${keyed(design, html`<div data-fd-brand=${design}>
         <div class="fd-brand"><span class="fd-brand-name">${name}</span></div>
       </div>`)}
-      <article class="fd-card" data-size="lg">
+      <article class="fd-card" data-size="lg" data-variant="sunken">
         <header class="fd-screen-head">
           <p class="fd-h1">${brand.copy?.sign_in_heading || 'Sign in to ' + name}</p>
           <p class="fd-muted">${brand.copy?.sign_in_help || 'Use the email your team invited.'}</p>
@@ -35,5 +34,5 @@ export function specimen(brand: Branding, realmName: string) {
       <a class="fd-link" href="/admin/branding/preview" target="_blank" rel="noopener">${icon('external-link')} Open saved sign-in page</a>
       <a class="fd-link" href="/admin/branding/email-preview" target="_blank" rel="noopener">${icon('mail')} Open sample email</a>
     </div>
-  </section>`;
+  `);
 }

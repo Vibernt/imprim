@@ -3,6 +3,7 @@ import { overlays } from 'fire-design';
 import { ApiError, api } from '../../lib/api';
 import { FireLight } from '../../lib/fire-light';
 import { t } from '../../lib/i18n';
+import { pageHead } from '../page-layout';
 
 export const post = <T = object>(path: string, body: object = {}) => api<T>(`/v1/account/${path}`, { method: 'POST', body });
 export const success = (title: string, description?: string) => overlays.toast({ title, description, tone: 'success' });
@@ -53,7 +54,7 @@ export abstract class AccountScreen<T> extends FireLight {
   protected page(title: string, description: string, content: (data: T) => unknown) {
     return html`
       <main class="fd-page"><div class="fd-frame">
-        <section class="fd-band fd-page-hero"><h1 class="fd-display" tabindex="-1">${title}</h1><p class="fd-page-hero-desc">${description}</p></section>
+        ${pageHead(title, description)}
         <section class="fd-band fd-stack" data-gap="5" aria-busy=${Boolean(this.pending || (!this.data && !this.loadError))}>
           ${this.loadError ? html`
             <div class="fd-empty" data-tone="danger" role="alert">

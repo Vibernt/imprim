@@ -32,7 +32,7 @@ function clients(open) {
         await page.getByRole('table', { name: 'Clients' }).waitFor();
         await page.getByRole('link', { name: 'Register client', exact: true }).press('Enter');
         await page.locator('#f-id').fill('smoke-client');
-        assert.equal(await page.locator('.fd-form-section').count(), 6);
+        assert.equal(await page.locator('form.fd-form[data-size="full"] > .fd-form-section').count(), 6);
         assert.equal(await page.locator('#f-dev').isChecked(), false);
         assert.equal(await page.locator('input[name="signup_policy"][value="invited"]').isChecked(), true);
         assert.equal(await page.locator('#f-agent_max_grant_days').inputValue(), '90');

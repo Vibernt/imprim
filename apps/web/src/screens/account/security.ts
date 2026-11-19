@@ -1,3 +1,4 @@
+import { focusQuiet } from 'fire-design';
 import { ApiError, api } from '../../lib/api';
 import { t } from '../../lib/i18n';
 import { AccountScreen, post, success } from './account-screen';
@@ -27,7 +28,10 @@ class ScreenSecurity extends AccountScreen<Security> {
   private show(step?: Step) {
     this.code = '';
     this.step = step;
-    void this.updateComplete.then(() => this.querySelector('h1')?.focus());
+    void this.updateComplete.then(() => {
+      const heading = this.querySelector('h1');
+      if (heading) focusQuiet(heading);
+    });
   }
 
   private done = () => {

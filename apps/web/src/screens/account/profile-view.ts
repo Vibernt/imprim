@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { t } from '../../lib/i18n';
+import { card } from '../page-layout';
 
 export interface Profile {
   email: string;
@@ -14,56 +15,55 @@ type Submit = (action: Action, event: SubmitEvent) => void;
 
 function row(id: string, label: string, description: string, input: TemplateResult, button: TemplateResult) {
   return html`
-    <div class="fd-form-row" data-layout="stack">
-      <div class="fd-form-row-text">
-        <label class="fd-form-row-label" for=${id}>${label}</label>
-        <span class="fd-form-row-desc" id=${`${id}-desc`}>${description}</span>
+    <div class="fd-setting">
+      <div class="fd-setting-text fd-field">
+        <label class="fd-setting-title" for=${id}>${label}</label>
+        <p class="fd-setting-desc" id=${`${id}-desc`}>${description}</p>
+        ${input}
       </div>
-      <div class="fd-form-row-control"><div class="fd-field"><div class="fd-input-pair">${input}${button}</div></div></div>
+      <div class="fd-setting-control">${button}</div>
     </div>`;
 }
 
 export function profileFields(profile: Profile, pending: Action | null, submit: Submit) {
   const disabled = pending !== null;
   return html`
-    <div class="fd-form-row" data-layout="stack">
-      <div class="fd-form-row-text"><span class="fd-form-row-label">${t('Email')}</span></div>
-      <div class="fd-form-row-control">
-        <span class="fd-mono">${profile.email}</span>
-        ${profile.email_verified ? nothing : html`
+    <dl class="fd-kv" data-cols="1">
+      <div class="fd-kv-item">
+        <dt class="fd-kv-key">${t('Email')}</dt>
+        <dd class="fd-kv-value"><span class="fd-kv-text fd-mono">${profile.email}</span></dd>
+        ${profile.email_verified ? nothing : html`<dd class="fd-row" data-wrap>
           <span class="fd-badge" data-tone="warning">${t('Not confirmed')}</span>
-          <span>${t('Sign in with an email link to confirm it.')}</span>`}
+          <span>${t('Sign in with an email link to confirm it.')}</span>
+        </dd>`}
       </div>
-    </div>
-    <form method="post" @submit=${(event: SubmitEvent) => submit('profile', event)}>
-      ${row('display_name', t('Name'), t('Apps that ask for your profile see this name.'), html`
-        <input class="fd-input" id="display_name" name="display_name" maxlength="100" autocomplete="name"
-          aria-describedby="display_name-desc" .value=${profile.display_name ?? ''} ?disabled=${disabled}>`, html`
-        <button class="fd-btn" type="submit" data-variant="primary" ?disabled=${disabled}>${t('Save name')}</button>`)}
-    </form>
-    <form method="post" @submit=${(event: SubmitEvent) => submit('language', event)}>
-      ${row('locale', t('Language'), t('For these pages and the emails we send you.'), html`
-        <span class="fd-select"><select id="locale" name="locale" aria-describedby="locale-desc" ?disabled=${disabled}>
-          <option value="" ?selected=${!profile.locale}>${t('Automatic')}</option>
-          ${profile.languages.map(({ id, label }) => html`<option value=${id} lang=${id} ?selected=${profile.locale === id}>${label}</option>`)}
-        </select></span>`, html`
-        <button class="fd-btn" type="submit" ?disabled=${disabled}>${t('Save language')}</button>`)}
-    </form>
-    <form method="post" @submit=${(event: SubmitEvent) => submit('email', event)}>
-      ${row('new_email', t('New email'), t('Needs an email-link sign-in in the last 10 minutes. We confirm the new address and tell the old one.'), html`
-        <input class="fd-input" id="new_email" name="new_email" type="email" maxlength="254" autocomplete="email"
-          placeholder=${t('name@example.com')} aria-describedby="new_email-desc" required ?disabled=${disabled}>`, html`
-        <button class="fd-btn" type="submit" ?disabled=${disabled}>${t('Change email')}</button>`)}
-    </form>`;
+    </dl>
+    ${card(t('Personal information'), html`
+      <form method="post" @submit=${(event: SubmitEvent) => submit('profile', event)}>
+        ${row('display_name', t('Name'), t('Apps that ask for your profile see this name.'), html`
+          <input class="fd-input" id="display_name" name="display_name" maxlength="100" autocomplete="name"
+            aria-describedby="display_name-desc" .value=${profile.display_name ?? ''} ?disabled=${disabled}>`, html`
+          <button class="fd-btn" type="submit" data-variant="primary" ?disabled=${disabled}>${t('Save name')}</button>`)}
+      </form>
+      <form method="post" @submit=${(event: SubmitEvent) => submit('language', event)}>
+        ${row('locale', t('Language'), t('For these pages and the emails we send you.'), html`
+          <label class="fd-select"><select id="locale" name="locale" aria-describedby="locale-desc" ?disabled=${disabled}>
+            <option value="" ?selected=${!profile.locale}>${t('Automatic')}</option>
+            ${profile.languages.map(({ id, label }) => html`<option value=${id} lang=${id} ?selected=${profile.locale === id}>${label}</option>`)}
+          </select></label>`, html`
+          <button class="fd-btn" type="submit" ?disabled=${disabled}>${t('Save language')}</button>`)}
+      </form>
+      <form method="post" @submit=${(event: SubmitEvent) => submit('email', event)}>
+        ${row('new_email', t('New email'), t('Needs an email-link sign-in in the last 10 minutes. We confirm the new address and tell the old one.'), html`
+          <input class="fd-input" id="new_email" name="new_email" type="email" maxlength="254" autocomplete="email"
+            placeholder=${t('name@example.com')} aria-describedby="new_email-desc" required ?disabled=${disabled}>`, html`
+          <button class="fd-btn" type="submit" ?disabled=${disabled}>${t('Change email')}</button>`)}
+      </form>
+    `)}`;
 }
 
 export function deleteSection(email: string, pending: Action | null, submit: Submit) {
-  return html`
-    <section class="fd-stack" data-gap="3" aria-labelledby="delete-heading">
-      <div class="fd-stack" data-gap="1">
-        <h2 class="fd-h3" id="delete-heading">${t('Delete account')}</h2>
-        <p class="fd-small fd-muted">${t('Signs you out of every app and agent and removes how you sign in. It can’t be undone.')}</p>
-      </div>
+  return card(t('Delete account'), html`
       <form class="fd-confirm-inline" method="post" data-fd-confirm-inline data-confirm=${email.toLowerCase()}
         @submit=${(event: SubmitEvent) => submit('delete', event)}>
         <div class="fd-field">
@@ -80,5 +80,5 @@ export function deleteSection(email: string, pending: Action | null, submit: Sub
         <p class="fd-small fd-muted">${t('Apps keep their own records of you. Deleting needs a sign-in in the last 10 minutes.')}</p>
         <div class="fd-form-actions"><button class="fd-btn" type="submit" data-variant="danger" data-fd-confirm-submit>${t('Delete account')}</button></div>
       </form>
-    </section>`;
+  `, t('Signs you out of every app and agent and removes how you sign in. It can’t be undone.'));
 }

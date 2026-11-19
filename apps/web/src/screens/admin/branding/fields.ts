@@ -30,12 +30,12 @@ export function languageFields(brand: Branding) {
   return html`<div class="fd-stack" data-gap="4">
     <div class="fd-field">
       <label class="fd-field-label" for="branding-locale">Default language</label>
-      <span class="fd-select"><select id="branding-locale" name="locale" aria-describedby="branding-locale-hint">
+      <label class="fd-select"><select id="branding-locale" name="locale" aria-describedby="branding-locale-hint">
         ${options.map(([value, label]) => html`<option value=${value} ?selected=${value === current}>${label}</option>`)}
-      </select></span>
+      </select></label>
       <p class="fd-field-hint" id="branding-locale-hint">Pages and emails use it if the browser asks for a language you don’t offer.</p>
     </div>
-    <fieldset class="fd-stack im-fieldset" data-gap="2">
+    <fieldset class="fd-stack" data-gap="2">
       <legend class="fd-field-label">Offered languages</legend>
       ${languages.map(([tag, name]) => html`<label class="fd-checkbox">
         <input type="checkbox" name="locales" value=${tag} .checked=${offered.includes(tag)}>

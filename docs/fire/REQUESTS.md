@@ -1,6 +1,6 @@
 # Fire requests from Imprim
 
-Imprim uses Fire v0.9.1 (commit `7bca159`).
+Imprim uses Fire v0.10.1 (commit `bb3c551`).
 
 Gaps found while building Imprim's screens with Fire ([GUIDE.md](GUIDE.md) section 7). Own classes and tokens use
 the `im-` prefix. Request a Fire variant when an existing component needs a change.
@@ -9,7 +9,9 @@ the `im-` prefix. Request a Fire variant when an existing component needs a chan
 
 | Request | Where and why | Proposed interface | What Imprim uses today |
 |---|---|---|---|
-| A fieldset reset | The Lit console groups form controls in `<fieldset>` so `disabled` covers them while a request runs. Fire has no reset, so each shows the browser's border and padding. | Reset `fieldset` in `base.css` (or a `fd-fieldset` class): no border, margin or padding, `min-inline-size: 0`. | `.im-fieldset` in [apps/web/src/app.css](../../apps/web/src/app.css). |
+| Fieldset reset | 0.10.0 | Native disabled fieldsets use Fire layout classes. Fire resets the border, margin, padding and minimum inline size. |
+| Starter focus ring on page titles | 0.10.0 | The router calls `focusQuiet()` for page headings and regions. |
+| Structural markup lint | 0.10.0 | Fire checks required parts, elements and parents in Lit templates. The browser review gate checks rendered markup and layout. |
 | Extend `renderEmail` with inline branding | Sign-in and security emails carry their branding inside the message. The recipient can read them with remote images disabled. | Accept an inline `cid:` logo and a dark logo swap, and draw the brand's dot-matrix initial when no logo is present. | Its own renderer and attachment handling in [services/email](../../apps/server/src/services/email/). |
 | Document a palette subset for Tweaks | Products with a curated palette set need the Tweaks panel to offer only palettes shipped in their CSS. | Document an allowlist that also governs what preset looks can apply. | [Branding](../BRANDING.md) ships the full Fire palette set. |
 | Read plain template strings in `fire lint` and `fire slim` | The Worker renders sign-in and consent without a template framework. Its HTML is in plain JavaScript template strings. | Add a documented opt-in or source marker to discover plain templates for linting and slimming. | Imprim's Node smoke tests inspect the rendered HTML, and the server ships all Fire CSS. See [pages.test.mjs](../../tests/pages.test.mjs). |
@@ -18,6 +20,9 @@ the `im-` prefix. Request a Fire variant when an existing component needs a chan
 
 | Request | Fire | What Imprim uses now |
 |---|---|---|
+| Fieldset reset | 0.10.0 | Native disabled fieldsets use Fire layout classes. Fire resets the border, margin, padding and minimum inline size. |
+| Starter focus ring on page titles | 0.10.0 | The router calls `focusQuiet()` for page headings and regions. |
+| Structural markup lint | 0.10.0 | Fire checks required parts, elements and parents in Lit templates. The browser review gate checks rendered markup and layout. |
 | Fire's scripts take their interface labels from the page | 0.5.1 | The shared document layout emits a translated `data-fd-labels` JSON dictionary before Fire runs |
 | No component writes a `style` attribute (skeletons, file list, chat, charts, agent blocks did) | 0.5.0 | Any Fire component can be used under Imprim's Content Security Policy |
 | A list and a name-and-value editor that post in a plain form; a long-form pattern; a JSON code field | 0.4.0 | `fd-tag-input`, `fd-pairs`, `fd-codefield`, `fd-form-section` and radio `fd-segmented` in the client editor (`admin/client-editor.mjs`, `pages/forms.mjs`) |

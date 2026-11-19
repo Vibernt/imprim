@@ -2,6 +2,7 @@ import { html, nothing, type PropertyDeclarations, type PropertyValues, type Tem
 import { ApiError, api } from '../../lib/api';
 import { FireLight } from '../../lib/fire-light';
 import type { View } from '../../lib/router';
+import { pageHead } from '../page-layout';
 
 export abstract class AdminRealmScreen<T> extends FireLight {
   static override properties: PropertyDeclarations = {
@@ -14,7 +15,7 @@ export abstract class AdminRealmScreen<T> extends FireLight {
   private generation = 0;
   private address = '';
   protected abstract heading: string;
-  protected description = '';
+  protected get description() { return ''; }
 
   protected abstract endpoint(): string;
   protected abstract content(data: T): unknown;
@@ -50,16 +51,7 @@ export abstract class AdminRealmScreen<T> extends FireLight {
 
   protected override render() {
     return html`<main class="fd-page"><div class="fd-frame">
-      <section class="fd-band" data-pad="sm">
-        ${this.back()}
-        <div class="fd-page-head">
-          <div class="fd-page-head-text">
-            <h1 class="fd-page-head-title">${this.heading}</h1>
-            ${this.description ? html`<p class="fd-page-head-desc">${this.description}</p>` : nothing}
-          </div>
-          ${this.actions()}
-        </div>
-      </section>
+      ${pageHead(this.heading, this.description, this.back(), this.actions())}
       <section class="fd-band" data-grow aria-busy=${Boolean(this.pending || (!this.data && !this.loadError))}>
         ${this.data ? this.content(this.data) : this.loadError ? html`
           <div class="fd-empty" data-tone="danger" role="alert">

@@ -1,6 +1,7 @@
 import { html, nothing } from 'lit';
 import { api } from '../../lib/api';
 import { t } from '../../lib/i18n';
+import { card, setting } from '../page-layout';
 import { AccountScreen, post, success } from './account-screen';
 import { day, when, empty } from './access-view';
 
@@ -39,25 +40,26 @@ class ScreenAgents extends AccountScreen<Agents> {
   }
 
   protected override render() {
-    return this.page(t('Connected agents'), t('Agents act for you in an app. Revoke one to end its access.'), ({ agents, next }) => agents.length ? html`
-      <div class="fd-table-wrap"><div class="fd-table-scroll">
-        <table class="fd-table" aria-label=${t('Connected agents')}>
-          <thead><tr><th scope="col">${t('Agent')}</th><th scope="col">${t('App')}</th><th scope="col">${t('Scopes')}</th>
-            <th scope="col">${t('Last used')}</th><th scope="col">${t('Access')}</th></tr></thead>
-          <tbody>${agents.map(a => html`<tr>
-            <td><div class="fd-stack" data-gap="1"><span class="fd-label">${a.name}</span>
-              ${a.host ? html`<span class="fd-mono-sm fd-muted">${a.host}</span>` : html`<span><span class="fd-badge" data-tone="warning">${t('Unverified')}</span></span>`}
-            </div></td>
-            <td><div class="fd-stack" data-gap="1"><span>${a.app}</span><span class="fd-small fd-muted">${t('Workspace: {workspace}', { workspace: a.workspace })}</span>
-              <span class="fd-mono-sm fd-muted">${a.resource}</span></div></td>
-            <td><div class="fd-row" data-wrap data-gap="1">${a.scopes.map(scope => html`<code class="fd-code">${scope}</code>`)}</div></td>
-            <td><div class="fd-stack" data-gap="1"><span>${when(a.last_used)}</span><span class="fd-small fd-muted">${t('Connected {date}', { date: day(a.created) })}</span></div></td>
-            <td>${this.access(a)}</td>
-          </tr>`)}</tbody>
-        </table>
-      </div></div>
-      ${next ? html`<div class="fd-row" data-justify="center"><a class="fd-btn" data-variant="ghost" href=${`/account/agents?before=${encodeURIComponent(next)}`}>${t('Older agents')}</a></div>` : nothing}`
-      : empty(t('No agents connected'), t('Agents you approve to act in an app appear here.')));
+    return this.page(t('Connected agents'), t('Agents act for you in an app. Revoke one to end its access.'), ({ agents, next }) =>
+      card(t('Agents'), agents.length ? html`
+        <div role="group" aria-label=${t('Connected agents')}>
+          ${agents.map(agent => setting(
+            html`<span class="fd-sr-only">${t('Agent')} </span><span class="fd-kv-value" data-plain>${agent.name}</span>`,
+            html`<div class="fd-stack" data-gap="1">
+              <div class="fd-kv-value">${agent.host ? html`<code class="fd-code">${agent.host}</code>` : html`<span class="fd-badge" data-tone="warning">${t('Unverified')}</span>`}</div>
+              <div class="fd-kv-value" data-plain>${t('App')} · ${agent.app} · ${t('Workspace: {workspace}', { workspace: agent.workspace })}</div>
+              <div class="fd-kv-value"><code class="fd-code">${agent.resource}</code></div>
+              <div class="fd-row" data-wrap data-gap="1"><span>${t('Scopes')}</span>
+                ${agent.scopes.map(scope => html`<code class="fd-code fd-kv-value">${scope}</code>`)}
+              </div>
+              <div>${t('Last used')} · ${when(agent.last_used)}</div>
+              <div>${t('Connected {date}', { date: day(agent.created) })}</div>
+            </div>`, html`<div class="fd-row" role="group" aria-label=${t('Access')}>${this.access(agent)}</div>`))}
+        </div>
+        ${next ? html`<div class="fd-row" data-justify="center">
+          <a class="fd-btn" data-variant="ghost" href=${`/account/agents?before=${encodeURIComponent(next)}`}>${t('Older agents')}</a>
+        </div>` : nothing}`
+      : empty(t('No agents connected'), t('Agents you approve to act in an app appear here.'))));
   }
 }
 customElements.define('screen-agents', ScreenAgents);

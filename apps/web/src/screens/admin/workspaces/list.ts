@@ -2,7 +2,7 @@ import { html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { icon } from '../../../lib/icon';
 import { navigate } from '../../../lib/router';
-import { cap, empty, link, status, table } from '../realm-ui';
+import { cap, link, status, table } from '../realm-ui';
 import { products } from './summary';
 import { root, workspacePath, type ListPage } from './types';
 
@@ -16,7 +16,7 @@ function url(filter: string, before?: string): string {
 }
 
 function statusFilter(filter: string) {
-  return keyed(filter, html`<div class="fd-filter-bar">
+  return keyed(filter, html`<div class="fd-toolbar">
     <div class="fd-filter" ?data-active=${Boolean(filter)} data-default="All statuses"
       @fd:change=${(event: CustomEvent<{ value: string | null }>) => { if (event.detail.value === null) void navigate(root); }}>
       <button class="fd-filter-trigger" type="button" data-fd-menu="workspace-status-menu" aria-haspopup="menu" aria-expanded="false">
@@ -33,10 +33,10 @@ function statusFilter(filter: string) {
 export const workspaceList = (data: ListPage, filter: string, before: string | null) => html`
   <div class="fd-stack" data-gap="4">
     ${statusFilter(filter)}
-    ${data.workspaces.length ? table('Workspaces', ['Name', 'Kind', 'Status', 'Products', 'Members'],
+    ${table('Workspaces', ['Name', 'Kind', 'Status', 'Products', 'Members', 'Actions'],
       data.workspaces.map(row => [link(workspacePath(row.id), row.name), cap(row.kind),
-        status(cap(row.status), row.status === 'active' ? 'success' : 'neutral'), products(row.products), row.members]))
-      : filter ? empty('No workspaces match', 'Choose another status.') : empty('No workspaces yet', 'Create a team to share membership across products.')}
+        status(cap(row.status), row.status === 'active' ? 'success' : 'neutral'), products(row.products), row.members, link(workspacePath(row.id), 'View')]),
+      filter ? ['No workspaces match', 'Choose another status.'] : ['No workspaces yet', 'Create a team to share membership across products.'])}
     ${data.next || before ? html`
       <nav class="fd-pagination" aria-label="Workspace pages"><div class="fd-pagination-pages">
         ${before ? html`<a class="fd-btn" data-variant="ghost" href=${url(filter)}>First page</a>` : nothing}

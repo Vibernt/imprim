@@ -4,6 +4,7 @@ import { forms } from 'fire-design';
 import { keyed } from 'lit/directives/keyed.js';
 import { api } from '../../../lib/api';
 import { icon } from '../../../lib/icon';
+import { card, setting } from '../../page-layout';
 import { AdminRealmScreen } from '../realm-screen';
 import { failed, formData, notice } from '../realm-ui';
 import { collect, copyFields, languageFields, nameFields } from './fields';
@@ -25,7 +26,7 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
   private previewLife?: AbortController;
   private tweaks?: Awaited<ReturnType<typeof openLookPreview>>;
   protected heading = 'Branding';
-  protected override description = 'How sign-in, consent and account pages look for this realm. Apps can override it.';
+  protected override get description() { return 'How sign-in, consent and account pages look for this realm. Apps can override it.'; }
   protected endpoint() { return '/admin/api/branding'; }
 
   constructor() {
@@ -132,40 +133,31 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
   protected content({ branding }: BrandResponse) {
     const panels = {
       look: html`<div class="fd-stack" data-gap="3">
-        <p class="fd-muted">Preview the palette, type set and dials before saving.</p>
-        <div><button class="fd-btn" data-variant="outline" type="button" data-fd-tweaks-open aria-expanded="false"
-          ?disabled=${this.lookPending || this.pending} @click=${this.openTweaks}>${icon('sliders-horizontal')}<span>Open tweaks</span></button></div>
+        ${setting('Appearance', 'Preview the palette, type set and dials before saving.', html`<button class="fd-btn" data-variant="outline" type="button" data-fd-tweaks-open aria-expanded="false"
+          ?disabled=${this.lookPending || this.pending} @click=${this.openTweaks}>${icon('sliders-horizontal')}<span>Open tweaks</span></button>`)}
         ${signatureFields(this.look, this.lookPending || this.pending, signature => void this.editLook(tweaks => tweaks.set({ signature })))}
       </div>`,
       logos: logoFields(this.assetDraft, this.pending, this.upload, this.removeLogo),
-      name: html`${nameFields(branding)}`,
+      name: html`<div class="fd-stack" data-gap="4">${nameFields(branding)}</div>`,
       languages: languageFields(branding),
       words: html`<p class="fd-muted">Leave a field empty to use the built-in words in that language.</p>${copyFields(branding)}`,
     };
-    return keyed(this.reset, html`<div class="fd-split" data-side="start">
-      <aside class="fd-panel" aria-label="Branding sections">
-        <nav class="fd-subnav" aria-label="Branding">
-          ${sections.map(([id, label, glyph]) => html`<button class="fd-subnav-item" type="button"
-            aria-current=${this.section === id ? 'true' : nothing} @click=${() => { this.section = id; }}>${icon(glyph)}<span>${label}</span></button>`)}
-        </nav>
-      </aside>
-      <div class="fd-split-main">
-        <div class="fd-grid" data-min="lg" data-cols="2" data-gap="6">
-          <form class="fd-form" data-size="full" method="post" novalidate @submit=${this.save}>
-            <fieldset class="im-fieldset" ?disabled=${this.pending}>
-              ${sections.map(([id, label]) => html`<section class="fd-stack" data-gap="4" ?hidden=${this.section !== id} aria-labelledby=${id + '-heading'}>
-                <h2 class="fd-h2" id=${id + '-heading'}>${label}</h2>
-                ${panels[id]}
-              </section>`)}
-              <div class="fd-form-actions">
-                <button type="button" class="fd-btn" data-variant="ghost" ?disabled=${this.lookPending} @click=${this.discard}>Discard changes</button>
-                <button type="submit" class="fd-btn" data-variant="primary" ?disabled=${this.lookPending}>Save branding</button>
-              </div>
-            </fieldset>
-          </form>
-          ${specimen(this.assetDraft, this.view.session.realm.display_name)}
-        </div>
-      </div>
+    return keyed(this.reset, html`<div class="fd-stack" data-gap="6">
+      <nav class="fd-row" data-wrap data-gap="2" aria-label="Branding">
+        ${sections.map(([id, label, glyph]) => html`<button class="fd-btn" data-variant=${this.section === id ? 'outline' : 'ghost'} type="button"
+          aria-pressed=${this.section === id} @click=${() => { this.section = id; }}>${icon(glyph)}<span>${label}</span></button>`)}
+      </nav>
+      <form method="post" novalidate @submit=${this.save}>
+        <fieldset class="fd-stack" data-gap="4" ?disabled=${this.pending}>
+          <legend class="fd-sr-only">Branding</legend>
+          ${sections.map(([id, label]) => html`<div ?hidden=${this.section !== id}>${card(label, panels[id])}</div>`)}
+          <div class="fd-form-actions">
+            <button type="button" class="fd-btn" data-variant="ghost" ?disabled=${this.lookPending} @click=${this.discard}>Discard changes</button>
+            <button type="submit" class="fd-btn" data-variant="primary" ?disabled=${this.lookPending}>Save branding</button>
+          </div>
+        </fieldset>
+      </form>
+      ${specimen(this.assetDraft, this.view.session.realm.display_name)}
     </div>`);
   }
 }

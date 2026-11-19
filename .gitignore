@@ -26,3 +26,4 @@ apps/web/dist/
 apps/web/.fire-slim/
 apps/web/public/fire/
 apps/server/public/ui/
+apps/web/.fire-review/

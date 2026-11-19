@@ -1,5 +1,6 @@
 import { html, nothing } from 'lit';
 import { t, tPlural } from '../../lib/i18n';
+import { card, setting } from '../page-layout';
 import { day, empty, list, section } from './access-view';
 import type { Password } from './security-setup';
 
@@ -28,37 +29,35 @@ export function overview(data: Security, pending: boolean, actions: Actions) {
     data.passkeys.length ? tPlural(data.passkeys.length, '{count} passkey', '{count} passkeys') : '',
   ].filter(Boolean).join(' · ');
   return html`
-    ${!enabled ? html`<div class="fd-callout" data-tone="warning" role="status"><div class="fd-callout-body">
-      <p class="fd-callout-title">${t('Confirm your email with a sign-in link first.')}</p>
-    </div></div>` : nothing}
-    <div class="fd-setting"><div class="fd-setting-text">
-      <div class="fd-setting-title">${t('Two-factor authentication')}</div>
-      <div class="fd-setting-desc">${hasFactor ? factorSummary : t('Ask for a code or passkey when you sign in.')}</div>
-    </div><div class="fd-setting-control">
-      ${hasFactor ? html`<span class="fd-status" data-tone="success">${t('On')}</span>` : html`<span class="fd-status">${t('Off')}</span>`}
-    </div></div>
+    ${card(t('Two-factor authentication'), html`
+      ${!enabled ? html`<div class="fd-callout" data-tone="warning" role="status">
+        <i class="fd-callout-icon" data-icon="triangle-alert" aria-hidden="true"></i>
+        <div class="fd-callout-content"><p class="fd-callout-title">${t('Confirm your email with a sign-in link first.')}</p></div>
+      </div>` : nothing}
+      ${setting(hasFactor ? factorSummary : t('Ask for a code or passkey when you sign in.'), '',
+        hasFactor ? html`<span class="fd-status" data-tone="success">${t('On')}</span>` : html`<span class="fd-status">${t('Off')}</span>`)}
+    `)}
     ${section(t('Authenticator apps'), t('Apps that show a new 6-digit code every 30 seconds.'), html`
       ${data.factors.length ? list(t('Authenticator apps'), data.factors.map(f => ({ title: f.name,
         description: `${t('Added {date}', { date: day(f.created) })} · ${f.last_used ? t('last used {date}', { date: day(f.last_used) }) : t('never used')}`,
         trail: remove('authenticator', f),
       }))) : empty(t('No authenticator app yet'), t('Add one to enter a 6-digit code each time you sign in.'))}
-      ${enabled ? html`<div class="fd-row">
-        <button class="fd-btn" data-variant=${hasFactor ? 'outline' : 'primary'} type="button" ?disabled=${pending} @click=${actions.start}>${t('Add authenticator app')}</button>
-      </div>` : nothing}`)}
+      ${enabled ? setting(t('Add an authenticator app'), '', html`
+        <button class="fd-btn" data-variant=${hasFactor ? 'outline' : 'primary'} type="button" ?disabled=${pending} @click=${actions.start}>${t('Add authenticator app')}</button>`) : nothing}`)}
     ${section(t('Passkeys'), t('Sign in with this device’s screen lock instead of a code.'), html`
       ${data.passkeys.length ? list(t('Passkeys'), data.passkeys.map(p => ({ title: p.name,
         description: t('Added {date}', { date: day(p.created) }), meta: p.backup_eligible ? html`<span class="fd-badge">${t('Synced')}</span>` : undefined,
         trail: remove('passkey', p),
       }))) : empty(t('No passkeys yet'), t('Add one to use your fingerprint, face or device PIN.'))}
       ${!enabled ? nothing : typeof PublicKeyCredential === 'undefined' ? html`<p class="fd-small fd-muted">${t('This browser cannot add passkeys.')}</p>` : html`
-        <form class="fd-form" method="post" @submit=${actions.passkey}>
-          <div class="fd-field">
+        <form class="fd-setting" method="post" @submit=${actions.passkey}>
+          <div class="fd-setting-text fd-field">
             <label class="fd-field-label" for="passkey-name">${t('Passkey name')}</label>
-            <div class="fd-input-pair">
-              <input class="fd-input" id="passkey-name" name="name" maxlength="60" placeholder=${t('Work laptop')} aria-describedby="passkey-name-hint">
-              <button class="fd-btn" data-variant="outline" type="submit" ?disabled=${pending}>${t('Add passkey')}</button>
-            </div>
+            <input class="fd-input" id="passkey-name" name="name" maxlength="60" placeholder=${t('Work laptop')} aria-describedby="passkey-name-hint">
             <p class="fd-field-hint" id="passkey-name-hint">${t('Leave blank to name it “Passkey”.')}</p>
+          </div>
+          <div class="fd-setting-control">
+            <button class="fd-btn" data-variant="outline" type="submit" ?disabled=${pending}>${t('Add passkey')}</button>
           </div>
         </form>`}`)}
     ${hasFactor ? section(t('Recovery codes'), t('Each code works once, for when you can’t use your app or passkey.'), html`
@@ -74,5 +73,6 @@ export function overview(data: Security, pending: boolean, actions: Actions) {
       </div>${enabled ? html`<div class="fd-setting-control">
         <button class="fd-btn" data-variant="outline" type="button" ?disabled=${pending} @click=${actions.password}>${passwordTitle(data.password)}</button>
       </div>` : nothing}</div>`)}
-    <div class="fd-row"><a class="fd-link" href="/account/sessions">${t('Manage remembered browsers')}</a></div>`;
+    ${card(t('Remembered browsers'), setting(t('These skip the second-factor code until the date shown.'), '', html`
+      <a class="fd-btn" data-variant="outline" href="/account/sessions">${t('Manage remembered browsers')}</a>`))}`;
 }

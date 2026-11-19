@@ -89,7 +89,7 @@ export function accountSmoke(open) {
         await nav.getByRole('link', { name: 'Agents', exact: true }).click();
         await page.getByRole('heading', { name: 'Connected agents', exact: true }).waitFor();
         assert.equal(await nav.getByRole('link', { name: 'Agents', exact: true }).getAttribute('aria-current'), 'page');
-        const row = page.getByRole('row').filter({ hasText: 'Test agent' });
+        const row = page.locator('.fd-setting').filter({ hasText: 'Test agent' });
         await row.getByRole('button', { name: 'Revoke Test agent' }).click();
         await page.getByText('Agent revoked', { exact: true }).waitFor();
         await row.getByText('Revoked', { exact: true }).waitFor();

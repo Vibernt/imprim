@@ -4,6 +4,7 @@ import { ApiError, api } from '../../lib/api';
 import { FireLight } from '../../lib/fire-light';
 import { t } from '../../lib/i18n';
 import { deleteSection, profileFields, type Action, type Profile } from './profile-view';
+import { pageHead } from '../page-layout';
 
 const { toast } = overlays;
 const describe = (error: unknown) => error instanceof ApiError ? error.description : t('The request could not be completed.');
@@ -102,14 +103,11 @@ class ScreenProfile extends FireLight {
     return html`
       <main class="fd-page">
         <div class="fd-frame">
-          <section class="fd-band fd-page-hero">
-            <h1 class="fd-display">${t('Profile')}</h1>
-            <p class="fd-page-hero-desc">${t('Your name and email, as the apps you sign in to see them.')}</p>
-          </section>
-          <section class="fd-band" aria-busy=${this.pending !== null || (!this.profile && !this.loadError)}>
+          ${pageHead(t('Profile'), t('Your name and email, as the apps you sign in to see them.'))}
+          <section class="fd-band fd-stack" data-gap="5" data-grow aria-busy=${this.pending !== null || (!this.profile && !this.loadError)}>
             ${this.fields()}
+            ${this.profile ? deleteSection(this.profile.email, this.pending, this.submit) : nothing}
           </section>
-          ${this.profile ? html`<section class="fd-band" data-grow>${deleteSection(this.profile.email, this.pending, this.submit)}</section>` : nothing}
         </div>
       </main>`;
   }

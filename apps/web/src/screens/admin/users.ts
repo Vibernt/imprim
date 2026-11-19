@@ -2,7 +2,7 @@ import { html } from 'lit';
 import { icon } from '../../lib/icon';
 import { navigate, type View } from '../../lib/router';
 import { AdminScreen, corePage } from './core-screen';
-import { empty, link, mono, nextPage, status, table, userPath } from './core-view';
+import { link, mono, nextPage, status, table, userPath } from './core-view';
 
 export interface UserSummary { id: string; email: string; status: string; merged_into: string | null; created: number }
 const path = '/admin/users';
@@ -29,13 +29,13 @@ class UsersScreen extends AdminScreen<{ users: UserSummary[]; next: string | nul
           <button class="fd-btn" type="submit">Search</button>
         </form>
         ${this.content(({ users, next }) => html`
-          ${users.length ? table('Users', ['Email', 'Status', 'User ID'], users.map(user =>
-            [link(userPath(user.id), user.email), status(user.status), mono(user.id)]))
-            : search ? empty('No users match', 'Try another email or a full user ID.')
-              : empty('No users yet', 'People appear here after their first sign-in.')}
+          ${table('Users', ['Email', 'Status', 'User ID', 'Actions'], users.map(user =>
+            [link(userPath(user.id), user.email), status(user.status), mono(user.id), link(userPath(user.id), 'View')]),
+            search ? ['No users match', 'Try another email or a full user ID.']
+              : ['No users yet', 'People appear here after their first sign-in.'])}
           ${nextPage(path, query, next)}
         `)}
-      </div>`, { art: 'orbit', busy: !this.data && !this.failure });
+      </div>`, { busy: !this.data && !this.failure });
   }
 }
 

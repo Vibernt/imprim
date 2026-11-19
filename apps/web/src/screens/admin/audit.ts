@@ -5,7 +5,7 @@ import { icon } from '../../lib/icon';
 import { navigate, type View } from '../../lib/router';
 import { text } from './core-fields';
 import { AdminScreen, corePage } from './core-screen';
-import { empty, mono, nextPage, table, when } from './core-view';
+import { mono, nextPage, table, when } from './core-view';
 
 interface AuditRow { id: number; created: number; event: string; actor: string | null; target: string | null; detail: string }
 const path = '/admin/audit';
@@ -53,15 +53,17 @@ class AuditScreen extends AdminScreen<{ audit: AuditRow[]; next: number | null }
   protected override render() {
     return corePage('Audit log', 'Every sign-in, grant and admin change, newest first. Rows cannot be edited.', html`
       <div class="fd-stack" data-gap="3">
-        <div class="fd-filter-bar" role="group" aria-label="Filters">${this.filter('actor', 'Actor')}${this.filter('target', 'Target')}</div>
+        <div class="fd-toolbar"><div class="fd-toolbar-filters" role="group" aria-label="Filters">
+          ${this.filter('actor', 'Actor')}${this.filter('target', 'Target')}
+        </div></div>
         ${this.content(({ audit, next }) => html`
-          ${audit.length ? table('Audit log', ['Time', 'Event', 'Actor', 'Target', 'Detail'], audit.map(row => [
+          ${table('Audit log', ['Time', 'Event', 'Actor', 'Target', 'Detail'], audit.map(row => [
             when(row.created), mono(row.event), row.actor ? mono(row.actor) : 'System',
             row.target ? mono(row.target) : 'None', mono(row.detail || '{}'),
-          ])) : empty('No events match', 'Clear the actor and target to see every event.')}
+          ]), ['No events match', 'Clear the actor and target to see every event.'])}
           ${nextPage(path, this.view.query, next)}
         `)}
-      </div>`, { art: 'rain', busy: !this.data && !this.failure });
+      </div>`, { busy: !this.data && !this.failure });
   }
 }
 

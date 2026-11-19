@@ -27,6 +27,12 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
     return this.workspace?.name ?? (this.workspaceId ? 'Workspace' : 'Workspaces');
   }
 
+  protected override get description() {
+    if (this.closing) return 'Review the effects of closing this workspace.';
+    if (this.creating) return 'Create a team and choose its first owner.';
+    return this.workspaceId ? 'Manage membership, products and access.' : 'Teams and personal workspaces in this realm.';
+  }
+
   protected endpoint() {
     if (this.workspaceId) return apiRoot + '/' + encodeURIComponent(this.workspaceId) + (this.closing ? '/close' : '');
     return apiRoot + (this.creating ? '' : '?' + this.view.query);
@@ -40,7 +46,7 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
 
   protected override actions() {
     return this.data?.enabled && !this.workspaceId && !this.creating ? html`
-      <div class="fd-page-head-actions"><a class="fd-btn" data-variant="primary" href=${root + '?create=1'}>Create workspace</a></div>` : nothing;
+      <a class="fd-btn" data-variant="primary" href=${root + '?create=1'}>Create workspace</a>` : nothing;
   }
 
   private submit: Submit = async (action, event) => {
@@ -75,7 +81,7 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
   };
 
   protected content(data: WorkspacePage) {
-    if (!data.enabled) return html`<div class="fd-callout"><div class="fd-callout-content">
+    if (!data.enabled) return html`<div class="fd-callout"><i class="fd-callout-icon" data-icon="info" aria-hidden="true"></i><div class="fd-callout-content">
       <p class="fd-callout-title">Shared workspaces are off</p>
       <p class="fd-callout-body">Set ${mono('workspaces')} to ${mono('on')} in this realm’s configuration to enable them.</p>
     </div></div>`;

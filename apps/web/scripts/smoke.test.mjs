@@ -10,7 +10,7 @@ test.after(() => browser.close());
 
 async function open(t, { width = 1440, colorScheme = 'light', role = null, expectedBadRequest } = {}) {
     const server = await smokeServer(t, role);
-    const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme, locale: 'en-US' });
+    const context = server.track(await browser.newContext({ viewport: { width, height: 900 }, colorScheme, locale: 'en-US' }));
     t.after(() => context.close());
     await context.addCookies(server.cookies);
     const page = await context.newPage(), failures = [];

@@ -104,10 +104,9 @@ class ClientEditor extends AdminScreen<Editor> {
               </button>
             </div>
           </form>`) : nothing}
-        ${isNew ? nothing : html`<div class="fd-grid" data-min="lg" data-cols="2" data-gap="6">
-          ${this.secret ? nothing : rotationPanel(data, this.rotating, this.pending, this.reviewRotation, this.rotate)}
+        ${isNew ? nothing : html`
           ${deliveryPanel(data.delivery)}
-        </div>`}
+          ${this.secret ? nothing : rotationPanel(data, this.rotating, this.pending, this.reviewRotation, this.rotate)}`}
       </div>`;
   };
 
@@ -116,7 +115,7 @@ class ClientEditor extends AdminScreen<Editor> {
     const data = this.data;
     const title = isNew ? 'Register client' : data && 'id' in data ? data.branding.name || data.id : 'Edit client';
     return corePage(title, isNew ? 'An app that signs people in through this realm.' : 'Sign-in, callbacks and agent access for this app.',
-      this.content(this.editor), { back, art: 'grid', busy: this.pending || (!this.data && !this.failure) });
+      this.content(this.editor), { back, busy: this.pending || (!this.data && !this.failure) });
   }
 }
 

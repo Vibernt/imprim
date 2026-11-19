@@ -1,4 +1,4 @@
-import { texture, type IconName } from 'fire-design';
+import { texture, type IconName, focusQuiet } from 'fire-design';
 import type { Session } from './session';
 
 /**
@@ -171,7 +171,7 @@ async function resolve(mode: Mode): Promise<void> {
   // A parameter change in the same screen leaves focus and scroll to the screen.
   const target = screen.querySelector<HTMLElement>('h1') ?? screen.querySelector<HTMLElement>('main') ?? screen;
   if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
-  target.focus({ preventScroll: true });
+  focusQuiet(target); // no ring: the heading is not a control, and a ring on it reads as something to press
   scrollBack(mode === 'pop' ? scrolls.get(key) ?? 0 : 0);
   outlet.announce(document.title);
 }
