@@ -1,6 +1,6 @@
 # Fire requests from Imprim
 
-Imprim uses Fire v0.10.1 (commit `bb3c551`).
+Imprim uses Fire v0.10.2 (commit `4d3d9b7`).
 
 Gaps found while building Imprim's screens with Fire ([GUIDE.md](GUIDE.md) section 7). Own classes and tokens use
 the `im-` prefix. Request a Fire variant when an existing component needs a change.
@@ -9,6 +9,7 @@ the `im-` prefix. Request a Fire variant when an existing component needs a chan
 
 | Request | Where and why | Proposed interface | What Imprim uses today |
 |---|---|---|---|
+| Refuse a field inside a settings row, and a text field wider than a form | 0.10.2 | `wrong-parent` (lint and review) and `wide-field` (review) guard `fieldWithAction` in `apps/web/src/screens/page-layout.ts`, used for every value someone types beside its button |
 | Fieldset reset | 0.10.0 | Native disabled fieldsets use Fire layout classes. Fire resets the border, margin, padding and minimum inline size. |
 | Starter focus ring on page titles | 0.10.0 | The router calls `focusQuiet()` for page headings and regions. |
 | Structural markup lint | 0.10.0 | Fire checks required parts, elements and parents in Lit templates. The browser review gate checks rendered markup and layout. |

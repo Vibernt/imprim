@@ -42,7 +42,7 @@ export function setting(title: string | TemplateResult, description: string | Te
 export function fieldWithAction(id: string, label: string, hint: string | undefined, control: TemplateResult, action: TemplateResult) {
   return html`<div class="fd-field">
     <label class="fd-field-label" for=${id}>${label}</label>
-    <div class="fd-row" data-gap="3">${control}${action}</div>
+    <div class="fd-row" data-align="end" data-gap="3">${control}${action}</div>
     ${hint ? html`<p class="fd-field-hint" id=${id + '-hint'}>${hint}</p>` : nothing}
   </div>`;
 }

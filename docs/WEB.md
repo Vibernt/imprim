@@ -1,6 +1,6 @@
 # Account and admin interface
 
-Status: built. This page is the specification for Fire 0.10.1 and the Lit account and admin interface; the code matches it.
+Status: built. This page is the specification for Fire 0.10.2 and the Lit account and admin interface; the code matches it.
 
 ## What changes and what does not
 
@@ -15,8 +15,8 @@ Status: built. This page is the specification for Fire 0.10.1 and the Lit accoun
 
 ## Fire
 
-- Fire v0.10.1 (commit `bb3c551`), MIT, from its public repository: both the root `package.json` (a dev dependency, for
-  the Worker, scripts and tests) and `apps/web/package.json` pin `"fire-design": "github:vidhatanand/firedesign#v0.10.1"`.
+- Fire v0.10.2 (commit `4d3d9b7`), MIT, from its public repository: both the root `package.json` (a dev dependency, for
+  the Worker, scripts and tests) and `apps/web/package.json` pin `"fire-design": "github:vidhatanand/firedesign#v0.10.2"`.
   Upgrading Fire means changing that tag in both and recording it here and in `docs/fire/README.md`.
 - The Worker imports Fire's modules (`icons.js`, `palettes.js`, `typefaces.js`) as `fire-design/fire/js/…`; Wrangler
   bundles them. They are the only imports outside `apps/server/src` that `npm run check` allows.
@@ -84,7 +84,7 @@ form pattern and one list pattern; a screen never invents its own page layout.
 |---|---|---|
 | `settings.html` | Compact page head (back link on a detail page, h1, one line, primary action at the right). A key-value summary when the screen has one, then full-width cards stacked in one column, each with a title and description; actions are `fd-setting` rows (text left, a button, switch or short select at its natural width right); a value to
 type is a field in a `form.fd-form`, which stops at a readable width: the label above, the input (`fd-grow`) and its
-button side by side in one `fd-row`, the hint below (`fieldWithAction` in `screens/page-layout.ts`), and several fields
+button side by side in one `fd-row data-align="end"`, the hint below (`fieldWithAction` in `screens/page-layout.ts`), and several fields
 end with one `fd-form-actions`; an input never goes inside `fd-setting`; empty states sit inside their card; destructive actions come last, in a danger card, confirmed with `fd-confirm-inline` | Account Profile, Security, Sessions and apps, Agents; admin User detail, Workspace detail, Settings, Branding |
 | `form.html` | One `form.fd-form[data-size="full"]` at full content width; `fd-form-section` only as its direct children, never in a grid; inputs and textareas fill the section; one `fd-form-actions` at the end | Client new and edit, Workspace create, Realm create and edit (administrators as a card below the form) |
 | `api-keys.html`, `audit.html` | Page head with the primary action, a toolbar (search, filters), one table in `.fd-table-wrap > .fd-table-scroll`, row actions in the last column, the empty state inside the table area | Clients, Services, Users, Audit log, Sign-up requests, Workspaces, Signing keys (rotate in the head, revoke as a row action), Realms |

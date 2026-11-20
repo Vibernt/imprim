@@ -3,6 +3,13 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-20.5
+
+No migration.
+
+- Fire v0.10.2. Its lint and review now refuse a field inside a settings row and a text field wider than a form;
+  Imprim already passed both. The rules, guide and class reference in `docs/fire` are updated.
+
 ## 2026-11-20.4
 
 No migration. Client 0.11.0.
