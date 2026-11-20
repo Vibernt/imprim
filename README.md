@@ -132,7 +132,7 @@ npm run check
 
 ## Built with
 
-Every page uses the [Fire v0.10.2 design system](docs/fire/README.md) (MIT), from its pinned package, with
+Every page uses the [Fire v0.12.1 design system](docs/fire/README.md) (MIT), from its pinned package, with
 Lit for the account and admin app, fonts under the SIL Open Font License and [Lucide](https://lucide.dev) icons (ISC).
 
 ## Status

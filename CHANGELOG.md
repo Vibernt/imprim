@@ -3,6 +3,14 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-20.6
+
+No migration.
+
+- Fire v0.12.1. Its styles and behaviour are those of 0.10.2. The rules, guide and class reference in `docs/fire` are
+  updated: templates are references to read, never starters, and a component Fire lacks is built to Fire's standard
+  and proposed internally in `docs/fire/REQUESTS.md`, never publicly.
+
 ## 2026-11-20.5
 
 No migration.
