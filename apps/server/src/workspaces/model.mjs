@@ -317,15 +317,19 @@ export function removeWorkspaceMember(env, client, actor, id, sub) {
         event: 'workspace-member-removed', eventOptions: { userId: sub }, detail: { sub } });
 }
 
-export async function closeWorkspace(env, client, actor, id, confirm) {
+export async function closeWorkspace(env, client, actor, id, confirm, { releaseOwnHold } = {}) {
     invariant(confirm === undefined || (typeof confirm === 'string' && !confirm.includes('\0') && [...confirm].length <= 120),
         'invalid_request', 'Confirmation must be text of at most 120 characters.');
+    invariant(releaseOwnHold === undefined || typeof releaseOwnHold === 'boolean', 'invalid_request', 'release_own_hold must be true or false.');
+    // The calling app's own hold stops blocking and is deleted in the same batch, so it goes only if the close commits.
+    const ownHold = Boolean(client && releaseOwnHold);
     const now = Date.now();
     const { results } = await env.DB.prepare(`SELECT m.user_id FROM workspace_members m JOIN workspaces w ON w.id=m.workspace_id
         WHERE w.id=? AND w.realm_id=? ORDER BY m.user_id`).bind(id, realmId(env)).all();
     const members = results.map(row => row.user_id);
-    const held = conflict('NOT EXISTS(SELECT 1 FROM workspace_holds WHERE workspace_id=?)', [id], 'workspace_held', async () => {
-        const { results: holds } = await env.DB.prepare('SELECT reason FROM workspace_holds WHERE workspace_id=? ORDER BY client_id').bind(id).all();
+    const otherHolds = ownHold ? ' AND client_id<>?' : '', holdArgs = ownHold ? [id, client.id] : [id];
+    const held = conflict(`NOT EXISTS(SELECT 1 FROM workspace_holds WHERE workspace_id=?${otherHolds})`, holdArgs, 'workspace_held', async () => {
+        const { results: holds } = await env.DB.prepare(`SELECT reason FROM workspace_holds WHERE workspace_id=?${otherHolds} ORDER BY client_id`).bind(...holdArgs).all();
         return 'Workspace is held. Reasons include ' + holds.map(hold => hold.reason).join(', ');
     });
     const unjoined = unjoinedAppRule(client, id);
@@ -349,8 +353,9 @@ export async function closeWorkspace(env, client, actor, id, confirm) {
     };
     return guardedWrite(env, { client, actor, id, now, checks, auditFlags: { unjoined, realm_admin: realmAdminOnly },
         effects: [...members.flatMap(sub => accessEndStatements(env, id, sub)),
+            ...(ownHold ? [env.DB.prepare('DELETE FROM workspace_holds WHERE workspace_id=? AND client_id=?').bind(id, client.id)] : []),
             env.DB.prepare("UPDATE workspaces SET status='closed',closed_at=? WHERE id=?").bind(now, id)],
-        event: 'workspace-closed' });
+        event: 'workspace-closed', detail: ownHold ? { released_own_hold: true } : {} });
 }
 
 export function putWorkspaceHold(env, client, id, value) {

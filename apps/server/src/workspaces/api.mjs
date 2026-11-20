@@ -120,6 +120,6 @@ async function actorWrite(env, ctx, client, id, route, target, body) {
         case 'DELETE invitations/id': return json(await revokeWorkspaceInvitation(env, client, actor, id, pathId(target)));
         case 'POST members/id': return json(await setWorkspaceMemberRole(env, client, actor, id, pathId(target), body.role));
         case 'DELETE members/id': return json(await removeWorkspaceMember(env, client, actor, id, pathId(target)));
-        case 'POST close': return json(await closeWorkspace(env, client, actor, id, body.confirm));
+        case 'POST close': return json(await closeWorkspace(env, client, actor, id, body.confirm, { releaseOwnHold: body.release_own_hold }));
     }
 }

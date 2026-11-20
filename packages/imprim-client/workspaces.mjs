@@ -57,9 +57,12 @@ export function workspaceMethods(send, fail) {
         async removeMember(id, sub, { actorToken } = {}) {
             return sendAsActor('DELETE', `${workspacePath(id)}/members/${segment(sub)}`, actorToken);
         },
-        async closeWorkspace(id, { actorToken, confirm } = {}) {
+        async closeWorkspace(id, { actorToken, confirm, releaseOwnHold } = {}) {
             if (confirm !== undefined && typeof confirm !== 'string') fail('configuration', 'Invalid workspace confirmation.');
-            return sendAsActor('POST', `${workspacePath(id)}/close`, actorToken, confirm === undefined ? {} : { confirm });
+            if (releaseOwnHold !== undefined && typeof releaseOwnHold !== 'boolean') fail('configuration', 'releaseOwnHold is true or false.');
+            return sendAsActor('POST', `${workspacePath(id)}/close`, actorToken, {
+                ...(confirm === undefined ? {} : { confirm }), ...(releaseOwnHold ? { release_own_hold: true } : {})
+            });
         },
         async holdWorkspace(id, reason) {
             return send('PUT', `${workspacePath(id)}/holds`, { reason });

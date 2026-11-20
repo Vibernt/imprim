@@ -200,7 +200,7 @@ test('client invitation and missing ID token', async t => {
 test('vendored body hash matches header', async () => {
     const file = await readFile(new URL('../dist/imprim-client.mjs', import.meta.url), 'utf8');
     const [header, ...body] = file.split('\n');
-    assert.match(header, /^\/\/ imprim-client 0\.10\.0 body-sha256 [a-f0-9]{64}/);
+    assert.match(header, /^\/\/ imprim-client 0\.11\.0 body-sha256 [a-f0-9]{64}/);
     assert.equal(header.split(' ').at(-1), createHash('sha256').update(body.join('\n')).digest('hex'));
 });
 test('user reads the current profile with an encoded subject and confidential credentials', async () => {
@@ -240,4 +240,13 @@ test('every client request refuses redirects with redirect manual, never error (
         }
     }
     assert.ok(seen.length > 0 && seen.every(value => value === 'manual'), JSON.stringify(seen));
+});
+
+test('startLogin asks for the profile scope only when profile is true', async t => {
+    const { client } = await setup(t);
+    const scope = async options => new URL((await client.startLogin(options)).url).searchParams.get('scope');
+    assert.equal(await scope(), 'openid email');
+    assert.equal(await scope({ profile: false }), 'openid email');
+    assert.equal(await scope({ profile: true }), 'openid email profile');
+    await assert.rejects(client.startLogin({ profile: 'yes' }), { code: 'configuration' });
 });

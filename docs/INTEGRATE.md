@@ -27,7 +27,7 @@ A confidential client gets its secret once, at creation. Store it as a secret in
 2. Register the app's back-channel URL and set `initiate_login_uri` to its sign-in page for invitation emails.
    Enable `personal_workspaces` for personal workspace creation and `workspace_admin` when the app needs team
    creation or product management.
-3. Use client 0.10.0 on the server to read memberships and manage workspaces. For actions on a person's behalf,
+3. Use client 0.11.0 on the server to read memberships and manage workspaces. For actions on a person's behalf,
    pass the ID token issued to the app as `actorToken`. Keep app-specific permissions and check them on each request.
 4. Verify `workspace_token` on the back channel. Deduplicate `jti`, apply newer versions and use `workspaceMembers`
    to catch up. [Shared workspace specification](WORKSPACES.md)

@@ -32,6 +32,8 @@ const requests = [
     ['removeMember', [id, sub, actor], 'DELETE', member, wireActor],
     ['closeWorkspace', [id, actor], 'POST', path + '/close', wireActor],
     ['closeWorkspace', [id, { confirm: 'Team', ...actor }], 'POST', path + '/close', { confirm: 'Team', ...wireActor }],
+    ['closeWorkspace', [id, { confirm: 'Team', releaseOwnHold: true, ...actor }], 'POST', path + '/close', { confirm: 'Team', release_own_hold: true, ...wireActor }],
+    ['closeWorkspace', [id, { releaseOwnHold: false, ...actor }], 'POST', path + '/close', wireActor],
     ['holdWorkspace', [id, 'Balance due'], 'PUT', path + '/holds', { reason: 'Balance due' }],
     ['releaseWorkspace', [id, 'Settled'], 'DELETE', path + '/holds', { reason: 'Settled' }],
     ['releaseWorkspace', [id], 'DELETE', path + '/holds', {}],

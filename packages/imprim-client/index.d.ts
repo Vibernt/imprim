@@ -57,7 +57,7 @@ export interface IdentityClient {
     protectedResourceMetadata(options: ResourceMetadataOptions): ResourceMetadata;
     wwwAuthenticate(options: ChallengeOptions): string;
     // acrValues and maxAge ask for step-up (0.4.0): 'urn:imprim:acr:mfa' demands a second factor in this session.
-    startLogin(options?: { state?: string; nonce?: string; prompt?: string; loginHint?: string; method?: 'email' | 'password' | 'github' | 'google'; acrValues?: string; maxAge?: number }): Promise<LoginStart>;
+    startLogin(options?: { state?: string; nonce?: string; prompt?: string; loginHint?: string; method?: 'email' | 'password' | 'github' | 'google'; acrValues?: string; maxAge?: number; profile?: boolean }): Promise<LoginStart>;
     handleCallback(url: string | URL, values: LoginValues, options: { idToken: true }): Promise<{ claims: Claims; idToken: string }>;
     handleCallback(url: string | URL, values: LoginValues, options?: { idToken?: false | undefined }): Promise<Claims>;
     verifyIdToken(jwt: string, options: { nonce: string; maxAge?: number }): Promise<Claims>;
@@ -82,7 +82,7 @@ export interface IdentityClient {
     revokeWorkspaceInvitation(id: string, invitationId: string, options: WorkspaceActor): Promise<unknown>;
     setMemberRole(id: string, sub: string, options: WorkspaceActor & { role: WorkspaceRole }): Promise<unknown>;
     removeMember(id: string, sub: string, options: WorkspaceActor): Promise<unknown>;
-    closeWorkspace(id: string, options: WorkspaceActor & { confirm?: string }): Promise<unknown>;
+    closeWorkspace(id: string, options: WorkspaceActor & { confirm?: string; releaseOwnHold?: boolean }): Promise<unknown>;
     holdWorkspace(id: string, reason: string): Promise<unknown>;
     releaseWorkspace(id: string, reason?: string): Promise<unknown>;
     registerWorkspaceResource(id: string, resource: string): Promise<unknown>;

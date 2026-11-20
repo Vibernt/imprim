@@ -1,4 +1,4 @@
-# imprim-client 0.10.0
+# imprim-client 0.11.0
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
 named `@vibernt/identity-client`. To move an app from that version, follow
@@ -143,7 +143,7 @@ for actions on a person's behalf.
 | `revokeWorkspaceInvitation` | `id, invitationId, { actorToken }` |
 | `setMemberRole` | `id, sub, { role, actorToken }` |
 | `removeMember` | `id, sub, { actorToken }` |
-| `closeWorkspace` | `id, { actorToken }` |
+| `closeWorkspace` | `id, { actorToken, confirm?, releaseOwnHold? }`. `releaseOwnHold: true` (0.11.0) lets the app's own hold stop blocking and removes it only if the close succeeds; other apps' holds still block. |
 | `holdWorkspace`, `releaseWorkspace` | `id, reason` (optional for release) |
 | `registerWorkspaceResource`, `unregisterWorkspaceResource` | `id, resource` |
 
@@ -173,6 +173,8 @@ const claims = await identity.verifyAccessToken(token, { audience: resource,
 
 A bound token verified without `dpop` fails with `invalid_dpop_proof`; a bearer token still verifies as before.
 `requireDpop: true` refuses bearer tokens, for an app whose client sets `agent_dpop: required`.
+
+**Profile scope (0.11.0).** `startLogin({ profile: true })` asks for `openid email profile`; the ID token then carries `name` whenever the person has set one, so an absent `name` means none.
 
 **Step-up (0.4.0).** `startLogin({ acrValues: 'urn:imprim:acr:mfa', maxAge })` asks for a second factor in this
 session, or a sign-in no older than `maxAge` seconds. Check `claims.acr === 'urn:imprim:acr:mfa'` and

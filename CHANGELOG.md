@@ -3,6 +3,15 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-20.4
+
+No migration. Client 0.11.0.
+
+- `startLogin({ profile: true })` asks for the `profile` scope, so the ID token carries `name` when one is set.
+- `POST /v1/workspaces/{id}/close` takes `release_own_hold: true` (client `closeWorkspace(id, { releaseOwnHold: true })`):
+  the calling app's own hold stops blocking and is deleted in the same write, only if the close commits. Other apps'
+  holds still block, and a refused close leaves the hold in place.
+
 ## 2026-11-20.3
 
 No migration.
