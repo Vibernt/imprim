@@ -45,7 +45,10 @@ Status: built. This page is the specification for Fire 0.12.3 and the Lit accoun
   redirect to `/login?next=…`.
 - **Areas and roles.** Two route groups: account (every signed-in person) and admin (realm admins; the Platform group
   for platform admins). Guards read `/v1/me`. A person who is not an admin never receives admin routes in the
-  navigation, and the server refuses every admin API call regardless.
+  navigation, and the server refuses every admin API call regardless. An admin whose session does not pass the
+  console's rules yet (an administrator sign-in within the hour, an enrolled second factor checked within the hour:
+  `admin_ready` false) sees no admin pages either, only "Open admin console", a full page load that the server turns
+  into the sign-in, second-factor or enrolment step it needs.
 - **Language.** The account area is translated; admin is English. The app's own strings are English message ids
   through `t()` and `tPlural()`, the same ids and catalogues as the server. The Worker serves the person's catalogue at
   `GET /v1/i18n/<locale>.json` (cached by catalogue hash), and `scripts/i18n.mjs` also scans `apps/web/src` for ids,
@@ -55,8 +58,9 @@ Status: built. This page is the specification for Fire 0.12.3 and the Lit accoun
 
 ## APIs
 
-- `GET /v1/me`: `{ sub, email, initials, locale, admin: null | 'realm' | 'platform', mfa: bool, fresh_until,
-  realm: { id, display_name } }`. Signed out: 401 `login_required`.
+- `GET /v1/me`: `{ sub, email, initials, locale, admin: null | 'realm' | 'platform', admin_ready: bool, mfa: bool,
+  fresh_until, realm: { id, display_name } }`. `admin_ready` is true only when the session passes every admin console
+  rule (`adminBlock` in `admin/auth.mjs`, the same check the console enforces). Signed out: 401 `login_required`.
 - Account: `/v1/account/*` JSON for every account screen (profile and email change, sessions and apps, agents and
   their revocation, security: factors, passkeys, recovery codes, password set and change, deletion). Admin:
   `/admin/api/*` extended to cover every console screen. Each handler reuses the service functions the HTML pages

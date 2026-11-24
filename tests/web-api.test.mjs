@@ -31,7 +31,7 @@ test('/v1/me reports the existing subject, locale, exact roster role and authent
     };
     const person = db.prepare('SELECT id,email FROM users').get(), session = db.prepare('SELECT auth_time FROM sessions').get();
     assert.deepEqual(await get(), {
-        sub: person.id, email: person.email, initials: 'PE', locale: 'fr', admin: null, mfa: false,
+        sub: person.id, email: person.email, initials: 'PE', locale: 'fr', admin: null, admin_ready: false, mfa: false,
         fresh_until: session.auth_time * 1000 + ADMIN_FRESH_MS, realm: { id: 'default', display_name: 'Vibernt' }
     });
     db.prepare("INSERT INTO admins(realm_id,email,role,created) VALUES('default',?,'realm',0)").run(person.email);
@@ -45,6 +45,21 @@ test('/v1/me reports the existing subject, locale, exact roster role and authent
     assert.equal(platform.mfa, true);
     db.prepare('UPDATE sessions SET mfa_at=?').run(Date.now() - ADMIN_MFA_MS);
     assert.equal((await get()).mfa, false);
+
+    // admin_ready follows every admin console rule: roster, an admin sign-in, an enrolled factor, a fresh second factor.
+    assert.equal(platform.admin_ready, false, 'an ordinary sign-in is not an admin session');
+    db.prepare('UPDATE sessions SET admin_until=?, mfa_at=?').run(Date.now() + 600000, Date.now());
+    assert.equal((await get()).admin_ready, false, 'no enrolled second factor');
+    db.prepare(`INSERT INTO mfa_factors(id,user_id,type,name,sealed_secret,confirmed,created) VALUES('f1',?,'totp','Phone','x',1,0)`).run(person.id);
+    assert.equal((await get()).admin_ready, true);
+    db.prepare('UPDATE sessions SET mfa_at=?').run(Date.now() - ADMIN_MFA_MS);
+    assert.equal((await get()).admin_ready, false, 'second factor not checked within the hour');
+    db.prepare('UPDATE sessions SET mfa_at=?, admin_until=?').run(Date.now(), Date.now() - 1);
+    assert.equal((await get()).admin_ready, false, 'admin sign-in expired');
+    db.prepare('UPDATE sessions SET admin_until=?').run(Date.now() + 600000);
+    db.prepare('DELETE FROM admins').run();
+    const removed = await get();
+    assert.deepEqual([removed.admin, removed.admin_ready], [null, false], 'off the roster');
     db.prepare("UPDATE users SET status='blocked'").run();
     await refused(await w.call('/v1/me', { headers: { cookie } }), 401, 'login_required');
 });

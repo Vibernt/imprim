@@ -3,6 +3,15 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-24.1
+
+No migration.
+
+- The account area shows an administrator the admin pages only when their session can open them: an administrator
+  sign-in and a second factor, both within the hour. Before that, the menu offers one "Open admin console" entry,
+  which goes through the sign-in or second-factor step. `GET /v1/me` reports `admin_ready`, from the same check the
+  console enforces.
+
 ## 2026-11-24
 
 No migration.

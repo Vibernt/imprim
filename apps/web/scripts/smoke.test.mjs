@@ -113,4 +113,20 @@ for (const role of ['realm', 'platform']) test(`${role} navigation is gated by t
     }
 });
 
+test('an administrator without a fresh second factor sees one way into the console, not its pages', async t => {
+    const { page, server } = await open(t, { role: 'platform' });
+    // An hour after the second factor, the console's rules refuse this session; the menu follows them (admin_ready).
+    server.env.DB.db.prepare('UPDATE sessions SET mfa_at=?').run(Date.now() - 2 * 3600000);
+    await page.reload();
+    await page.locator('screen-profile #display_name').waitFor();
+    const sidebar = page.locator('.fd-nav');
+    for (const name of ['Clients', 'Users', 'Branding', 'Signing keys', 'Realms'])
+        assert.equal(await sidebar.getByRole('link', { name, exact: true }).count(), 0, `${name} is hidden`);
+    const gate = sidebar.getByRole('link', { name: 'Open admin console' });
+    assert.equal(await gate.count(), 1);
+    await gate.click();
+    await page.waitForURL(url => url.pathname === '/mfa');
+    assert.equal(new URL(page.url()).searchParams.get('next'), '/admin/clients');
+});
+
 adminCoreSmoke(open);

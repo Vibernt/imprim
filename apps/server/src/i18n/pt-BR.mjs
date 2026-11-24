@@ -412,6 +412,7 @@ export default Object.freeze({
     "Help": "Ajuda",
     "Powered by": "Desenvolvido com",
     "Admin console": "Console de administração",
+    "Open admin console": "Abrir o console de administração",
     "Your account, {email}": "Sua conta, {email}",
     "Your account": "Sua conta",
     "Agents": "Agentes",

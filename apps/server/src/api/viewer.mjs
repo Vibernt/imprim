@@ -1,4 +1,4 @@
-import { ADMIN_FRESH_MS } from '../admin/auth.mjs';
+import { ADMIN_FRESH_MS, adminBlock } from '../admin/auth.mjs';
 import { ADMIN_MFA_MS } from '../auth/mfa.mjs';
 import { initialsOf } from '../auth/session.mjs';
 import { localeOf } from '../i18n/index.mjs';
@@ -8,12 +8,15 @@ import { requireApiSession } from './json.mjs';
 
 export async function viewer(request, env) {
     const session = await requireApiSession(request, env);
+    const admin = await adminRole(env, session.email);
     return json({
         sub: session.user_id,
         email: session.email,
         initials: initialsOf(session.email),
         locale: localeOf(env),
-        admin: await adminRole(env, session.email),
+        admin,
+        // True only when this session passes every admin console rule now; otherwise the menu offers the way in.
+        admin_ready: admin !== null && !(await adminBlock(env, session, admin, true)),
         mfa: session.mfa_at > Date.now() - ADMIN_MFA_MS,
         fresh_until: session.auth_time * 1000 + ADMIN_FRESH_MS,
         realm: { id: env.REALM.id, display_name: env.REALM.display_name }

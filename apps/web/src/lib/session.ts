@@ -6,6 +6,7 @@ export interface Session {
   readonly initials: string;
   readonly locale: string;
   readonly admin: 'realm' | 'platform' | null;
+  readonly admin_ready: boolean;
   readonly mfa: boolean;
   readonly fresh_until: number;
   readonly realm: { readonly id: string; readonly display_name: string };

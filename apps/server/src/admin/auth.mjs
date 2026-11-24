@@ -6,15 +6,22 @@ import { confirmedFactors, ADMIN_MFA_MS } from '../auth/mfa.mjs';
 import { invariant } from '../lib/errors.mjs';
 export const ADMIN_FRESH_MS = 600000;
 const SCOPED_SIGN_IN = 'Sign in at /login with an administrator magic link. Admin access lasts one hour.';
+// The first rule this session fails before it may use the admin console, as [code, message], or null. The console's
+// pages and API enforce it (adminSession); /v1/me reports it, so the navigation shows only what the session can open.
+export async function adminBlock(env, session, role, api = false) {
+    if (!(session && session.method === 'email' && session.email_verified === 1 && role)) return ['admin_required', SCOPED_SIGN_IN];
+    if (!(session.admin_until > Date.now())) return [api ? 'reauth_required' : 'admin_required', SCOPED_SIGN_IN];
+    // Administrators always use a second factor, verified within the hour.
+    if (!(await confirmedFactors(env, session.user_id)).length)
+        return [api ? 'mfa_required' : 'mfa_enrolment_required', 'Administrators need a second factor: add one at /account/mfa.'];
+    if (!(session.mfa_at && session.mfa_at > Date.now() - ADMIN_MFA_MS)) return ['mfa_required', 'Enter your second-factor code at /mfa?next=/admin.'];
+    return null;
+}
 export async function adminSession(request, env, api = false) {
     const session = await (api ? requireApiSession(request, env) : getSession(request, env));
     const role = session ? await adminRole(env, session.email) : null;
-    invariant(session && session.method === 'email' && session.email_verified === 1 && role,
-        'admin_required', SCOPED_SIGN_IN, 403);
-    invariant(session.admin_until > Date.now(), api ? 'reauth_required' : 'admin_required', SCOPED_SIGN_IN, 403);
-    // Administrators always use a second factor, verified within the hour.
-    invariant((await confirmedFactors(env, session.user_id)).length, api ? 'mfa_required' : 'mfa_enrolment_required', 'Administrators need a second factor: add one at /account/mfa.', 403);
-    invariant(session.mfa_at && session.mfa_at > Date.now() - ADMIN_MFA_MS, 'mfa_required', 'Enter your second-factor code at /mfa?next=/admin.', 403);
+    const block = await adminBlock(env, session, role, api);
+    invariant(!block, block?.[0], block?.[1], 403);
     if (env.SEEN) env.SEEN.role = role;
     return { ...session, role };
 }
