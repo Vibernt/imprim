@@ -4,6 +4,7 @@ import { chromium } from 'playwright-core';
 import { accountSmoke } from './smoke-account.mjs';
 import { smokeServer } from './smoke-server.mjs';
 import { adminCoreSmoke } from './smoke-admin-core.mjs';
+import { forgetRealms } from '../../server/src/realms/realm.mjs';
 
 const browser = await chromium.launch();
 test.after(() => browser.close());
@@ -127,6 +128,18 @@ test('an administrator without a fresh second factor sees one way into the conso
     await gate.click();
     await page.waitForURL(url => url.pathname === '/mfa');
     assert.equal(new URL(page.url()).searchParams.get('next'), '/admin/clients');
+});
+
+test('a person’s reduced-motion setting wins over a brand’s slow motion (Fire 0.12.4)', async t => {
+    const { page, server } = await open(t);
+    server.env.DB.db.prepare("UPDATE realms SET config=json_set(config,'$.branding.look.motion','slow')").run();
+    forgetRealms(server.env);
+    await page.reload();
+    await page.locator('screen-profile #display_name').waitFor();
+    const motion = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--fd-motion').trim());
+    assert.equal(await motion(), '1.75', 'the brand’s theme.css sets slow motion');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await motion(), '0', 'reduced motion keeps it at 0');
 });
 
 adminCoreSmoke(open);

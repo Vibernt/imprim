@@ -3,6 +3,16 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-24.2
+
+No migration.
+
+- Fire v0.12.4. A person's reduced-motion setting now wins over a brand's motion dial: a brand saved with slow motion
+  no longer brings transitions back for someone who asked the system for less motion. On the Branding page, the
+  Tweaks panel's motion control has no visible effect for an administrator with reduced motion on; the saved dial
+  still applies to everyone else.
+- `docs/fire`: CLASSES from the tag.
+
 ## 2026-11-24.1
 
 No migration.

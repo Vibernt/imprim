@@ -1,7 +1,7 @@
 # Fire in Imprim
 
-Every Imprim page uses **Fire v0.12.3** (commit `d484380`), MIT, from the pinned package
-`"fire-design": "github:vidhatanand/firedesign#v0.12.3"` (root and `apps/web` `package.json`).
+Every Imprim page uses **Fire v0.12.4** (commit `e283633`), MIT, from the pinned package
+`"fire-design": "github:vidhatanand/firedesign#v0.12.4"` (root and `apps/web` `package.json`).
 `scripts/build-fire.mjs` copies its CSS, ES modules and other static assets into `apps/server/public/fire/`,
 the generated directory served by Workers Static Assets. The package includes SIL OFL notices for the fonts
 and the ISC notice for the Lucide icons.
@@ -49,6 +49,7 @@ and check the upgrade. Review the sign-in, account and console pages in light an
 
 | Fire | In Imprim since | What changed for Imprim |
 |---|---|---|
+| 0.12.4 | 2026-11-24 | A person's reduced-motion setting wins over every look: `fire/tokens.css` keeps `--fd-motion` at 0 (and the press scale at 1) with `!important`, above the brand's `theme.css`. Nothing to change in Imprim; a smoke test holds it. The logo field fix does not touch Imprim (no `fd-logo`). |
 | 0.12.3 | 2026-11-24 | `boot.js`, or another classic script, goes after every stylesheet in `<head>`, or Chromium can paint buttons link blue for 160 ms. Server pages end `<head>` with Imprim's own `/imprim/head.js` (sign-in pages load no Fire JavaScript); the console's build moves `boot.js` last (`bootLast`) and the Worker puts the brand's `theme.css` in front of it. 0.12.2 changed only `render-equal`. |
 | 0.12.1 | 2026-11-20 | No change to Fire's styles or behaviour since 0.10.2. 0.11.0 took the Facet adapter out of Fire; 0.12.0 changed `render-equal` (Imprim does not run it) and Fire's starters; 0.12.1 changed the rules for agents: templates are references, never starters, and a component Fire lacks is built to Fire's standard and proposed internally, in `REQUESTS.md`. |
 | 0.10.2 | 2026-11-20 | Lint and review refuse a field inside a settings row (`wrong-parent`); review refuses a text field wider than 768 px outside a full-width form (`wide-field`). Imprim already passed both. |
