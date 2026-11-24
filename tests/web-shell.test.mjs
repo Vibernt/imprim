@@ -40,6 +40,12 @@ test('the signed-in shell uses the person’s language, realm look, and strict h
     const html = await response.text();
     assert.match(html, /<html data-fd-surface="app" lang="fr-CA" data-palette="glacier" data-type="book" data-density="compact">/);
     assert.match(html, /href="\/assets\/theme\.css\?v=[a-f0-9]{64}"/);
+    // Fire 0.12.3: boot.js, a classic script, stays after every stylesheet, the brand's theme.css included.
+    const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
+    const boot = head.indexOf('<script src="/fire/boot.js">');
+    assert.ok(boot > head.lastIndexOf('rel="stylesheet"'), 'boot.js follows every stylesheet');
+    assert.ok(head.indexOf('/assets/theme.css') > head.indexOf('/ui/static/index.css'), 'the theme follows the app stylesheet');
+    assert.match(head, /<script src="\/fire\/boot\.js"><\/script>\s*$/, 'boot.js ends <head>');
     assert.equal(fireLabels(html)['menu.close'], 'Fermer le menu');
     const brand = html.match(/<script type="application\/json" data-fd-brand>([\s\S]+?)<\/script>/)[1];
     assert.ok(!brand.includes('<'));

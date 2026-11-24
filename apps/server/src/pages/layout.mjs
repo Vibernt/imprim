@@ -30,7 +30,8 @@ const localCssLink = localCss.includes('{')
 // The document around either layout. formTargets: origins a form on this page redirects to after it posts. Chrome applies
 // form-action to those redirects, so the logout confirmation (to the app's post-logout URI) and the agent consent (to
 // its callback) name them. client: the app whose branding this page wears; otherwise the realm's.
-// script: classic scripts; modules: ES modules.
+// script: classic scripts; modules: ES modules. /imprim/head.js stays the last element of <head>, after every
+// stylesheet (the brand's theme.css comes in through HEAD), so Chromium never paints without Fire's CSS.
 export function htmlResponse(title, inner, { script = '', modules = [], turnstile = false, cookies = [], status = 200, formTargets = [], client = null } = {}) {
     const formAction = ["'self'", ...new Set(formTargets.map(uri => new URL(uri).origin).filter(origin => origin !== 'null'))].join(' ');
     const headers = new Headers({
@@ -43,7 +44,7 @@ export function htmlResponse(title, inner, { script = '', modules = [], turnstil
     const scripts = [script].flat().filter(Boolean).map(src => `<script src="${escapeHtml(src)}" defer></script>`).join('') +
         modules.map(src => `<script type="module" src="${escapeHtml(src)}"></script>`).join('');
     return new Response(`<!doctype html>${appRoot('en')}<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-${client?.id && /^[A-Za-z0-9_-]{1,200}$/.test(client.id) ? marker(`client:${client.id}`) : ''}<title>${escapeHtml(title)} · ${BRAND}</title><link rel="stylesheet" href="/fire/fire.css">${localCssLink}${HEAD}</head>
+${client?.id && /^[A-Za-z0-9_-]{1,200}$/.test(client.id) ? marker(`client:${client.id}`) : ''}<title>${escapeHtml(title)} · ${BRAND}</title><link rel="stylesheet" href="/fire/fire.css">${localCssLink}${HEAD}<script src="/imprim/head.js"></script></head>
 <body>${inner}${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ''}${scripts}</body></html>`, { status, headers });
 }
 // The centred screen (Fire's fd-screen): the brand, one card, "Powered by", then the legal footer. `size` is sm or md.

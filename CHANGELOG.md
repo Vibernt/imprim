@@ -3,6 +3,15 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-24
+
+No migration.
+
+- Fire v0.12.3. A classic script now ends every page's `<head>`, after every stylesheet, so Chromium no longer paints
+  buttons link blue for a moment when you move between pages: server pages end with `/imprim/head.js`, and the console
+  puts Fire's `boot.js` after its stylesheet and the brand's `theme.css`.
+- `docs/fire`: AGENT-RULES, GUIDE, WRITING, CLASSES and VOCABULARY from the tag.
+
 ## 2026-11-20.6
 
 No migration.

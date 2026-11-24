@@ -80,8 +80,8 @@ test('legacy admin form responses retain the Fire shell, same-origin scripts and
     assert.match(html, /<a class="fd-nav-item" href="\/admin\/clients" aria-current="page">/);
     assert.match(html, /<span class="fd-account-email">admin@example\.com<\/span>/);
     assert.deepEqual([...html.matchAll(/<script[^>]*>/g)].map(m => m[0]), [
-        '<script type="application/json" data-fd-labels>', '<script type="module" src="/imprim/shell.js">'
-    ], 'non-executable label data precedes the only executable script');
+        '<script type="application/json" data-fd-labels>', '<script src="/imprim/head.js">', '<script type="module" src="/imprim/shell.js">'
+    ], 'label data, then the head script after every stylesheet, then the shell module');
     assertFireMarkup(html);
     // A platform administrator sees the platform pages; a realm administrator is not shown them.
     assert.ok(html.includes('href="/admin/keys"') && html.includes('href="/admin/realms"') && !html.includes('identity:'));
@@ -112,4 +112,16 @@ test('the shell script loads two Fire modules and makes no request of its own', 
     const script = readFileSync(new URL('../apps/server/public/imprim/shell.js', import.meta.url), 'utf8');
     assert.deepEqual([...script.matchAll(/import\('([^']+)'\)/g)].map(m => m[1]), ['/fire/js/shell.js', '/fire/js/texture.js']);
     assert.ok(!/fetch\(|XMLHttpRequest|https?:/.test(script));
+});
+
+test('a classic script ends every server page head, after every stylesheet (Fire 0.12.3)', async t => {
+    const w = await world(t);
+    for (const path of ['/login', '/account']) {
+        const html = await (await w.call(path, { headers: { accept: 'text/html' } })).text();
+        const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>') + 7);
+        assert.match(head, /<script src="\/imprim\/head\.js"><\/script><\/head>$/, `${path}: head.js closes <head>`);
+        const lastSheet = head.lastIndexOf('rel="stylesheet"'), script = head.indexOf('<script src="/imprim/head.js">');
+        assert.ok(lastSheet >= 0 && lastSheet < script, `${path}: every stylesheet comes before head.js`);
+        assert.doesNotMatch(head, /<script[^>]*(?:async|defer)[^>]*src="\/imprim\/head\.js"/);
+    }
 });

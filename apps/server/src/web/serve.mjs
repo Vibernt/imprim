@@ -56,8 +56,10 @@ function rewriteShell(response, { lang, attributes, opening, stylesheet }) {
             html.setAttribute('lang', lang);
             for (const [name, value] of attributes) html.setAttribute(name, String(value));
         } })
-        .on('head', { element(head) {
-            head.append(opening + stylesheet, { html: true });
+        // The page data and the brand's stylesheet go in front of boot.js, which the build puts last in <head>: a classic
+        // script after every stylesheet keeps Chromium from painting before Fire's CSS and the theme load (Fire 0.12.3).
+        .on('script[src="/fire/boot.js"]', { element(script) {
+            script.before(opening + stylesheet, { html: true });
         } })
         .transform(response);
 }

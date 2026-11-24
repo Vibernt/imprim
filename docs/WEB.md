@@ -1,6 +1,6 @@
 # Account and admin interface
 
-Status: built. This page is the specification for Fire 0.12.1 and the Lit account and admin interface; the code matches it.
+Status: built. This page is the specification for Fire 0.12.3 and the Lit account and admin interface; the code matches it.
 
 ## What changes and what does not
 
@@ -15,8 +15,8 @@ Status: built. This page is the specification for Fire 0.12.1 and the Lit accoun
 
 ## Fire
 
-- Fire v0.12.1 (commit `e0d58af`), MIT, from its public repository: both the root `package.json` (a dev dependency, for
-  the Worker, scripts and tests) and `apps/web/package.json` pin `"fire-design": "github:vidhatanand/firedesign#v0.12.1"`.
+- Fire v0.12.3 (commit `d484380`), MIT, from its public repository: both the root `package.json` (a dev dependency, for
+  the Worker, scripts and tests) and `apps/web/package.json` pin `"fire-design": "github:vidhatanand/firedesign#v0.12.3"`.
   Upgrading Fire means changing that tag in both and recording it here and in `docs/fire/README.md`.
 - The Worker imports Fire's modules (`icons.js`, `palettes.js`, `typefaces.js`) as `fire-design/fire/js/…`; Wrangler
   bundles them. They are the only imports outside `apps/server/src` that `npm run check` allows.

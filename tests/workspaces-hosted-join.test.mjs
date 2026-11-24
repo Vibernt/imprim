@@ -25,7 +25,7 @@ test('hosted join lists eligible teams, joins a product and admits the owner and
     assert.match(page.headers.get('content-security-policy'), /form-action 'self' https:\/\/app\.example;/);
     const html = await page.text();
     assertFireMarkup(html);
-    assert.doesNotMatch(html, /<script[^>]*src=|\bchecked\b|admin-only|someone-elses/);
+    assert.doesNotMatch(html, /<script[^>]*src="(?!\/imprim\/head\.js")|\bchecked\b|admin-only|someone-elses/);
     assert.match(html, /Use a workspace for Tasks &lt;HQ&gt;/);
     assert.match(html, new RegExp('/assets/brand/' + logo));
     assert.match(html, /Alpha &lt;Team&gt;[\s\S]*>notes<.*>Beta<[\s\S]*>files</);

@@ -17,6 +17,13 @@ const CSP = [
 
 const slim = (file: string) => decodeURIComponent(new URL(`./.fire-slim/${file}`, import.meta.url).pathname);
 
+/** boot.js, moved to the end of <head> after Vite's stylesheet (Fire 0.12.3; from Fire's lit-vite starter). */
+function bootLast(html: string) {
+  const tag = /[ \t]*<script src="[^"]*fire\/boot\.js"><\/script>\r?\n/.exec(html)?.[0];
+  if (!tag) throw new Error('index.html: no boot.js script to put after the stylesheets');
+  return html.replace(tag, '').replace(/[ \t]*<\/head>/, (end) => tag + end);
+}
+
 function fireHtml(): Plugin {
   let base = '/';
   return {
@@ -31,7 +38,8 @@ function fireHtml(): Plugin {
         const asset = font && Object.values(ctx.bundle!).find((out) => out.type === 'asset' && out.originalFileNames.some((name) => name.endsWith(`/${font}`)));
         if (asset) tags.push({ tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: base + asset.fileName, crossorigin: true } });
         else if (ctx.bundle) this.warn('no font to preload: fire slim reports no Latin regular face for the theme');
-        return { html: html.replace('<!-- csp -->\n', policy), tags };
+        const out = html.replace('<!-- csp -->\n', policy);
+        return { html: ctx.server ? out : bootLast(out), tags };
       },
     },
   };
