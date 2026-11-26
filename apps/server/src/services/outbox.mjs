@@ -1,4 +1,5 @@
 import { invariant } from '../lib/errors.mjs';
+import { realmId } from '../realms/realm.mjs';
 import { expireBacklog } from './outbox-expiry.mjs';
 // These table/type pairs are internal constants, never request input.
 export async function dispatchOutbox(env, table, type) {
@@ -33,15 +34,15 @@ export function queueEvent(env, ctx, table, type, id) {
     })().catch(error => console.error(JSON.stringify({ type: 'event_queue_deferred', table, code: error?.code || 'queue_failed' }))));
 }
 export async function deliveryStatus(env) {
-    const [human, agent, missing, user, workspace] = await Promise.all([
-        env.DB.prepare("SELECT count(*) AS pending,min(created) AS oldest FROM logout_outbox WHERE delivered_at IS NULL AND delivery_state!='expired'").first(),
-        env.DB.prepare("SELECT count(*) AS pending,min(created) AS oldest FROM agent_revocation_outbox WHERE delivered_at IS NULL AND delivery_state!='expired'").first(),
-        env.DB.prepare(`SELECT o.client_id FROM logout_outbox o LEFT JOIN clients c ON c.id=o.client_id
-            WHERE o.delivered_at IS NULL AND o.delivery_state!='expired' AND c.backchannel_uri IS NULL
-            UNION SELECT o.app_id AS client_id FROM agent_revocation_outbox o LEFT JOIN clients c ON c.id=o.app_id
-            WHERE o.delivered_at IS NULL AND o.delivery_state!='expired' AND c.backchannel_uri IS NULL ORDER BY client_id`).all(),
-        env.DB.prepare("SELECT count(*) AS pending,min(created) AS oldest FROM user_event_outbox WHERE delivered_at IS NULL AND delivery_state!='expired'").first(),
-        env.DB.prepare("SELECT count(*) AS pending,min(created) AS oldest FROM workspace_event_outbox WHERE delivered_at IS NULL AND delivery_state!='expired'").first()
+    const realm = realmId(env);
+    const pending = "o.delivered_at IS NULL AND o.delivery_state!='expired'";
+    const queues = [['logout_outbox', 'client_id'], ['agent_revocation_outbox', 'app_id'],
+        ['user_event_outbox', 'client_id'], ['workspace_event_outbox', 'client_id']];
+    const from = (table, key) => `FROM ${table} o JOIN clients c ON c.id=o.${key} WHERE c.realm_id=? AND ${pending}`;
+    const [human, agent, user, workspace, missing] = await Promise.all([
+        ...queues.map(([table, key]) => env.DB.prepare(`SELECT count(*) AS pending,min(o.created) AS oldest ${from(table, key)}`).bind(realm).first()),
+        env.DB.prepare(queues.map(([table, key]) => `SELECT c.id AS client_id ${from(table, key)} AND nullif(c.backchannel_uri,'') IS NULL`)
+            .join(' UNION ') + ' ORDER BY client_id').bind(...queues.map(() => realm)).all()
     ]);
     return { human, agent, user_events: user, workspace_events: workspace, clients_missing_backchannel: missing.results.map(row => row.client_id) };
 }

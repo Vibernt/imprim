@@ -3,7 +3,7 @@ import { readBody, uniqueParams, redirect } from '../lib/http.mjs';
 import { getSession, requireCsrf } from '../auth/session.mjs';
 import { pendingRequest, authorizationResponse } from '../oidc/requests.mjs';
 import { page } from '../pages/layout.mjs';
-import { result, linkButton } from '../pages/ui.mjs';
+import { result, linkButton, escapeHtml } from '../pages/ui.mjs';
 import { validateAgentRequest } from './authorize.mjs';
 import { consentResourceDetails } from './policy.mjs';
 import { listWorkspaceChoices, requireWorkspaceChoices } from './workspace-choice.mjs';
@@ -47,7 +47,7 @@ export async function consent(request, env) {
     const location = await consentLocation(env, row, context, session, choosing);
     const gate = await mfaGate(env, request, { client: context.app, session, row, agent: true });
     if (gate) return redirect(`${env.ISSUER}${gate}`);
-    if (!post) return consentPage(request, env, row, context, location, await consentChoices(env, row, context, session.user_id, choosing));
+    if (!post) return consentPage(request, env, row, context, location, await consentChoices(env, row, context, session.user_id, choosing), session);
     invariant(['approve','deny'].includes(body.decision), 'invalid_request', 'Choose Approve or Deny.');
     const approve = body.decision === 'approve';
     const selected = choosing && approve ? location.workspaces.find(item => item.id === body.workspace_id) : null;
@@ -64,8 +64,13 @@ export async function consent(request, env) {
             workspace: selected?.name ?? location.workspaceName ?? workspace(row.resource), scopes: approval.scope },
             { links: { agents_url: `${env.ISSUER}/account/agents` } });
     }
-    if (row.device_hash) return approve
-        ? page(t(env, 'Agent connected'), result('circle-check', 'success', t(env, 'Agent connected'), t(env, 'Go back to your device to continue.')) + linkButton(t(env, 'See connected agents'), '/account/agents', { variant: 'outline', size: 'lg', block: true }))
-        : page(t(env, 'Connection denied'), result('ban', 'neutral', t(env, 'Connection denied'), t(env, 'The agent gets no access. Go back to your device.')));
+    if (row.device_hash) {
+        const title = approve ? t(env, 'Agent connected') : t(env, 'Connection denied');
+        return page(title, result(approve ? 'circle-check' : 'ban', approve ? 'success' : 'neutral', title,
+            approve ? t(env, 'Go back to your device to continue.') : t(env, 'The agent gets no access. Go back to your device.')) +
+            `<p class="fd-body">${escapeHtml(t(env, 'You can close this tab.'))}</p>` +
+            (approve ? linkButton(t(env, 'See connected agents'), '/account/agents', { variant: 'outline', size: 'lg', block: true }) : ''),
+            { client: context.app });
+    }
     return authorizationResponse(env, row, approve ? { code } : { error: 'access_denied' });
 }

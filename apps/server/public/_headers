@@ -12,6 +12,8 @@
   X-Content-Type-Options: nosniff
   Cross-Origin-Resource-Policy: same-origin
   Cache-Control: public, max-age=0, must-revalidate
+/imprim/*.svg
+  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox
 
 # Vite content hashes change when these bytes change. The shell is served by the Worker with no-store.
 /ui/static/*

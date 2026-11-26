@@ -5,9 +5,10 @@ import { readBody, json, uniqueParams, tokenShape } from '../lib/http.mjs';
 import { randomToken, sha256 } from '../lib/crypto.mjs';
 import { limitAgentAddress } from '../auth/rate-limit.mjs';
 import { page } from '../pages/layout.mjs';
-import { result, field, button } from '../pages/ui.mjs';
+import { accountLine, result, field, button } from '../pages/ui.mjs';
 import { checkPolicy } from './policy.mjs';
 import { authenticateAgent } from './client-auth.mjs';
+import { getSession } from '../auth/session.mjs';
 import { beginAgentSignIn } from './authorize.mjs';
 import { t, msg } from '../i18n/index.mjs';
 import { grantContext, tokenMaterial, usageStatements, dpopFor, bindStatement } from './grants.mjs';
@@ -33,7 +34,9 @@ export async function deviceAuthorization(request, env) {
 }
 export async function devicePage(request, env) {
     const query = uniqueParams(new URL(request.url).searchParams);
-    if (!query.user_code) return page(t(env, 'Connect a device'), result('bot', 'accent', t(env, 'Connect a device'), t(env, 'Enter the code your agent shows you.')) +
+    const title = t(env, 'Enter the code from your agent');
+    const session = await getSession(request, env);
+    if (!query.user_code) return page(title, result('bot', 'accent', title) + (session ? accountLine(env, session.email) : '') +
         `<form class="fd-stack" data-gap="4" method="get" action="/device">${field({ id: 'user_code', label: t(env, 'Device code'), name: 'user_code', required: true, autocomplete: 'off',
             spellcheck: 'false', size: 'lg', placeholder: 'BCDF-GHJK', hint: t(env, 'Only enter a code from an agent you started yourself.') })}${button(t(env, 'Continue'), { variant: 'primary', size: 'lg', block: true })}</form>`);
     await limitAgentAddress(env, request, 'user-code');

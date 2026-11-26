@@ -70,21 +70,7 @@ export async function changeUser(env, actor, id, action, survivor, confirmSource
     }
     return { id, status, ...(action === 'merge' ? { merged_into: survivor } : {}) };
 }
-export async function users(env, query) {
-    const search = (query.get('q') || '').slice(0, 254), cursor = query.get('before') || '\uffff';
-    return (await env.DB.prepare(`SELECT id,email,status,merged_into,created FROM users WHERE realm_id=? AND
-        (instr(lower(email),lower(?))>0 OR id=?) AND id<? ORDER BY id DESC LIMIT 51`).bind(realmId(env), search, search, cursor).all()).results;
-}
-export async function userDetail(env, id) {
-    const user = await env.DB.prepare('SELECT * FROM users WHERE id=? AND realm_id=?').bind(id, realmId(env)).first();
-    invariant(user, 'not_found', 'User not found.', 404);
-    const [identities, sessions, grants] = await Promise.all([
-        env.DB.prepare('SELECT provider,provider_id,login,created FROM user_identities WHERE user_id=?').bind(id).all(),
-        env.DB.prepare('SELECT sid,method,auth_time,expires_at FROM sessions WHERE user_id=? ORDER BY auth_time DESC LIMIT 100').bind(id).all(),
-        env.DB.prepare('SELECT id,client_id,app_id,resource,scope,created,last_used,expires_at,revoked_at FROM agent_grants WHERE user_id=? ORDER BY created DESC LIMIT 100').bind(id).all()
-    ]);
-    return { ...user, identities: identities.results, sessions: sessions.results, grants: grants.results };
-}
+export { users, userDetail } from './user-read.mjs';
 // Admin MFA reset (a person lost their authenticator): factors, recovery codes and remembered browsers go, identity
 // sessions end (apps by back-channel), and the person enrols again at their next sign-in. A reason is required and
 // recorded; the person is told by email. Runs inside mutationEnvironment, so it needs a fresh admin second factor.

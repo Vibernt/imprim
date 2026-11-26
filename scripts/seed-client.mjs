@@ -12,7 +12,7 @@ const sql = value => value === null ? 'NULL' : typeof value === 'number' ? Strin
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 export function clientSeedSql(config) {
     assert(config && typeof config === 'object' && !Array.isArray(config), 'Client configuration must be an object');
-    const allowed = [...settingNames, ...POLICY,'id','secret_hash','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev','sign_in_methods','google_hosted_domains'];
+    const allowed = [...settingNames, ...POLICY,'id','secret_hash','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev','listed','sign_in_methods','google_hosted_domains'];
     assert(Object.keys(config).every(key => allowed.includes(key)), 'Unknown client setting');
     assert(typeof config.id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(config.id), 'Invalid client id');
     assert(config.secret_hash === null || /^[a-f0-9]{64}$/.test(config.secret_hash || ''), 'Provide a SHA-256 secret_hash or explicit null for a public client');
@@ -32,6 +32,7 @@ export function clientSeedSql(config) {
     for (const field of ['redirect_uris','post_logout_uris']) for (const uri of JSON.parse(client[field])) registeredUri(client, uri, field);
     // The same policy rules as the console; a missing value keeps the column default.
     try { validatePolicySettings(config, agent); } catch (error) { assert(false, `Invalid policy: ${error.message}`); }
+    if (Object.hasOwn(config, 'listed')) client.listed = Number(config.listed);
     for (const key of POLICY) if (config[key] !== undefined)
         client[key] = typeof config[key] === 'object' && !workspaceSettingNames.includes(key) ? JSON.stringify(config[key]) : config[key];
     validateSignInSettings(methods, config.allowed_domains ?? []);

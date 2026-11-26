@@ -12,6 +12,9 @@ for (const methods of [['google'], ['github'], ['email'], ['google','email','git
         for (const [method, marker] of Object.entries(markers)) assert.equal(controls.includes(marker), methods.includes(method));
         const positions = methods.map(method => controls.indexOf(markers[method]));
         assert.deepEqual(positions, [...positions].sort((a,b) => a-b));
+        // Each provider button carries that provider's mark: Google's file as an image, the others inline.
+        assert.equal(controls.includes('<img class="fd-icon" src="/imprim/google-g.svg" alt=""'), methods.includes('google'));
+        assert.equal(/<svg class="fd-icon" viewBox="0 0 16 16"[^>]*>.*?<\/svg><span>Sign in with GitHub/.test(controls), methods.includes('github'));
         assert.match(html, /<script src="\/assets\/sign-in.js" defer><\/script>/);
         const script = await (await w.call('/assets/sign-in.js')).text();
         runInNewContext(script, { URLSearchParams, location: { hash: '' }, document: { getElementById(id) {

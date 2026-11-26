@@ -70,7 +70,7 @@ test('per-language brand words show in that language; the default words stay wit
     assert.ok((await (await w.call('/signed-out')).text()).includes('See you soon.'));
     assert.ok((await (await w.call('/signed-out', { headers: { 'accept-language': 'de' } })).text()).includes('Bis bald.'));
     const french = await (await w.call('/signed-out', { headers: { 'accept-language': 'fr' } })).text();
-    assert.ok(!french.includes('See you soon.') && french.includes(escaped(fr('Apps you used keep their own sessions until you sign out there.'))));
+    assert.ok(!french.includes('See you soon.') && french.includes(escaped(fr('Some apps keep you signed in until you sign out there.'))));
 });
 test('the saved language: chosen on the account page, checked, CSRF-bound, and used for pages and notices', async t => {
     const w = await world(t), { cookie } = await login(w, t);
@@ -121,7 +121,7 @@ test('an administrator\'s two-factor reset notice goes in the person\'s language
 test('errors people read are translated; protocol errors stay English ASCII', async t => {
     const w = await world(t);
     const page = await (await w.call('/error', { headers: { accept: 'text/html', 'accept-language': 'de' } })).text();
-    assert.ok(page.includes(escaped(de('This sign-in request is missing or has expired.'))));
+    assert.ok(page.includes(escaped(de('This sign-in has expired'))));
     const unknown = await (await w.call('/authorize?client_id=nope', { headers: { accept: 'text/html', 'accept-language': 'fr' } })).text();
     assert.ok(unknown.includes(escaped(fr('Unknown client.'))));
     const json = await (await w.post('/v1/auth/magic/request', { email: 'a@example.com' }, '', { 'accept-language': 'de' })).json();

@@ -14,7 +14,7 @@ const ADMIN = { id: 'admin', label: 'Admin console', home: '/admin', sections: [
     actions: env => `<a class="fd-btn" data-variant="ghost" data-only="desktop" href="/login">${icon('refresh-cw')}<span>Sign in again</span></a><a class="fd-btn" data-only="desktop" href="/account">${icon('user')}<span>Your account</span></a>${SIGN_OUT(env)}`,
     phone: [['Your account', '/account'], ['Sign in again', '/login'], ['Sign out', '/logout']] };
 const ACCOUNT = { id: 'account', label: msg('Your account'), home: '/account', sections: [
-    { items: [['profile', msg('Profile'), 'user', '/account'], ['security', msg('Security'), 'shield-check', '/account/security'], ['sessions', msg('Sessions and apps'), 'monitor', '/account/sessions'], ['agents', msg('Agents'), 'bot', '/account/agents']] },
+    { items: [['profile', msg('Profile'), 'user', '/account'], ['apps', msg('Apps'), 'blocks', '/account/apps'], ['security', msg('Security'), 'shield-check', '/account/security'], ['sessions', msg('Sessions'), 'monitor', '/account/sessions'], ['agents', msg('Agents'), 'bot', '/account/agents']] },
     { label: msg('Administration'), only: 'admin', items: [['admin', msg('Admin console'), 'settings', '/admin']] }],
     actions: env => only('admin', `<a class="fd-btn" data-only="desktop" href="/admin">${icon('settings')}<span>${e(t(env, 'Admin console'))}</span></a>`) + SIGN_OUT(env), phone: [[msg('Sign out'), '/logout']] };
 const AREAS = { admin: ADMIN, account: ACCOUNT };
@@ -35,6 +35,8 @@ function phoneMenu(env, area, active) {
     return `<div class="fd-mobile-nav" id="shell-menu" role="dialog" aria-modal="true" aria-label="${e(t(env, 'Menu'))}" data-state="closed" hidden>
 <a class="fd-mobile-nav-account" href="/account"><span>${VIEWER}</span><span class="fd-account-avatar" aria-hidden="true">${INITIALS}</span></a>${sections}${extra}</div>`;
 }
+const phoneTabs = (env, area, active) => area === ACCOUNT ? `<nav class="fd-tabbar" aria-label="${e(t(env, 'Your account'))}">${
+    area.sections[0].items.map(([id, label, glyph, href]) => `<a class="fd-tabbar-item" href="${href}"${current(id === active)}>${icon(glyph)}<span class="fd-tabbar-label">${e(t(env, label))}</span></a>`).join('')}</nav>` : '';
 // One band of the page, its parts stacked. A string is a band with the usual padding; { html, pad, label } sets them.
 const band = (part, last) => {
     const { html, pad, label } = typeof part === 'string' ? { html: part } : part;
@@ -43,16 +45,18 @@ const band = (part, last) => {
 // area: "admin" or "account". active: the nav item. description, eyebrow: text. back: [label, href]. actions: safe
 // markup for the hero. art: the hero's texture. body: one band's markup, or a list of bands.
 // env: the request's, for the language (the admin console's is always English).
-export function shellPage(title, body, { env = null, area, active = '', description = '', back = null, actions = '', art = 'terrain', modules = [], ...options } = {}) {
+export function shellPage(title, body, { env = null, area, active = '', description = '', back = null, normalBack = false, actions = '', art = 'terrain', modules = [], ...options } = {}) {
     const a = AREAS[area], bands = [body].flat().filter(Boolean);
+    const topTitle = a === ACCOUNT ? a.sections[0].items.find(([id]) => id === active)?.[1] || a.label : a.label;
     const hero = `<section class="fd-band fd-page-hero fd-rise"><div class="fd-page-hero-art" aria-hidden="true"><div class="fd-ascii" data-fd-ascii="${e(art)}"></div></div>
-${back ? `<a class="fd-back" href="${e(back[1])}">${icon('arrow-left')}<span>${e(back[0])}</span></a>` : ''}<h1 class="fd-display">${e(title)}</h1>
+${back ? (normalBack ? `<p class="fd-body"><a class="fd-link" href="${e(back[1])}">${e(back[0])}</a></p>`
+    : `<a class="fd-back" href="${e(back[1])}">${icon('arrow-left')}<span>${e(back[0])}</span></a>`) : ''}<h1 class="fd-display">${e(title)}</h1>
 ${description ? `<p class="fd-page-hero-desc">${e(description)}</p>` : ''}${actions ? `<div class="fd-page-hero-actions">${actions}</div>` : ''}</section>`;
     return htmlResponse(title, `<div class="fd-app" data-sidebar="expanded">${sidebar(env, a, active)}
-<div class="fd-main"><header class="fd-topbar"><a class="fd-topbar-brand" data-only="mobile" href="${a.home}" aria-label="${e(t(env, a.label))}"><span class="fd-brand-mark">${MARK}</span></a><span class="fd-topbar-title">${e(t(env, a.label))}</span>
+<div class="fd-main"><header class="fd-topbar"><a class="fd-topbar-brand" data-only="mobile" href="${a.home}" aria-label="${e(t(env, a.label))}"><span class="fd-brand-mark">${MARK}</span></a><span class="fd-topbar-title">${e(t(env, topTitle))}</span>
 <div class="fd-topbar-actions">${a.actions(env)}<button class="fd-btn" type="button" data-icon-only data-only="mobile" data-fd-mobile-nav aria-controls="shell-menu" aria-expanded="false" aria-label="${e(t(env, 'Open menu'))}">${icon('menu')}</button></div></header>
 <main class="fd-page"><div class="fd-frame">${hero}${bands.map((part, i) => band(part, i === bands.length - 1)).join('')}${SHELL_FOOTER}</div></main></div>
-${phoneMenu(env, a, active)}</div>`, { ...options, modules: ['/imprim/shell.js', ...modules] });
+${phoneMenu(env, a, active)}${phoneTabs(env, a, active)}</div>`, { ...options, modules: ['/imprim/shell.js', ...modules] });
 }
 // An account page: Profile, Security, Sessions and apps, or Agents.
 export const accountPage = (title, body, options = {}) => shellPage(title, body, { area: 'account', art: 'waves', ...options });

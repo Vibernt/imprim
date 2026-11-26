@@ -1,132 +1,129 @@
-import { html, nothing, type PropertyDeclarations } from 'lit';
+import { html, nothing } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { api } from '../../lib/api';
+import { icon } from '../../lib/icon';
 import { t } from '../../lib/i18n';
-import { card, setting } from '../page-layout';
+import { card } from '../page-layout';
 import { AccountScreen, post, success } from './account-screen';
-import { day, when, empty } from './access-view';
+import { empty } from './access-view';
+import { agentRow, type Agent } from './agent-connection';
 import { confirmDisableMachine, machineClients, type MachineClient } from './machine-clients';
-import { agentLabelForm } from './agent-label-form';
+import { agentLabelForm, confirmRevokeAgent } from './agent-label-form';
 
-interface Agent {
-  id: string; name: string; app: string; host: string | null; workspace: string; resource: string; scopes: string[];
-  workspace_id: string | null; workspace_name: string | null; resource_name: string | null;
-  label: string | null; approved_device: string | null; approved_location: string | null;
-  last_used: number | null; created: number; status: 'revoked' | 'expired' | 'active';
-}
-interface Agents { agents: Agent[]; next: string | null; machine_clients: MachineClient[] }
+type Status = 'active' | 'ended';
+interface GrantPage { agents: Agent[]; next: string | null }
+interface Agents { active: GrantPage & { machine_clients: MachineClient[] }; ended: GrantPage & { total: number } }
+type Review = { kind: 'rename' | 'revoke'; agent: Agent } | { kind: 'disable'; client: MachineClient };
 
 class ScreenAgents extends AccountScreen<Agents> {
-  static override properties: PropertyDeclarations = { editing: { state: true }, disabling: { state: true } };
-  declare private editing: string | undefined;
-  declare private disabling: MachineClient | undefined;
-  private queryString = '';
+  static override properties = { review: { state: true } };
+  declare private review: Review | undefined;
+  private cursor = { active: '', ended: '' };
 
-  set query(query: URLSearchParams) {
-    const before = query.toString();
-    if (before === this.queryString) return;
-    this.queryString = before;
-    this.editing = undefined;
-    this.disabling = undefined;
-    if (this.isConnected) void this.load();
+  protected override async read() {
+    const path = (status: Status) => `/v1/account/agents?${new URLSearchParams({ status, before: this.cursor[status] })}`;
+    const [active, ended] = await Promise.all([api<Agents['active']>(path('active')), api<Agents['ended']>(path('ended'))]);
+    return { active, ended };
   }
 
-  protected override read() {
-    return api<Agents>(`/v1/account/agents?${this.queryString}`);
-  }
-
-  private revoke = (agent: Agent) => this.mutate(async () => {
-    await post('agents/revoke', { grant_id: agent.id });
-    if (!this.isConnected) return;
-    success(t('Agent revoked'));
-    await this.load(false);
-  });
-
-  private async edit(agent: Agent, open: boolean) {
-    this.editing = open ? agent.id : undefined;
+  private async select(review?: Review) {
+    const previous = this.review;
+    this.review = review;
     await this.updateComplete;
-    this.querySelector<HTMLElement>(`#${open ? 'agent-label' : 'agent-rename'}-${agent.id}`)?.focus();
+    const focus = review?.kind === 'rename' ? `agent-label-${review.agent.id}` :
+      review?.kind === 'revoke' ? `agent-revoke-cancel-${review.agent.id}` : review?.kind === 'disable' ? 'confirm-machine' :
+      previous?.kind === 'disable' ? `connection-more-machine-${previous.client.client_id}` :
+      previous ? `connection-more-agent-${previous.agent.id}` : '';
+    if (focus) this.querySelector<HTMLElement>(`#${CSS.escape(focus)}`)?.focus();
   }
 
-  private async saveLabel(event: SubmitEvent, agent: Agent) {
+  private async saveLabel(agent: Agent, event: SubmitEvent) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget as HTMLFormElement);
+    const label = new FormData(event.currentTarget as HTMLFormElement).get('label');
     let saved = false;
     await this.mutate(async () => {
-      await post('agents/label', { grant_id: agent.id, label: data.get('label') });
+      await post('agents/label', { grant_id: agent.id, label });
       if (!this.isConnected) return;
       success(t('Connection name saved'));
+      await this.load(false);
       saved = true;
+    });
+    if (saved) await this.select();
+  }
+
+  private revoke(agent: Agent) {
+    return this.mutate(async () => {
+      await post('agents/revoke', { grant_id: agent.id });
+      if (!this.isConnected) return;
+      success(t('Agent revoked'));
+      this.review = undefined;
+      this.cursor.ended = '';
+      await this.load(false);
+      await this.updateComplete;
+      this.querySelector<HTMLElement>('.fd-accordion-trigger')?.focus();
+    });
+  }
+
+  private changeMachine(client: MachineClient, action: 'renew' | 'disable') {
+    return this.mutate(async () => {
+      await post('machine-clients/' + action, { client_id: client.client_id });
+      if (!this.isConnected) return;
+      if (action === 'disable') this.review = undefined;
+      success(action === 'renew' ? t('Machine renewed') : t('Machine disabled'));
       await this.load(false);
     });
-    if (saved && this.editing === agent.id) await this.edit(agent, false);
   }
 
-  private access(agent: Agent) {
-    if (agent.status === 'revoked') return html`<span class="fd-status">${t('Revoked')}</span>`;
-    if (agent.status === 'expired') return html`<span class="fd-status" data-tone="warning">${t('Expired')}</span>`;
-    return html`<button class="fd-btn" data-variant="danger-soft" data-size="sm" type="button"
-      aria-label=${t('Revoke {name}', { name: agent.name })} ?disabled=${this.pending} @click=${() => this.revoke(agent)}>${t('Revoke')}</button>`;
+  private pagination(status: Status, next: string | null) {
+    const go = (cursor: string) => this.mutate(async () => {
+      this.review = undefined;
+      this.cursor[status] = cursor;
+      await this.load(false);
+    });
+    return next || this.cursor[status] ? html`<div class="fd-row" data-wrap>
+      <button class="fd-btn" data-variant="ghost" type="button" ?disabled=${this.pending || !this.cursor[status]}
+        @click=${() => go('')}>${t('First page')}</button>
+      <button class="fd-btn" data-variant="ghost" type="button" ?disabled=${this.pending || !next}
+        @click=${() => next && go(next)}>${t('Older agents')}</button>
+    </div>` : nothing;
   }
 
-  private connection(agent: Agent) {
-    const name = agent.label || agent.name;
-    const device = [agent.approved_device, agent.approved_location].filter(Boolean).join(' · ');
-    const editing = this.editing === agent.id;
-    return html`
-      ${setting(
-        html`<span class="fd-sr-only">${t('Agent')} </span><span class="fd-kv-value" data-plain>${name}</span>`,
-        html`<div class="fd-stack" data-gap="1">
-          ${agent.label ? html`<div class="fd-kv-value" data-plain>${agent.name}</div>` : nothing}
-          <div class="fd-kv-value">${agent.host ? html`<code class="fd-code">${agent.host}</code>` : html`<span class="fd-badge" data-tone="warning">${t('Unverified')}</span>`}</div>
-          <div class="fd-kv-value" data-plain>${t('App')} · ${agent.app} · ${t('Workspace: {workspace}', { workspace: agent.workspace_name ?? agent.workspace })}</div>
-          ${agent.resource_name ? html`<div class="fd-kv-value" data-plain>${agent.resource_name}</div>` : nothing}
-          <div class="fd-kv-value"><code class="fd-code">${agent.resource}</code></div>
-          <div class="fd-row" data-wrap data-gap="1"><span>${t('Scopes')}</span>
-            ${agent.scopes.map(scope => html`<code class="fd-code fd-kv-value">${scope}</code>`)}
-          </div>
-          ${device ? html`<div>${t('Approved on {device}', { device })}</div>` : nothing}
-          <div>${t('Last used')} · ${when(agent.last_used)}</div>
-          <div>${t('Connected {date}', { date: day(agent.created) })}</div>
-        </div>`, html`<div class="fd-row" data-wrap role="group" aria-label=${t('Access')}>
-          <button class="fd-btn" data-variant="outline" data-size="sm" type="button" id=${`agent-rename-${agent.id}`}
-            aria-label=${t('Rename {name}', { name })} aria-expanded=${editing} ?disabled=${this.pending || editing}
-            @click=${() => this.edit(agent, true)}>${t('Rename')}</button>
-          ${this.access(agent)}
-        </div>`)}
-      ${editing ? agentLabelForm(agent.id, agent.label, this.pending, event => this.saveLabel(event, agent), () => this.edit(agent, false)) : nothing}
-    `;
+  private connections(label: string, agents: Agent[]) {
+    const review = this.review;
+    return html`<ul class="fd-list" data-divided aria-label=${label}>${repeat(agents, agent => agent.id, agent => {
+      const selected = review && review.kind !== 'disable' && review.agent.id === agent.id;
+      const form = selected && review.kind === 'rename' ? agentLabelForm(agent.id, agent.label, this.pending,
+        event => this.saveLabel(agent, event), () => this.select()) : selected && review.kind === 'revoke' ?
+        confirmRevokeAgent(agent.id, agent.label || agent.name, this.pending, () => this.revoke(agent), () => this.select()) : nothing;
+      return agentRow(agent, this.pending, () => this.select({ kind: 'rename', agent }), () => this.select({ kind: 'revoke', agent }), form);
+    })}</ul>`;
   }
-
-  private reviewMachine = async (client?: MachineClient) => {
-    const focus = client ? '#confirm-machine' : this.disabling ? '#disable-' + this.disabling.client_id : '';
-    this.disabling = client;
-    await this.updateComplete;
-    if (focus) this.querySelector<HTMLElement>(focus)?.focus();
-  };
-
-  private changeMachine = (client: MachineClient, action: 'renew' | 'disable') => this.mutate(async () => {
-    await post('machine-clients/' + action, { client_id: client.client_id });
-    if (!this.isConnected) return;
-    if (action === 'disable') this.disabling = undefined;
-    success(action === 'renew' ? t('Machine renewed') : t('Machine disabled'));
-    await this.load(false);
-  });
 
   protected override render() {
-    return this.page(t('Connected agents'), t('Agents act for you in an app. Revoke one to end its access.'), ({ agents, next, machine_clients }) => html`
-      ${card(t('Agents'), agents.length ? html`
-        <div role="group" aria-label=${t('Connected agents')}>
-          ${agents.map(agent => this.connection(agent))}
-        </div>
-        ${next ? html`<div class="fd-row" data-justify="center">
-          <a class="fd-btn" data-variant="ghost" href=${`/account/agents?before=${encodeURIComponent(next)}`}>${t('Older agents')}</a>
-        </div>` : nothing}`
-      : empty(t('No agents connected'), t('Agents you approve to act in an app appear here.')))}
-      ${machineClients(machine_clients, this.pending, client => this.changeMachine(client, 'renew'), this.reviewMachine)}
-      ${this.disabling ? keyed(this.disabling.client_id, confirmDisableMachine(this.disabling, this.pending,
-        () => this.changeMachine(this.disabling!, 'disable'), () => this.reviewMachine())) : nothing}`);
-
+    const activeTitle = t('Active connections');
+    const review = this.review;
+    return this.page(t('Connected agents'), t('Agents act for you in an app. Revoke one to end its access.'), ({ active, ended }) => {
+      const endedTitle = t('Ended connections ({count})', { count: ended.total });
+      return html`
+        ${card(activeTitle, html`
+          ${active.agents.length ? this.connections(activeTitle, active.agents) :
+            empty(t('No agents connected'), t('Agents appear here after you approve one from an app.'))}
+          ${this.pagination('active', active.next)}
+          ${ended.total ? html`<div class="fd-accordion" data-variant="card">
+            <details class="fd-accordion-item">
+              <summary class="fd-accordion-trigger"><span>${endedTitle}</span>${icon('chevron-down')}</summary>
+              <div class="fd-accordion-panel"><div class="fd-accordion-inner">
+                ${this.connections(endedTitle, ended.agents)}
+                ${this.pagination('ended', ended.next)}
+              </div></div>
+            </details>
+          </div>` : nothing}`)}
+        ${machineClients(active.machine_clients, this.pending, client => this.changeMachine(client, 'renew'), client => this.select({ kind: 'disable', client }))}
+        ${review?.kind === 'disable' ? keyed(review.client.client_id, confirmDisableMachine(review.client, this.pending,
+          () => this.changeMachine(review.client, 'disable'), () => this.select())) : nothing}`;
+    });
   }
 }
+
 customElements.define('screen-agents', ScreenAgents);

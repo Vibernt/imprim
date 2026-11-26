@@ -30,15 +30,26 @@ apps can opt in to membership and base roles managed by Imprim. Users imported w
 | `POST /v1/auth/passkey/options`, `/v1/auth/passkey/verify` | Passkey sign-in ceremony (below). |
 | `GET`/`POST /mfa` | Second-factor challenge for a pending authorization, agent consent or the console. The page asks for the 6-digit authenticator code in one-time-code boxes; `?recovery=1` shows a field for a recovery code instead. The POST accepts either in `code`. |
 | `GET`/`POST /workspace-join` | [Hosted workspace choice](WORKSPACES.md#adding-a-product-to-an-existing-workspace) for a pending interactive app authorization. Requires its browser and signed-in account. The form posts `request_id`, `workspace_id`, `action` and CSRF from the issuer's Origin. |
-| `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. With `request_id` of a sign-in still open in this browser (an app's email link, or Sign in again on a page that stopped) it is that app's sign-in page again; any other `request_id` is ignored. Without one, it lists the realm's apps that have an `initiate_login_uri` ([next steps](#next-steps-on-pages-that-stop)). |
-| `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; the signed-in page requires a current identity session. `/signed-out` and `/error` offer the [next step](#next-steps-on-pages-that-stop). |
-| `GET /account`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, security, sessions and apps, connected agents, and the password, factor and email-change pages (below). |
+| `GET`/`POST /workspace-access` | Explains a refused shared-app sign-in when the signed-in member has a team that does not use the product and there was no hosted join offer. Requires the original browser and account. POST takes `request_id` and session CSRF from the issuer's Origin, consumes the request once and returns `access_denied`, `state` and `iss` to the registered callback. |
+| `POST /switch-account` | Takes `request_id` and session CSRF from the issuer's Origin. Checks the original browser, signs out the identity session with back-channel logout, and returns to `/login?request_id=…` with the authorization request still open. |
+| `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. With `request_id` of a sign-in still open in this browser (an app's email link, or Sign in again on a page that stopped) it is that app's sign-in page again; any other `request_id` is ignored. Without one, it links to the short public app list ([next steps](#next-steps-on-pages-that-stop)). |
+| `GET /check-email`, `/signup-pending`, `/signed-in`, `/signed-out`, `/error` | Hosted confirmation and [next steps](#next-steps-on-pages-that-stop). `/signed-in` requires a current identity session. |
+| `GET /device`, `GET`/`POST /agent/consent` | The code entry, account check and approval pages for agents. A valid device code starts a browser-bound app request. A signed-in person can continue to consent or switch accounts. |
+| `GET /account`, `/account/apps`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, apps, security, sessions, connected agents, and the password, factor and email-change pages (below). |
 | `POST /account/{profile,sessions,apps,devices,email,email/confirm,delete,password,mfa,revoke}` | Account changes; same Origin and CSRF. |
-| `POST /account/passkeys/{options,register,remove}` | Passkey registration and removal. |
+| `POST /account/passkeys/{options,register,remove}` | Passkey registration and removal. In the hosted setup, `POST /account/mfa` with `action=rename-passkey` saves the new passkey's name with session CSRF, Origin and recent MFA. |
+| `GET /v1/account/apps` | `{apps:[{id,name,summary,mark,href,last_signed_in}]}` for the signed-in person. These are the same live admissions with registered sign-in addresses as the hosted personal list (up to 12 in this realm). `summary`, `mark` and `last_signed_in` can be null. |
+| `GET /v1/account/sessions` | Current sessions, remembered browsers and app sessions. Each app session includes a nullable `href` for its registered sign-in address. |
+| `POST /v1/account/apps` | JSON `{client_id}` signs the person out of that app, without clearing its last-sign-in time. |
+| `POST /v1/account/passkeys/rename` | JSON `{id,name}` names a passkey owned by this person in this realm, with recent MFA. Returns `{}`. |
 | `GET /assets/local.css`, `/assets/sign-in.js`, `/assets/passkey.js` | Imprim's stopgap CSS (empty unless Fire lacks something; pages link it only when it has rules, with a hash of its content as `?v=`) and its two page scripts; one-hour cache. |
 | `GET /assets/theme.css[?client=id]` | The brand's Fire look as `<html>`-level custom properties for the realm, or an app in it; five-minute cache ([Branding](BRANDING.md)). |
 | `GET /assets/brand/<sha256>` | An uploaded logo or mark of this realm, sandboxed (`CSP: default-src 'none'; style-src 'unsafe-inline'; sandbox`, `nosniff`); 404 otherwise. |
 | `GET /fire/*`, `/imprim/*` | Static assets (Fire, and the console's branding editor module), served before the Worker with `nosniff` and `Cross-Origin-Resource-Policy: same-origin`. |
+
+Account JSON reads require the person's session. Writes also require the issuer's Origin and the session's
+`X-CSRF-Token` header. The Apps directory records `last_signed_in` in Unix milliseconds after a successful app code
+exchange. Existing sign-ins are backfilled from retained app sessions; a sign-in removed before the migration is not recoverable.
 
 Pages use no inline script or style. Every HTML page sends `default-src 'self'; script-src 'self'; frame-src 'none';
 style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri
@@ -328,13 +339,17 @@ A page that says to sign in or start again links to it, from the first of these 
 2. The sign-in request the page belongs to (the `request_id` of the URL or of the posted form), when it is still open
    and this browser started it: **Sign in again**, `/login?request_id=…`. Another browser never gets this link.
 3. That request's app, when an administrator set its `initiate_login_uri`: **Sign in to {app}**.
-4. With no request in view (`/error`, `/signed-out`, the signed-out account page, `/login` without a request): the
-   realm's apps that have an `initiate_login_uri`, by name, when there are at most five. Imprim never guesses an
-   app's address from its redirect URIs.
+4. With no app in view, a signed-in person sees **Your apps**, up to 12 apps they currently have an admission for.
+   Imprim sorts by most recent app session, then by name. Signed-out pages and the administrator sign-in note use
+   the public list, up to six apps with `listed: true`. If more than six qualify, the public list is omitted.
 
-Otherwise the page keeps its line ("Go back to the app and start again."). Refusals of the browser forms
-`/authorize`, `/workspace-join`, `/agent/consent`, `/mfa` and `/account/password` are such pages when the browser asks for
-HTML; a script on those paths (which does not send `Accept: text/html`) still gets JSON.
+Each list only links to administrator-set `initiate_login_uri` values. When there is exactly one personal app,
+`/signed-in` redirects to it with 303. The missing or expired sign-in error does the same with a live session,
+unless a 60-second host-only cookie records a recent skip to that app. Other errors and signed-out pages show
+their next steps on the page.
+
+Browser form refusals on `/authorize`, `/workspace-join`, `/workspace-access`, `/switch-account`,
+`/agent/consent`, `/mfa` and `/account/password` render a page when the browser requests HTML.
 
 JSON errors have `error` and `error_description`; browser GET errors may render HTML. OAuth errors include
 `invalid_request`, `invalid_client`, `invalid_grant`, `invalid_scope`, `unsupported_response_type`,
@@ -343,7 +358,7 @@ JSON errors have `error` and `error_description`; browser GET errors may render 
 `origin`, `csrf`, `browser_binding`, `turnstile_*`, `rate_limit`, and configuration errors. Unexpected failures are
 500 `server_error` without internal details. Failed dependencies are not replaced by alternate providers.
 The `error` code never changes with language. `error_description` is translated for people: on HTML error pages and
-from the browser endpoints (`/v1/auth/*`, `/account/*`, `/mfa`, `/agent/consent`, `/device`, `/logout`, `/login`).
+from the browser endpoints (`/v1/auth/*`, `/account/*`, `/mfa`, `/agent/consent`, `/device`, `/workspace-access`, `/switch-account`, `/logout`, `/login`).
 Every other endpoint, including `/token`, `/register`, `/introspect`, `/revoke`, `/userinfo`, the app APIs and
 `/authorize` error redirects, keeps English ASCII (RFC 6749 section 5.2).
 
@@ -366,9 +381,16 @@ rules apply to the separate public-agent registry and OAuth grants.
 | `GET /device` | Code-entry form; matching live code starts app sign-in, then the same consent page. GET never grants access. |
 | `POST /token` | Code + S256 verifier, refresh token, or device code. Every exchange requires the exact client and resource. The response and access JWT include the granted `scope`, or the narrower set selected on refresh. |
 | `GET /account/agents` | Current person's grants, including creation/last-use times and revoked/expired status. |
-| `GET /v1/account/agents` | The current person's paginated grants. Each includes nullable `label` (a private connection name), `approved_device` and `approved_location` (the browser used to approve and its coarse location), `workspace_id`, `workspace_name` and `resource_name`. |
+| `GET /v1/account/agents?status=active\|ended&before=…` | The current person's grants in this realm, up to 50 each, with an independent `next` cursor for each status. Ended includes revoked and expired grants and returns `total`; active also returns `machine_clients`. Omit `status` for the unfiltered view, which also returns `machine_clients`. |
 | `POST /v1/account/agents/label` | Same Origin, session and CSRF header. JSON `{ grant_id, label }` names any of the person's grants in this realm, including expired or revoked grants. The label is trimmed, with 1–60 characters and no control characters. An empty label clears it. Returns `{}`, 404 `not_found` for missing or unowned grants, or 400 `invalid_request` for an invalid label. |
-| `POST /account/revoke` | Same Origin + CSRF + grant ownership; durable revocation and back-channel outbox. |
+| `POST /account/revoke`, `/v1/account/agents/revoke` | Same Origin + CSRF + grant ownership; durable revocation and back-channel outbox. |
+
+Agent rows include `label` (a private connection name), `approved_device`, `approved_location`, `workspace_id`,
+`workspace_name`, `resource_name`, `host`, `created`, `last_used`, `expires_at`, `status`, `ended_at` and `ended_reason`.
+`workspace_name` comes from the chosen workspace or the resource's registered workspace in this realm; it is null
+when neither resolves, never the URL slug. `host` is null for self-registered agents. `scopes` is an array of `{code,label}`;
+`label` is null when the app no longer lists that permission. An ended grant has an expiry or revocation time in
+Unix milliseconds; `ended_reason` is `expired` or the recorded revocation reason, null if no reason remains.
 
 Agent IDs do not replace imported subjects. `auth_requests.client_id` remains the owning app for sign-in/admission;
 separate columns bind the agent, resource and optional device. The resource must be a canonical HTTPS URL without
@@ -599,3 +621,15 @@ return `invalid_grant`. Policy, user status and resource binding are checked aga
 See [Control plane](CONTROL_PLANE.md) for all `/admin` and `/admin/api/*` routes, scoped email-link sessions,
 CSRF and Origin enforcement, reauthentication, transactional audit, block, merge and delete behaviour, and key
 rotation.
+
+The console registers inactive client drafts at `POST /admin/api/clients/editor/drafts`. Activation at
+`POST /admin/api/clients/:id/activate` requires a valid HTTPS back-channel URI. It creates the live client and
+returns its generated secret once. Use `GET /admin/api/clients?include_drafts=1` to list drafts alongside live
+clients. The full configuration still creates a live client at `POST /admin/api/clients`.
+
+`GET /admin/api/users` includes `display_name`, `last_sign_in` (UTC milliseconds or null) and `total` across the
+current search. User detail includes sign-in methods, verification methods and the total agent grant count.
+`GET /admin/api/audit` accepts exact `event`, `actor` and `target` filters and inclusive UTC calendar dates
+`from` and `to` (`YYYY-MM-DD`). Its rows include current realm labels when the actor or target can be resolved.
+The NDJSON export keeps the original IDs and fields. `GET /admin/api/signups/summary` returns the realm's pending
+count, excluding requests past their decision window.

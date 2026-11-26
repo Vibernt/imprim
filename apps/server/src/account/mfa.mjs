@@ -4,12 +4,14 @@ import { invariant } from '../lib/errors.mjs';
 import { getSession, requireCsrf, cookies, CSRF_COOKIE, sessionByHash } from '../auth/session.mjs';
 import { confirmedFactors } from '../auth/mfa.mjs';
 import { changeFactor, readFactors, requireVerifiedFactorEmail } from './factors.mjs';
-import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
+import { pendingRequest, completeAuthorization, requireAuthorizationSession } from '../oidc/requests.mjs';
 import { safeNext } from '../auth/mfa-challenge.mjs';
 import { page, escapeHtml as e } from '../pages/layout.mjs';
 import { accountPage } from '../pages/shell.mjs';
-import { heading, section, button, linkButton, field, otp, hidden, callout, list, empty, setting, badge, small } from '../pages/ui.mjs';
+import { accountLine, heading, section, button, linkButton, field, otp, hidden, callout, list, setting, badge, small, messageBox } from '../pages/ui.mjs';
 import { FORMS_MODULE } from '../pages/forms.mjs';
+import { brandingFor } from '../branding/tokens.mjs';
+import { renamePasskey } from '../webauthn/rename.mjs';
 import { t, tPlural, formatDate, scriptPath } from '../i18n/index.mjs';
 const csrfOf = request => cookies(request)[CSRF_COOKIE] || '';
 const carry = values => hidden('request_id', values.request_id) + hidden('next', values.next);
@@ -18,53 +20,70 @@ const post = (request, values, action, body, submit, layout = '') => `<form${lay
 // Short dates in UTC, as WRITING.md asks: "Nov 15, 2026".
 const day = (env, time) => formatDate(env, time, { month: 'short', day: 'numeric', year: 'numeric' });
 // Recovery codes as a two-column grid of mono codes; tests/support/admin.mjs reads them from this markup.
-const recoveryCodes = (env, codes) => `<div class="fd-card" data-variant="sunken"><ul class="fd-grid" data-cols="2" data-min="4xs" data-gap="2" id="recovery-codes" aria-label="${e(t(env, 'Recovery codes'))}">${codes.map(code => `<li><code class="fd-code">${e(code)}</code></li>`).join('')}</ul></div>`;
+const recoveryCodes = (env, codes) => `<div><ul class="fd-grid" data-cols="2" data-min="4xs" data-gap="2" id="recovery-codes" aria-label="${e(t(env, 'Recovery codes'))}">${codes.map(code => `<li><code class="fd-code">${e(code)}</code></li>`).join('')}</ul></div>`;
 // Where "Cancel" returns to, keeping the app request (or the page to go back to) the person arrived with.
 const overviewHref = values => {
     const query = new URLSearchParams(Object.entries({ request_id: values.request_id, next: values.next }).filter(([, v]) => typeof v === 'string' && v));
     return `/account/mfa${query.size ? `?${query}` : ''}`;
 };
 // Mid sign-in (an app is waiting) each step is a centred screen; otherwise it sits in the account pages, under Security.
-const show = (env, values, title, description, body, options = {}) => values.request_id ? page(title, heading(title, description) + body, { size: 'md', ...options })
+const show = (env, values, title, description, body, options = {}) => values.request_id
+    ? page(title, heading(title, description) + accountLine(env, values.email, { id: values.request_id, csrf: values.csrfToken }) + body,
+        { size: 'md', client: values.client, formTargets: [values.redirectUri], ...options })
     : accountPage(title, body, { env, active: 'security', description, back: [t(env, 'Security'), '/account/security'], ...options });
 async function overview(request, env, session, values, message = '') {
     const { factors, passkeys, recovery_count: left } = await readFactors(env, session);
     const hasFactor = factors.length + passkeys.length > 0;
     const toConsole = !hasFactor && typeof values.next === 'string' && /^\/admin(\/|$)/.test(values.next);
-    const required = values.request_id ? callout(t(env, 'Add a second factor to continue'), t(env, 'This app asks for a code or a passkey after you sign in.'), { tone: 'warning', role: 'alert' })
+    const required = values.request_id && !hasFactor ? callout('', t(env, '{app} asks for a second step after you sign in. Add an authenticator app or a passkey.',
+        { app: brandingFor(env, values.client).name || values.client.id }), { tone: 'info' })
         : toConsole ? callout(t(env, 'Add a second factor to open the admin console'), t(env, 'Administrators need an authenticator app or a passkey. You go on to the console once it is added.'), { tone: 'warning', role: 'alert' }) : '';
     const notice = message ? callout(message, '', { tone: 'success', role: 'status' }) : '';
     const add = post(request, values, 'start', '', button(t(env, 'Add authenticator app'), { variant: hasFactor ? 'outline' : 'primary', icon: 'plus' }));
     const apps = factors.length ? list(t(env, 'Authenticator apps'), factors.map(f => ({ title: f.name, desc: e(`${t(env, 'Added {date}', { date: day(env, f.created) })} · ${f.last_used ? t(env, 'last used {date}', { date: day(env, f.last_used) }) : t(env, 'never used')}`),
-        trail: post(request, values, 'remove', hidden('factor_id', f.id), button(t(env, 'Remove'), { variant: 'ghost', size: 'sm', 'aria-label': t(env, 'Remove {name}', { name: f.name }) })) }))) + `<div class="fd-row">${add}</div>`
-        : empty(t(env, 'No authenticator app yet'), t(env, 'Add one to enter a 6-digit code each time you sign in.'), add);
+        trail: post(request, values, 'remove', hidden('factor_id', f.id), button(t(env, 'Remove'), { variant: 'ghost', size: 'lg', 'aria-label': t(env, 'Remove {name}', { name: f.name }) })) })), { divided: Boolean(values.request_id) }) + `<div class="fd-row">${add}</div>`
+        : `<p class="fd-body">${e(t(env, 'No authenticator app yet'))}</p><div class="fd-row">${add}</div>`;
     const keys = passkeys.length ? list(t(env, 'Passkeys'), passkeys.map(p => ({ title: p.name, desc: e(t(env, 'Added {date}', { date: day(env, p.created) })), meta: p.backup_eligible ? badge(t(env, 'Synced')) : '',
-        trail: `<form method="post" action="/account/passkeys/remove">${hidden('csrf', csrfOf(request))}${hidden('id', p.id)}${button(t(env, 'Remove'), { variant: 'ghost', size: 'sm', 'aria-label': t(env, 'Remove {name}', { name: p.name }) })}</form>` })))
-        : empty(t(env, 'No passkeys yet'), t(env, 'Add one to use your fingerprint, face or device PIN.'));
-    // The passkey name has no form: /assets/passkey.js reads #passkey-name and wires #passkey-add.
-    const addKey = `<div class="fd-row" data-align="end" data-wrap data-gap="3"><div class="fd-grow">${field({ id: 'passkey-name', label: t(env, 'Passkey name'), maxlength: 60, placeholder: t(env, 'Work laptop'), hint: t(env, 'Leave blank to name it “Passkey”.') })}</div>${button(t(env, 'Add passkey'), { id: 'passkey-add', type: 'button', variant: 'outline', icon: 'key-round' })}</div>`;
+        trail: `<form method="post" action="/account/passkeys/remove">${hidden('csrf', csrfOf(request))}${hidden('id', p.id)}${button(t(env, 'Remove'), { variant: 'ghost', size: 'lg', 'aria-label': t(env, 'Remove {name}', { name: p.name }) })}</form>` })), { divided: Boolean(values.request_id) })
+        : `<p class="fd-body">${e(t(env, 'No passkeys yet'))}</p>`;
+    const addKey = button(t(env, 'Add passkey'), { id: 'passkey-add', type: 'button', variant: 'outline', size: 'lg', icon: 'key-round' });
+    const nameKey = `<form class="fd-form" method="post" action="/account/mfa" id="passkey-rename" hidden>
+${hidden('csrf', csrfOf(request))}${carry(values)}${hidden('action', 'rename-passkey')}${hidden('id', '')}
+${field({ id: 'passkey-name', name: 'name', label: t(env, 'Passkey name'), maxlength: 60, required: true })}
+<div class="fd-row" data-wrap>${button(t(env, 'Save name'), { variant: 'outline', size: 'lg' })}
+<a class="fd-link" href="${e(overviewHref(values))}">${e(t(env, 'Keep the default name'))}</a></div></form>`;
+    const continueSignIn = values.request_id && hasFactor && session.mfa_at
+        ? post(request, values, 'continue', '', button(t(env, 'Continue'), { variant: 'primary', size: 'lg', block: true })) : '';
     const codes = hasFactor ? section(t(env, 'Recovery codes'), t(env, 'Each code works once, for when you can’t use your app or passkey.'),
         setting(left ? tPlural(env, left, '{count} unused code', '{count} unused codes') : t(env, 'No unused codes'), t(env, 'New codes replace every old one.'), post(request, values, 'recovery', '', button(t(env, 'Generate new codes'), { variant: 'outline', size: 'sm', icon: 'refresh-cw' })))) : '';
     return show(env, values, t(env, 'Two-factor authentication'), t(env, 'Ask for a code or a passkey each time you sign in.'), required + notice +
         section(t(env, 'Authenticator apps'), t(env, 'Apps that show a new 6-digit code every 30 seconds.'), apps) +
-        section(t(env, 'Passkeys'), t(env, 'Sign in with this device’s screen lock instead of a code.'), keys + addKey + '<p class="fd-small" id="message" role="status" aria-live="polite"></p>') +
-        codes, { script: scriptPath(env, '/assets/passkey.js') });
+        section(t(env, 'Passkeys'), t(env, 'Sign in with this device’s screen lock instead of a code.'), keys + `<div class="fd-row">${addKey}</div>${messageBox()}` + nameKey) +
+        codes + continueSignIn, { script: scriptPath(env, '/assets/passkey.js') });
 }
 export async function mfaAccount(request, env, ctx) {
     const session = await getSession(request, env);
     invariant(session, 'login_required', 'Sign in first.', 401);
     requireVerifiedFactorEmail(session);
-    if (request.method === 'GET') {
-        const values = uniqueParams(new URL(request.url).searchParams);
+    const get = request.method === 'GET';
+    const values = get ? uniqueParams(new URL(request.url).searchParams) : await readBody(request, 'form');
+    if (!get) await requireCsrf(request, env, session, values.csrf);
+    const pending = values.request_id ? await pendingRequest(env, request, values.request_id) : null;
+    if (pending) {
+        requireAuthorizationSession(pending.row, session);
+        Object.assign(values, { client: pending.client, redirectUri: pending.row.redirect_uri, email: session.email, csrfToken: csrfOf(request) });
+    }
+    if (get) {
         if (values.verify === '1' && !values.request_id && (await confirmedFactors(env, session.user_id)).length)
             return redirect(`/mfa?next=${encodeURIComponent(safeNext(values.next))}`);
         return overview(request, env, session, values);
     }
-    const values = await readBody(request, 'form');
-    await requireCsrf(request, env, session, values.csrf);
+    if (values.action === 'rename-passkey') {
+        await renamePasskey(env, session, values);
+        return redirect(overviewHref(values));
+    }
     if (values.action === 'continue') {
-        if (values.request_id) {
-            const pending = await pendingRequest(env, request, values.request_id);
+        if (pending) {
             return completeAuthorization(env, request, pending.row.id, await sessionByHash(env, session.hash));
         }
         return redirect(`${env.ISSUER}${values.next ? safeNext(values.next) : '/account/mfa'}`);

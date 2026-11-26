@@ -33,8 +33,17 @@ export function workspaceConsentSmoke(browser) {
             const { user_code } = await device.json();
             const consent = await page.goto(server.origin + '/device?user_code=' + user_code);
             assert.equal(consent.status(), 200);
+            await page.getByRole('button', { name: 'Not you?', exact: true }).waitFor();
+            await page.waitForURL('**/agent/consent?request_id=*');
             assert.equal(await page.locator('script[src^="/fire/"], [style]').count(), 0);
             assert.equal(await page.locator('input[name="workspace_id"]:checked').count(), 0);
+            const approve = page.getByRole('button', { name: 'Approve', exact: true });
+            const deny = page.getByRole('button', { name: 'Deny', exact: true });
+            const [primary, secondary, form] = await Promise.all([approve.boundingBox(), deny.boundingBox(),
+                page.locator('form[action="/agent/consent"]').boundingBox()]);
+            assert.ok(primary.y + primary.height <= secondary.y, 'primary button precedes the secondary button vertically');
+            assert.ok(Math.abs(primary.width - form.width) < 1 && Math.abs(secondary.width - form.width) < 1, 'both buttons fill the form');
+            assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'consent fits the phone viewport');
         };
         await openConsent();
         await page.getByRole('button', { name: 'Approve', exact: true }).click();

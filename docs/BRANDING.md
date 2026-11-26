@@ -36,12 +36,13 @@ admin write, and the version the page loaded, so two admins cannot overwrite eac
 |---|---|
 | `look` | Fire tweak state. App settings override the realm's. The `tone` and `signature` objects also merge per key. |
 | `name` | Shown beside the mark, in page titles, email subjects and text. Up to 200 characters, escaped. |
+| `summary` | Apps only. One to 80 characters of plain text for the app list. |
 | `legal_name` | Footer `© <legal_name>` on pages and emails. |
 | `support_url`, `privacy_url`, `terms_url` | `https://` links in the footer. |
 | `support_email` | Footer "Help" link (when there is no `support_url`) and the email footer. |
 | `locale` | The default language, such as `de` or `en-GB`: used when the browser asks for none the brand offers, and as `<html lang>` for that language. |
 | `locales` | The languages offered, from `en`, `es`, `fr`, `de`, `pt-BR`. Default: all of them. `locale` must be one of them. |
-| `locale_copy` | The brand's words per language: `{ "de": { "sign_in_heading": "…" } }`, same keys and limits as `copy`. |
+| `locale_copy` | The brand's words per language: `{ "de": { "sign_in_heading": "…" } }`, same keys and limits as `copy`. An app can also set `locale_copy.<tag>.summary` with the same limit as `summary`. |
 | `logo_light`, `logo_dark`, `mark` | Uploaded asset ids. |
 | `copy` | Plain text, up to 300 characters each: `sign_in_heading`, `sign_in_help`, `consent_intro`, `signed_out`, `footer`. |
 
@@ -84,7 +85,7 @@ Values outside these are refused, not clamped. **Contrast** is Fire's job: its p
 ```
 
 An app sets its own `branding` in the console's client editor or the seed script ([Clients](CLIENTS.md)), for
-example `{"name": "My app", "look": {"palette": "iris"}}`.
+example `{"name": "Notes", "summary": "Shared notes for teams", "look": {"palette": "iris"}}`.
 
 ## Languages
 
@@ -92,7 +93,9 @@ Pages and emails come in English, Spanish, French, German and Portuguese (Brazil
 brand chooses which it offers (`locales`) and which to fall back to (`locale`); an app's values replace the realm's.
 `copy` is in the brand's default language; `locale_copy` holds the same words in other languages. On a page in
 language L, a copy key shows `locale_copy[L]`, then `copy` if L is the default language, then Imprim's built-in text
-in L. `locale_copy` merges per language and per key, app over realm.
+in L. `locale_copy` merges per language and per key, app over realm. App lists use the page language for each
+app's summary. They use `summary` in the app's default language, and omit the description when that language has
+no text.
 
 ```json
 { "locale": "de", "locales": ["de", "en"], "copy": { "sign_in_heading": "Willkommen bei Acme" },

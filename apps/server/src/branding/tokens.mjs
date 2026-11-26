@@ -14,6 +14,9 @@ export function validateBranding(value, { app = false } = {}) {
     if (value === undefined) return {};
     if (!value || typeof value !== 'object' || Array.isArray(value)) fail('branding must be an object.');
     const known = ['name', 'legal_name', 'support_email', 'locale', 'locales', 'locale_copy', 'look', 'copy', ...LINKS, ...ASSETS];
+    if (app) known.push('summary');
+    const summary = text => plain(text, 80) && !/[<>]/.test(text);
+    if (value.summary !== undefined && !summary(value.summary)) fail('branding.summary is 1 to 80 characters of plain text.');
     for (const key of Object.keys(value)) if (!known.includes(key)) fail(`Unknown branding field ${key}.`);
     if (value.name !== undefined && value.name !== '' && !plain(value.name, 200)) fail('branding.name is up to 200 characters of plain text.');
     if (value.legal_name !== undefined && !plain(value.legal_name, 200)) fail('branding.legal_name is 1 to 200 characters.');
@@ -29,7 +32,13 @@ export function validateBranding(value, { app = false } = {}) {
         for (const [tag, copy] of Object.entries(value.locale_copy)) {
             if (!LANGUAGES.includes(tag)) fail(`branding.locale_copy: ${tag} is not a language Imprim ships.`);
             if (!copy || typeof copy !== 'object' || Array.isArray(copy)) fail(`branding.locale_copy.${tag} must be an object.`);
-            for (const [key, text] of Object.entries(copy)) { if (!COPY_KEYS.includes(key)) fail(`Unknown copy key ${key}.`); if (!plain(text, 300)) fail(`locale_copy.${tag}.${key} is 1 to 300 characters of plain text.`); }
+            for (const [key, text] of Object.entries(copy)) {
+                if (app && key === 'summary') {
+                    if (!summary(text)) fail(`locale_copy.${tag}.summary is 1 to 80 characters of plain text.`);
+                    continue;
+                }
+                if (!COPY_KEYS.includes(key)) fail(`Unknown copy key ${key}.`); if (!plain(text, 300)) fail(`locale_copy.${tag}.${key} is 1 to 300 characters of plain text.`);
+            }
         }
     }
     for (const key of ASSETS) if (value[key] !== undefined && !(typeof value[key] === 'string' && /^[0-9a-f]{64}$/.test(value[key]))) fail(`branding.${key} must be an uploaded asset id.`);

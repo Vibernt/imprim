@@ -285,9 +285,12 @@ test('the two-factor pages are Fire markup and escape factor names and carried v
     assert.match(overview, /aria-label="Remove &lt;img src=x onerror=alert\(1\)&gt;"/);
     assert.match(overview, /<input type="hidden" name="action" value="remove"><input type="hidden" name="factor_id" value="[^"]+">/);
     assert.match(overview, /<h3 class="fd-setting-title">10 unused codes<\/h3>/);
-    assert.ok(overview.includes('<input class="fd-input" id="passkey-name" aria-describedby="passkey-name-hint" placeholder="Work laptop" maxlength="60">'), 'no name attribute: the script posts it');
-    assert.match(overview, /<button class="fd-btn" type="button" data-variant="outline" id="passkey-add">/);
-    assert.match(overview, /<p class="fd-small" id="message" role="status" aria-live="polite"><\/p>/);
+    assert.match(overview, /<form[^>]+id="passkey-rename" hidden>/);
+    assert.match(overview, /id="passkey-name" name="name" maxlength="60" required/);
+    assert.doesNotMatch(overview, /class="fd-empty"/);
+    assert.match(overview, /<button class="fd-btn" type="button" data-variant="outline" data-size="lg" id="passkey-add">/);
+    // Script failures appear in a danger notice that stays hidden until there is one.
+    assert.match(overview, /<div class="fd-callout" id="message-box" hidden data-tone="danger" role="alert">.*?<p class="fd-callout-body" id="message"><\/p><\/div><\/div>/);
     assert.ok(overview.includes('<script src="/assets/passkey.js" defer></script>'));
     assert.ok(!overview.includes('data-variant="primary"'), 'with a factor, adding another is not the primary action');
     const codes = await (await form(w, '/account/mfa', { csrf, action: 'recovery' }, jar)).text();

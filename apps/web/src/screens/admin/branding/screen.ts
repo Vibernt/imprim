@@ -1,5 +1,5 @@
 import 'fire-design/fire/components/tweaks.css';
-import { html, nothing, type PropertyValues } from 'lit';
+import { html, type PropertyValues } from 'lit';
 import { forms } from 'fire-design';
 import { keyed } from 'lit/directives/keyed.js';
 import { api } from '../../../lib/api';
@@ -16,13 +16,14 @@ import { sections, specimen, type Section } from './view';
 
 class BrandingScreen extends AdminRealmScreen<BrandResponse> {
   static override properties = {
-    section: { state: true }, assetDraft: { state: true }, lookPending: { state: true }, look: { state: true }, reset: { state: true },
+    section: { state: true }, assetDraft: { state: true }, lookPending: { state: true }, look: { state: true }, reset: { state: true }, previewCopy: { state: true },
   };
   declare private section: Section;
   declare private assetDraft: Branding;
   declare private lookPending: boolean;
   declare private reset: number;
   declare private look: Look;
+  declare private previewCopy: Pick<Branding, 'name' | 'copy'>;
   private previewLife?: AbortController;
   private tweaks?: Awaited<ReturnType<typeof openLookPreview>>;
   protected heading = 'Branding';
@@ -35,6 +36,7 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
     this.assetDraft = {};
     this.look = {};
     this.reset = 0;
+    this.previewCopy = {};
   }
 
   override disconnectedCallback() {
@@ -46,6 +48,7 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
     super.willUpdate(changed);
     if (changed.has('data') && this.data) {
       this.assetDraft = this.data.branding;
+      this.previewCopy = { name: this.data.branding.name, copy: this.data.branding.copy };
       this.look = this.data.branding.look ?? {};
       const address = new URL(location.href);
       if (address.searchParams.get('saved') === '1') {
@@ -111,8 +114,16 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
     this.previewLife?.abort();
     this.tweaks = undefined;
     this.assetDraft = this.data.branding;
+    this.previewCopy = { name: this.data.branding.name, copy: this.data.branding.copy };
     this.look = this.data.branding.look ?? {};
     this.reset++;
+  };
+
+  private updatePreview = (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || (target.name !== 'name' && !target.name.startsWith('copy.'))) return;
+    const { name, copy } = collect(new FormData(target.form!), this.assetDraft, this.look);
+    this.previewCopy = { name, copy };
   };
 
   private save = async (event: SubmitEvent) => {
@@ -147,17 +158,20 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
         ${sections.map(([id, label, glyph]) => html`<button class="fd-btn" data-variant=${this.section === id ? 'outline' : 'ghost'} type="button"
           aria-pressed=${this.section === id} @click=${() => { this.section = id; }}>${icon(glyph)}<span>${label}</span></button>`)}
       </nav>
-      <form method="post" novalidate @submit=${this.save}>
-        <fieldset class="fd-stack" data-gap="4" ?disabled=${this.pending}>
-          <legend class="fd-sr-only">Branding</legend>
-          ${sections.map(([id, label]) => html`<div ?hidden=${this.section !== id}>${card(label, panels[id])}</div>`)}
-          <div class="fd-form-actions">
-            <button type="button" class="fd-btn" data-variant="ghost" ?disabled=${this.lookPending} @click=${this.discard}>Discard changes</button>
-            <button type="submit" class="fd-btn" data-variant="primary" ?disabled=${this.lookPending}>Save branding</button>
-          </div>
-        </fieldset>
+      <form class="fd-form" data-size="full" method="post" novalidate @submit=${this.save} @input=${this.updatePreview}>
+        <div class="fd-grid" data-cols="2" data-gap="6">
+          <fieldset class="fd-stack" data-gap="4" ?disabled=${this.pending}>
+            <legend class="fd-sr-only">Branding</legend>
+            ${sections.map(([id, label]) => html`<div ?hidden=${this.section !== id}>${card(label, panels[id])}</div>`)}
+          </fieldset>
+          <div>${specimen({ ...this.assetDraft, ...this.previewCopy }, this.view.session.realm.display_name)}</div>
+        </div>
+        <div class="fd-form-actions" data-variant="sticky">
+          <button type="button" class="fd-btn" data-variant="ghost" ?disabled=${this.pending || this.lookPending}
+            @click=${this.discard}>Discard changes</button>
+          <button type="submit" class="fd-btn" data-variant="primary" ?disabled=${this.pending || this.lookPending}>Save branding</button>
+        </div>
       </form>
-      ${specimen(this.assetDraft, this.view.session.realm.display_name)}
     </div>`);
   }
 }

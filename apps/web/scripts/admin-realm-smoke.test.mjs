@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { smokeServer } from './smoke-server.mjs';
 import { seedSignupRequest } from './signup-fixture.mjs';
+import { stacked } from './smoke-admin-core.mjs';
 
 const browser = await chromium.launch();
 test.after(() => browser.close());
@@ -24,13 +25,15 @@ async function open(t, width = 1440, colorScheme = 'light') {
     const go = path => page.goto(server.origin + path);
     const fits = name => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
         .then(result => assert.equal(result, true, `${name} fits ${width}px in ${colorScheme}`));
-    const toast = name => page.getByText(name, { exact: true }).waitFor();
+    // Notices only: audit rows now show the same words as readable event names ("Workspace created").
+    const toast = name => page.locator('.fd-toast-title').getByText(name, { exact: true }).waitFor();
     return { page, server, go, fits, toast, context };
 }
 
 test('Workspaces uses Fire filters and form controls and closes only after the name is typed', async t => {
     const { page, server, go, fits, toast } = await open(t);
     const db = server.env.DB.db;
+    db.prepare("UPDATE clients SET product='reports',workspaces='shared' WHERE id='other'").run();
     const seed = db.prepare("INSERT INTO workspaces(id,realm_id,kind,name,status,created) VALUES(?,'default','team',?,?,0)");
     for (let i = 0; i < 51; i++) {
         const name = String(i).padStart(2, '0');
@@ -58,6 +61,18 @@ test('Workspaces uses Fire filters and form controls and closes only after the n
     await page.getByRole('button', { name: 'Create workspace' }).click();
     await toast('Workspace created');
     await page.getByRole('heading', { name: 'Test Team', exact: true }).waitFor();
+    assert.deepEqual((await page.locator('main section.fd-card h2').allTextContents()).slice(0, 5), [
+        'Members', 'Products', 'Resources', 'Holds', 'Audit',
+    ]);
+    assert.equal(await page.getByRole('button', { name: 'Send invitation' }).getAttribute('data-variant'), 'primary');
+    for (const message of ['No registered resources.', 'No holds.']) {
+        await page.getByText(message, { exact: true }).waitFor();
+    }
+    await page.getByLabel('Product ID').fill('reports');
+    await page.getByRole('button', { name: 'Add product' }).click();
+    await toast('Products saved');
+    await page.getByRole('button', { name: 'Remove reports' }).click();
+    await page.getByRole('button', { name: 'Remove reports' }).waitFor({ state: 'detached' });
     assert.equal(await page.locator('.fd-sidebar a[href="/admin/workspaces"]').getAttribute('aria-current'), 'page');
     assert.equal(db.prepare("SELECT count(*) AS n FROM workspace_products p JOIN workspaces w ON w.id=p.workspace_id WHERE w.name='Test Team' AND p.product='notes'").get().n, 1);
     await page.getByLabel('Workspace name').fill('Renamed Team');
@@ -70,7 +85,9 @@ test('Workspaces uses Fire filters and form controls and closes only after the n
     await toast('Invitation sent');
     await page.getByRole('button', { name: 'Revoke invitation for join@example.net' }).click();
     await toast('Invitation revoked');
-    await page.getByRole('link', { name: 'Review closure' }).click();
+    const review = page.getByRole('link', { name: 'Review closure' });
+    assert.equal(await review.getAttribute('data-variant'), 'secondary');
+    await review.click();
     const close = page.getByRole('button', { name: 'Close workspace' });
     await close.waitFor();
     assert.equal(await close.isDisabled(), true);
@@ -89,7 +106,11 @@ test('Branding lazy-loads Tweaks, restores the route look, uploads a logo and sh
     const requests = [];
     page.on('request', req => requests.push(new URL(req.url()).pathname));
     await go('/admin/settings');
-    await page.getByRole('heading', { name: 'Full configuration' }).waitFor();
+    await page.getByRole('heading', { name: 'Configuration', exact: true }).waitFor();
+    await page.getByText('Workspace events', { exact: true }).waitFor();
+    await page.getByText('Clients with events missing a back-channel URL', { exact: true }).waitFor();
+    const rawConfiguration = page.locator('details').filter({ hasText: 'Raw configuration' });
+    assert.equal(await rawConfiguration.getAttribute('open'), null);
     const nav = page.locator('.fd-sidebar');
     await nav.getByRole('link', { name: 'Branding' }).click();
     await page.getByRole('button', { name: 'Open tweaks' }).waitFor();
@@ -102,27 +123,50 @@ test('Branding lazy-loads Tweaks, restores the route look, uploads a logo and sh
     await panel.locator('[data-palette="forest"]').click();
     assert.equal(await page.locator('html').getAttribute('data-palette'), 'forest');
     await panel.getByRole('button', { name: 'Close tweaks' }).click();
-    await nav.getByRole('link', { name: 'Settings' }).click();
-    await page.getByRole('heading', { name: 'Full configuration' }).waitFor();
+    await nav.getByRole('link', { name: 'Configuration' }).click();
+    await page.getByRole('heading', { name: 'Configuration', exact: true }).waitFor();
     assert.equal(await page.locator('html').getAttribute('data-palette'), 'glacier');
     await nav.getByRole('link', { name: 'Branding' }).click();
     await page.getByRole('button', { name: 'Open tweaks' }).click();
     await panel.locator('[data-palette="forest"]').click();
     await panel.getByRole('button', { name: 'Close tweaks' }).click();
-    await page.getByLabel('Signature cell size').selectOption('10');
-    await page.getByLabel('Signature ramp').selectOption('dense');
+    await page.getByLabel('Texture character size').selectOption('10');
+    await page.getByLabel('Texture character set').selectOption('dense');
     assert.equal(await page.locator('html').getAttribute('data-signature-cell'), '10');
     assert.equal(await page.locator('html').getAttribute('data-signature-ramp'), 'dense');
     await fits('Branding');
+    const preview = page.locator('section.fd-card').filter({ has: page.getByRole('heading', { name: 'Sign-in preview' }) });
+    assert.ok((await preview.boundingBox()).x > (await page.getByRole('heading', { name: 'Look', exact: true }).boundingBox()).x);
+    assert.equal(await preview.locator('.fd-btn[data-variant="primary"]').isDisabled(), false);
+    assert.equal(await preview.locator('.fd-screen').getAttribute('inert'), '');
+    const saveBar = page.locator('.fd-form-actions[data-variant="sticky"]');
+    await saveBar.getByRole('button', { name: 'Save branding' }).waitFor();
+    assert.equal(await saveBar.count(), 1);
     await page.getByRole('button', { name: 'Logos', exact: true }).click();
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XWQ8AAAAASUVORK5CYII=', 'base64');
     await page.getByLabel('Full logo', { exact: true }).setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });
     await toast('Logo uploaded');
     await page.getByRole('button', { name: 'Name and links', exact: true }).click();
+    await page.getByLabel('Name', { exact: true }).fill('Temporary name');
+    await page.getByRole('button', { name: 'Words', exact: true }).click();
+    await saveBar.getByRole('button', { name: 'Discard changes' }).click();
+    await page.getByRole('button', { name: 'Name and links', exact: true }).click();
+    assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), '');
     await page.getByLabel('Name', { exact: true }).fill('Studio');
+    await preview.getByText('Sign in to Studio', { exact: true }).waitFor();
+    // Discard resets the staged look and upload, so stage them again before saving the page.
+    await page.getByRole('button', { name: 'Look', exact: true }).click();
+    await page.getByRole('button', { name: 'Open tweaks' }).click();
+    await panel.locator('[data-palette="forest"]').click();
+    await panel.getByRole('button', { name: 'Close tweaks' }).click();
+    await page.getByRole('button', { name: 'Logos', exact: true }).click();
+    await page.getByLabel('Full logo', { exact: true }).setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });
+    await toast('Logo uploaded');
     await page.getByRole('button', { name: 'Save branding' }).click();
     await toast('Branding saved');
     assert.equal(await page.locator('html').getAttribute('data-palette'), 'forest');
+    await page.locator('.fd-sidebar .fd-brand').getByRole('img', { name: 'Studio' }).waitFor();
+    assert.equal(await page.locator('.fd-topbar-title').textContent(), 'Vibernt');
     const popup = context.waitForEvent('page');
     await page.getByRole('link', { name: 'Open sample email' }).click();
     const email = await popup;
@@ -140,8 +184,11 @@ test('platform screens rotate and revoke signing keys and create, update and adm
     await toast('Signing keys published');
     const published = page.getByRole('row').filter({ hasText: /ES256.*Published/s });
     await published.waitFor();
+    await published.getByText('At next rotation', { exact: true }).waitFor();
+    assert.equal(await page.getByText('Only for a compromised key', { exact: true }).count(), 0);
     const kid = (await published.locator('td').first().textContent()).trim();
     await published.getByRole('button', { name: 'Revoke', exact: true }).click();
+    await page.getByText('Only for a compromised key', { exact: true }).waitFor();
     await page.getByLabel('Type ' + kid + ' to confirm').fill(kid);
     await page.getByRole('button', { name: 'Revoke key', exact: true }).click();
     await toast('Signing key revoked');
@@ -174,8 +221,20 @@ test('sign-up requests require inline confirmation and move approved requests ou
     const row = table.getByRole('row').filter({ hasText: email });
     await row.getByText(name, { exact: true }).waitFor();
     await fits('Pending sign-up requests');
-    await row.getByRole('button', { name: 'Approve', exact: true }).click();
-    const confirmation = table.locator('.fd-confirm-inline');
+    const tabbar = page.getByRole('navigation', { name: 'Admin console' }).filter({ has: page.getByRole('button', { name: 'More' }) });
+    assert.deepEqual(await tabbar.locator('.fd-tabbar-label').allTextContents(), ['Clients', 'Users', 'Workspaces', 'Sign-ups', 'More']);
+    assert.equal(await tabbar.getByRole('link', { name: 'Sign-ups' }).getAttribute('aria-current'), 'page');
+    const badge = page.locator('.fd-sidebar a[href="/admin/signups"] .fd-nav-badge');
+    await badge.filter({ hasText: /^1$/ }).waitFor({ state: 'attached' });
+    assert.equal(await table.locator('th').filter({ hasText: 'Status' }).count(), 0);
+    const approve = row.getByRole('button', { name: 'Approve', exact: true });
+    const decline = row.getByRole('button', { name: 'Decline', exact: true });
+    await stacked(table, approve);
+    await stacked(table, decline);
+    assert.equal(await decline.getAttribute('data-variant'), 'secondary');
+    assert.equal(await decline.isEnabled(), true);
+    await approve.click();
+    const confirmation = page.locator('screen-admin-signups .fd-confirm-inline');
     await confirmation.waitFor();
     const confirm = confirmation.getByRole('button', { name: 'Approve request' });
     assert.equal(await confirm.isDisabled(), true);
@@ -186,6 +245,7 @@ test('sign-up requests require inline confirmation and move approved requests ou
     await input.fill(email);
     await confirm.click();
     await toast('Request approved');
+    await badge.filter({ hasText: /^0$/ }).waitFor({ state: 'attached' });
     await page.getByRole('heading', { name: 'No requests in this status' }).waitFor();
     await page.getByRole('button', { name: 'Pending', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Approved', exact: true }).click();
@@ -200,14 +260,34 @@ test('admin screens fit a dark phone viewport, including the workspace-off state
     server.env.DB.db.exec("UPDATE realms SET config=json_remove(config,'$.workspaces')");
     for (const [path, visible] of [
         ['workspaces', 'Shared workspaces are off'], ['branding', 'Sign-in preview'],
-        ['settings', 'Full configuration'], ['keys', 'Emergency revocation'], ['realms', 'Vibernt']
+        ['settings', 'Configuration'], ['keys', 'Signing keys'], ['realms', 'Vibernt']
     ]) {
         await go('/admin/' + path);
         await page.locator('main.fd-page').getByText(visible, { exact: true }).first().waitFor();
         await fits(path);
     }
-    await page.locator('.fd-tabbar [data-fd-mobile-nav]').press('Enter');
-    await page.locator('#im-mobile-nav').waitFor();
-    await page.locator('#im-mobile-nav').getByRole('link', { name: 'Settings', exact: true }).press('Enter');
-    await page.getByRole('heading', { name: 'Full configuration' }).waitFor();
+    const bar = page.locator('.fd-tabbar');
+    const more = bar.getByRole('button', { name: 'More' });
+    assert.equal(await more.getAttribute('aria-current'), 'page');
+    await more.press('Enter');
+    const menu = page.locator('#im-mobile-nav');
+    await menu.waitFor();
+    assert.equal(await more.getAttribute('aria-expanded'), 'true');
+    for (const name of ['Services', 'Profile', 'Signing keys', 'Realms', 'Sign out']) {
+        await menu.getByRole('link', { name, exact: true }).waitFor();
+    }
+    assert.equal(await menu.getByRole('link', { name: 'Clients', exact: true }).count(), 0);
+    await menu.getByRole('link', { name: 'Configuration', exact: true }).press('Enter');
+    await page.getByRole('heading', { name: 'Configuration', exact: true }).waitFor();
+});
+
+test('the top bar menu keeps console destinations at tablet width', async t => {
+    const { page, go } = await open(t, 768);
+    await go('/admin/settings');
+    const bar = page.locator('.fd-tabbar');
+    assert.equal(await bar.isVisible(), false);
+    await page.locator('.fd-topbar').getByRole('button', { name: 'Open menu' }).press('Enter');
+    const menu = page.locator('#im-mobile-nav');
+    await menu.getByRole('link', { name: 'Clients', exact: true }).press('Enter');
+    await page.getByRole('heading', { name: 'Clients', exact: true }).waitFor();
 });

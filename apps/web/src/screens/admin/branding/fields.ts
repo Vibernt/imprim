@@ -5,10 +5,10 @@ import { assets, languages, type Branding, type Look } from './types';
 const names = [
   ['name', 'Name', 'Acme', 'Shown beside the mark, in page titles and in emails.'],
   ['legal_name', 'Legal name', 'Acme Ltd', 'Shown in the footer and emails.'],
-  ['support_email', 'Support email', 'help@acme.com'],
-  ['support_url', 'Help URL', 'https://acme.com/help', 'Used instead of the support email in the footer.'],
-  ['privacy_url', 'Privacy URL', 'https://acme.com/privacy'],
-  ['terms_url', 'Terms URL', 'https://acme.com/terms'],
+  ['support_email', 'Support email', 'help@example.com'],
+  ['support_url', 'Help URL', 'https://example.com/help', 'Used instead of the support email in the footer.'],
+  ['privacy_url', 'Privacy URL', 'https://example.com/privacy'],
+  ['terms_url', 'Terms URL', 'https://example.com/terms'],
 ] as const;
 const words = [
   ['sign_in_heading', 'Sign-in heading', 'Sign in to Acme'],

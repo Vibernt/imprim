@@ -97,10 +97,13 @@ test('approval lists the requested permissions and keys, enforces session, realm
     const page = await w.view(id);
     assert.equal(page.status, 200);
     const html = await page.text();
-    for (const text of ['Allow a machine to act for Editorial team?', 'Example App', 'Editorial tools', '<code class="fd-code">' + resource,
-        choice, 'Editorial &lt;bot&gt;', 'Read workspace', 'ES256', (await thumbprint(w.pair.jwk)).slice(0, 24),
+    for (const text of ['Allow a machine to act for Editorial team?', 'Example App', 'Editorial tools', '<span class="fd-mono-sm">' + resource,
+        choice, 'Editorial &lt;bot&gt;', 'Read workspace', 'ES256', await thumbprint(w.pair.jwk),
         'Works until ', 'You stay accountable for it', 'action="/machine-client"', 'value="approve"', 'value="deny"']) assert.ok(html.includes(text), text);
-    assert.doesNotMatch(html, /style=|<script[^>]*src="\/fire\//);
+    assert.match(html, /Signed in as .*You stay accountable for it/s);
+    assert.match(html, /<details class="fd-disclosure"><summary[^>]+>.*Technical details.*https:\/\/app\.example/s);
+    assert.match(html, /Allow Editorial &lt;bot&gt;/);
+    assert.doesNotMatch(html, /action="\/switch-account"|style=|<script[^>]*src="\/fire\//);
     await problem(await w.submit(id, w.owner, { fields: { csrf: '' } }), 403, 'csrf');
     const crossOrigin = await w.submit(id, w.owner, { headers: { origin: 'https://other.example', accept: 'text/html' } });
     assert.equal(crossOrigin.status, 403);

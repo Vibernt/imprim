@@ -11,8 +11,11 @@ export function signatureFields(look: Look, disabled: boolean, update: (change: 
   const { cell = SIGNATURE_DEFAULT.cell, ramp = SIGNATURE_DEFAULT.ramp } = look.signature ?? {};
   return html`<div>
     <div class="fd-setting">
-      <label class="fd-setting-text fd-setting-title" for="signature-cell">Signature cell size</label>
-      <div class="fd-setting-control"><label class="fd-select" data-fit><select id="signature-cell" ?disabled=${disabled}
+      <div class="fd-setting-text">
+        <label class="fd-setting-title" for="signature-cell">Texture character size</label>
+        <p class="fd-setting-desc" id="signature-cell-hint">Larger characters make the background texture coarser.</p>
+      </div>
+      <div class="fd-setting-control"><label class="fd-select" data-fit><select id="signature-cell" aria-describedby="signature-cell-hint" ?disabled=${disabled}
         @change=${(event: Event) => {
           const { value } = event.currentTarget as HTMLSelectElement;
           update({ cell: value === 'auto' ? 'auto' : Number(value) });
@@ -22,8 +25,11 @@ export function signatureFields(look: Look, disabled: boolean, update: (change: 
       </select></label></div>
     </div>
     <div class="fd-setting">
-      <label class="fd-setting-text fd-setting-title" for="signature-ramp">Signature ramp</label>
-      <div class="fd-setting-control"><label class="fd-select" data-fit><select id="signature-ramp" ?disabled=${disabled}
+      <div class="fd-setting-text">
+        <label class="fd-setting-title" for="signature-ramp">Texture character set</label>
+        <p class="fd-setting-desc" id="signature-ramp-hint">Changes the symbols used to draw the background texture.</p>
+      </div>
+      <div class="fd-setting-control"><label class="fd-select" data-fit><select id="signature-ramp" aria-describedby="signature-ramp-hint" ?disabled=${disabled}
         @change=${(event: Event) => update({ ramp: (event.currentTarget as HTMLSelectElement).value as Signature['ramp'] })}>
         ${SIGNATURE_CHOICES.ramp.map(value => html`<option value=${value} ?selected=${ramp === value}>${cap(value)}</option>`)}
       </select></label></div>

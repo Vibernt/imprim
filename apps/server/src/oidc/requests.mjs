@@ -9,18 +9,26 @@ import { sessionByHash } from '../auth/session.mjs';
 import { admitSession, admissionGuard } from '../services/admission.mjs';
 import { mfaGate } from '../auth/mfa.mjs';
 import { useLocale } from '../i18n/index.mjs';
+import { offerWorkspaceAccess } from '../workspaces/access-offer.mjs';
 import { offerWorkspaceJoin } from '../workspaces/join-policy.mjs';
 // max_age is whole seconds since auth_time, which is itself whole seconds (OIDC Core 3.1.2.1). Comparing the rounded
 // auth_time with the clock in milliseconds would refuse a sign-in made late in a second, one second too soon.
 export const withinMaxAge = (authTime, maxAge, now = Date.now()) => Math.floor(now / 1000) - authTime <= maxAge;
 export async function pendingRequest(env, request, id) {
-    invariant(typeof id === 'string' && id.length <= 100, 'invalid_request', 'Authorization request required.');
-    const row = await env.DB.prepare('SELECT * FROM auth_requests WHERE id=? AND expires_at>?').bind(id, Date.now()).first();
+    const shaped = typeof id === 'string' && id.length <= 100 && id;
+    if (!shaped) env.SIGN_IN_EXPIRED = true;
+    invariant(shaped, 'invalid_request', 'Authorization request required.');
+    const row = await env.DB.prepare(`SELECT r.* FROM auth_requests r JOIN clients c ON c.id=r.client_id
+        WHERE r.id=? AND c.realm_id=?`).bind(id, env.REALM.id).first();
     const browser = cookies(request)[BROWSER_COOKIE];
-    // A page that stops later in this request offers the way back: the app (from another browser too) and, in the
-    // browser that started it, this sign-in itself (pages/next-steps.mjs).
-    if (row) env.SIGN_IN = { app: row.client_id };
-    invariant(row && browser && await safeEqual(await sha256(browser), row.browser_hash), 'browser_binding', 'Sign-in must finish in the browser that started it.', 403);
+    const bound = row && browser && await safeEqual(await sha256(browser), row.browser_hash);
+    // An expired request identifies the app only in its original browser.
+    if (row && (bound || row.expires_at > Date.now())) env.SIGN_IN = { app: row.client_id };
+    if (!row || row.expires_at <= Date.now()) {
+        env.SIGN_IN_EXPIRED = true;
+        if (bound) useLocale(env, { client: await getClient(env, row.client_id), uiLocales: row.ui_locales });
+    }
+    invariant(bound && row.expires_at > Date.now(), 'browser_binding', 'Sign-in must finish in the browser that started it.', 403);
     const client = await getClient(env, row.client_id);
     env.SIGN_IN = { app: client.id, id: row.id };
     useLocale(env, { client, uiLocales: row.ui_locales });
@@ -41,7 +49,8 @@ export function requireAuthorizationSession(row, session) {
     invariant(row.max_age == null || withinMaxAge(session.auth_time, row.max_age), 'login_required', 'This app asked for a recent sign-in. Sign in again.', 401);
     // An id_token_hint named the person this app expects; nobody else may finish the request.
     invariant(row.hint_sub == null || row.hint_sub === session.user_id, 'login_required', 'This app asked for a different account. Sign in as that person.', 401);
-    invariant(!row.workspace_join || JSON.parse(row.workspace_join).user_id === session.user_id,
+    invariant((!row.workspace_join || JSON.parse(row.workspace_join).user_id === session.user_id) &&
+        (!row.workspace_access || JSON.parse(row.workspace_access).user_id === session.user_id),
         'access_denied', 'This sign-in request belongs to another account.', 403);
 }
 export async function completeAuthorization(env, request, id, session, responseCookies = [], { interactive = true } = {}) {
@@ -53,9 +62,10 @@ export async function completeAuthorization(env, request, id, session, responseC
     try {
         await admitSession(env, client, session);
     } catch (error) {
-        if (interactive && error instanceof AppError && error.code === 'access_denied' &&
-            await offerWorkspaceJoin(env, pending, session.user_id)) {
-            return redirect(`${env.ISSUER}/workspace-join?request_id=${encodeURIComponent(row.id)}`, responseCookies);
+        if (interactive && error instanceof AppError && error.code === 'access_denied') {
+            const step = await offerWorkspaceJoin(env, pending, session.user_id) ? 'workspace-join'
+                : await offerWorkspaceAccess(env, pending, session) ? 'workspace-access' : null;
+            if (step) return redirect(`${env.ISSUER}/${step}?request_id=${encodeURIComponent(row.id)}`, responseCookies);
         }
         throw error;
     }
@@ -76,9 +86,10 @@ export async function completeAuthorization(env, request, id, session, responseC
             SELECT ?,client_id,redirect_uri,challenge,nonce,scope,?,? FROM auth_requests
             WHERE id=? AND browser_hash=? AND expires_at>?
             AND (workspace_join IS NULL OR json_extract(workspace_join,'$.user_id')=?)
+            AND (workspace_access IS NULL OR json_extract(workspace_access,'$.user_id')=?)
             AND EXISTS(SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id
                 WHERE s.hash=? AND s.expires_at>? AND u.status='active' AND u.merged_into IS NULL AND ${admission.sql})`)
-            .bind(hash, session.hash, now + 60000, id, row.browser_hash, now, session.user_id, session.hash, now, ...admission.args),
+            .bind(hash, session.hash, now + 60000, id, row.browser_hash, now, session.user_id, session.user_id, session.hash, now, ...admission.args),
         env.DB.prepare('DELETE FROM auth_requests WHERE id=? AND EXISTS(SELECT 1 FROM codes WHERE hash=?)').bind(id, hash)
     ]);
     invariant(results[0].meta.changes === 1, 'invalid_request', 'Authorization request already completed.');

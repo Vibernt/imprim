@@ -60,7 +60,7 @@ test('JSON agent revocation ends the grant and queues the same notice as the acc
     const { agents } = await (await read(w, 'agents', w.cookie)).json();
     assert.equal(agents[0].status, 'revoked');
     assert.equal(agents[0].name, 'Example Agent');
-    assert.deepEqual(agents[0].scopes, ['read']);
+    assert.deepEqual(agents[0].scopes, [{ code: 'read', label: 'Read workspace' }]);
     assert.ok(db.prepare('SELECT revoked_at FROM agent_grants').get().revoked_at);
     await w.drain();
     assert.equal(w.events.length, 1);

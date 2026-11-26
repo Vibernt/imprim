@@ -15,6 +15,9 @@ test('fire review: every Lit screen at 1440 and 375, light and dark', { timeout:
     db.prepare("INSERT OR IGNORE INTO workspaces(id,realm_id,kind,name,version,created) VALUES('ws_review','default','team','Acme team',3,?)").run(now);
     db.prepare("INSERT OR IGNORE INTO workspace_products(workspace_id,product,created) VALUES('ws_review','notes',?)").run(now);
     seedSignupRequest(db);
+    db.prepare(`INSERT INTO client_drafts(id,realm_id,configuration) VALUES('draft-notes','default',?)`).run(JSON.stringify({
+        branding: { name: 'Draft notes' }, redirect_uris: ['https://notes.example.com/callback'], sign_in_methods: ['email'],
+    }));
     const user = db.prepare('SELECT id FROM users ORDER BY created LIMIT 1').get();
     seedMachineWorkspace(db, user.id);
     forgetRealms(server.env);
@@ -25,11 +28,11 @@ test('fire review: every Lit screen at 1440 and 375, light and dark', { timeout:
         '["https://app.example/mcp"]','workspace','ws_test',?,?,?,?)`).run(user.id, now + 86400000, now, now);
     const client = db.prepare('SELECT id FROM clients ORDER BY id LIMIT 1').get();
     const routes = [
-        ['/account', 'account'], ['/account/security', 'account-security'], ['/account/sessions', 'account-sessions'],
+        ['/account', 'account'], ['/account/apps', 'account-apps'], ['/account/security', 'account-security'], ['/account/sessions', 'account-sessions'],
         ['/account/agents', 'account-agents'], [approvalPath(request_id), 'machine-approval'], ['/admin/clients', 'clients'], ['/admin/clients/new', 'client-new'],
-        ['/admin/clients/' + client.id, 'client-edit'], ['/admin/services', 'services'], ['/admin/users', 'users'],
+        ['/admin/clients/' + client.id, 'client-edit'], ['/admin/clients/draft-notes', 'client-draft'], ['/admin/services', 'services'], ['/admin/users', 'users'],
         ['/admin/users/' + user.id, 'user-detail'], ['/admin/audit', 'audit'], ['/admin/signups', 'signups'], ['/admin/workspaces', 'workspaces'],
-        ['/admin/workspaces/ws_review', 'workspace-detail'], ['/admin/branding', 'branding'], ['/admin/settings', 'settings'],
+        ['/admin/workspaces/ws_review', 'workspace-detail'], ['/admin/branding', 'branding'], ['/admin/settings', 'configuration'],
         ['/admin/keys', 'keys'], ['/admin/realms', 'realms']
     ].map(([path, name]) => ({ path, name }));
     const o = parseArgs(['--base', server.origin, '--routes', routes.map(r => r.path).join(',')]);

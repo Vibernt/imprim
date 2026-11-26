@@ -18,8 +18,8 @@ Every write needs a sign-in within the preceding ten minutes (`reauth_required`)
 session, role and account in the same transaction.
 
 The Lit console uses the Fire app shell, with a sidebar grouped into apps, realm and platform pages, a top bar and a
-phone menu. It covers Clients and the client editor, Services, Users and merge review, Workspaces, Branding, Audit,
-Settings, Signing keys and Realms. The Worker checks the admin session before serving the shell and requires the
+phone tab bar and More menu. It covers Clients and the client editor, Services, Users and merge review, Workspaces, Branding, Audit,
+Configuration, Signing keys and Realms. The Worker checks the admin session before serving the shell and requires the
 platform role for Signing keys and Realms. It serves the JSON API under `/admin/api/` and renders the branding
 previews and responses to legacy form submissions.
 
@@ -34,24 +34,26 @@ admin secret. Scripts may use the cookie jar and CSRF value from a real admin si
 control or logs. There is no CORS permission.
 
 Realm admins manage their realm's clients, service clients, users, workspaces and branding, and can read Audit
-and Settings. Platform admins can also manage realms, rosters and signing keys ([Realms](REALMS.md#admins)).
+and Configuration. Platform admins can also manage realms, rosters and signing keys ([Realms](REALMS.md#admins)).
 
 | Method and `/admin/api/` path | Body / response |
 | --- | --- |
-| GET `clients` | `{clients:[...]}`; secret hashes excluded |
-| GET `clients/:id` | Public client configuration, plus `confidential`, integer `version`, `delivery` status and realm provider labels |
+| GET `clients` | `{clients:[...]}`; live clients by default. `?include_drafts=1` includes inactive drafts flagged `draft:true`. Secret hashes excluded |
+| GET `clients/:id` | Client configuration, plus `confidential`, integer `version`, realm provider labels and either `draft:true` or `delivery` status |
 | GET `clients/editor/defaults` | Default fields for client registration and realm provider labels |
-| POST `clients` | Create (configuration below); returns `{client,client_secret}` once |
+| POST `clients` | Create a live client (configuration below); returns `{client,client_secret}` once |
+| POST `clients/editor/drafts` | `{id,branding:{name},redirect_uris,sign_in_methods}`; reserves the ID and returns `{id}` |
+| POST `clients/:id/activate` | Complete the draft using `version:0` and a valid HTTPS `backchannel_uri`. Accepts other client settings and returns `{client,client_secret}` once |
 | POST `clients/:id` | Partial update with the current `version`; the id cannot change; a stale version returns 409 |
 | POST `clients/:id/rotate-secret` | Optional `version` for conflict detection. Public clients need `make_confidential: true`. Returns `{id,client_secret}` once |
-| GET `users?q=email-or-id&before=id` | `{users,next}`; 50 rows a page |
-| GET `users/:id` | Identities, up to 100 most recent sessions and grants, status and unchanged subject |
+| GET `users?q=email-or-id&before=id` | `{users,next,total}`; 50 rows a page. `total` counts all matches. Each row includes `display_name` and `last_sign_in` from the realm audit log (UTC milliseconds, or null) |
+| GET `users/:id` | Identities, up to 100 most recent sessions and grants, `sign_in_methods`, `verification_methods` and `agent_grant_count`, status and unchanged subject |
 | POST `users/:id/block`, `unblock`, `delete` | `{}` |
 | POST `users/:id/revoke-session` | `{sid:"..."}`; only this user's session, with durable logout and audit; grants unchanged |
 | GET `users/:id/merge?surviving_id=id` | Source and surviving user IDs and emails for review |
 | POST `users/:id/merge` | `{surviving_id:"...",confirm_source_email:"source@example.com"}` |
 | POST `users/:id/reset-mfa` | `{reason:"..."}`; needs a fresh admin second factor ([Protocol](PROTOCOL.md#sign-in-and-sessions)) |
-| GET `audit?actor=id&target=id&before=row-id` | `{audit,next}`; newest first, 50 a page |
+| GET `audit` | `{audit,next}`; newest first, 50 a page. Optional exact `event`, `actor` and `target`, inclusive UTC `from` and `to` dates (both `YYYY-MM-DD`), and `before` row cursor. Rows can include `actor_label` and `target_label` resolved within the realm |
 | GET `audit/export?after=row-id` | NDJSON, oldest first, 1,000 a page; `x-next-after` while more remain |
 | GET `services` | `{services:[...]}`; workspace clients include `workspace_id`, `workspace_name`, `accountable_sub`, `accountable_email` and `expires_at`. |
 | POST `services`, `services/:id` | `{id, app_id, name, owner_email, jwks, scopes, resource_prefixes, status}` ([Protocol](PROTOCOL.md#machines-introspection-revocation-and-the-app-grant-api)) |
@@ -65,10 +67,12 @@ and Settings. Platform admins can also manage realms, rosters and signing keys (
 | POST `workspaces/:id/invite`, `revoke-invitation` | `{email,role}` or `{invitation_id}` |
 | POST `workspaces/:id/role`, `remove-member` | `{sub,role}` or `{sub}` |
 | POST `workspaces/:id/close` | `{confirm}` with the current workspace name, case-sensitive |
+| GET `signups?status=pending&before=id` | `{requests,next}`; 50 rows a page. Pending excludes requests past their decision window |
+| GET `signups/summary` | `{pending}`; total actionable pending requests in the realm |
 | GET `branding` | `{branding, version}` for the realm |
 | POST `branding` | `{branding, version}`; validated; a stale version returns 409 ([Branding](BRANDING.md)) |
 | POST `branding/assets` | `{content_type, data}` (base64, at most 256 KiB); returns `{id, url}` |
-| GET `settings` | Turnstile state, rate-limit description and pending delivery counts |
+| GET `settings` | Turnstile state, rate-limit description and realm-scoped delivery status |
 | GET `keys` | Platform only. Public key metadata, activation, retirement and status; no sealed or private JWK |
 | POST `keys/rotate` | Platform only. `{}`; returns the new `kid` and activation time |
 | POST `keys/:kid/revoke` | Platform only. Removes the key from JWKS at once and signs with a replacement ([Operations](OPERATIONS.md#keys-and-rotation)) |
@@ -100,14 +104,17 @@ Example client body:
 }
 ```
 
-New clients are confidential. The server generates a random secret and stores only its SHA-256 digest; neither the
+Active clients are created as confidential clients. The console first saves a draft outside the live client table.
+A draft cannot sign in, exchange tokens or appear on the public directory. Its edit page asks for any remaining
+configuration, including a back-channel URL. Activation validates the complete configuration, then claims the draft,
+creates the client and appends the audit event in one batch. The server generates a random secret and stores only its SHA-256 digest; neither the
 secret nor the digest appears in later reads or audit. Other settings are listed in
 [Configuration](CONFIGURATION.md#app-client-settings-clients). The [Lit client editor](../apps/web/src/screens/admin/client/editor.ts)
 uses Fire controls for URL lists, scope pairs, choices and switches. Branding overrides use a JSON code field. The
 editor submits JSON to the admin API and shows the outcome in a toast. Existing form POST URLs still accept
 their original fields. When the Worker rejects a legacy form submitted by an authenticated admin asking for HTML,
 it renders an error page. API clients receive a JSON error. A back-channel HTTPS URI is required. Signup defaults
-to invited and agents default off. Settings are read-only. Turnstile and binding limits are deployment changes,
+to invited and agents default off. Configuration is read-only. Turnstile and binding limits are deployment changes,
 and D1 budgets are code constants.
 
 Client edits need the integer `version` returned by GET. A missing or malformed edit version returns 400.
@@ -162,7 +169,7 @@ events `event_token` ([Protocol](PROTOCOL.md)). `imprim-client` provides `verify
 verify only; durable deduplication and the effect stay with the app. See the [package
 README](https://github.com/Vibernt/imprim/blob/main/packages/imprim-client/README.md).
 
-The action response confirms local revocation and labels delivery as asynchronous. Settings shows pending counts,
+The action response confirms local revocation and labels delivery as asynchronous. Configuration shows pending counts,
 the oldest pending event and clients missing a destination. A missing URI or failed dependency never counts as
 delivered. Each attempt resolves the client's **current** `backchannel_uri`, so a correction applies to pending
 events; the captured outbox `uri` is diagnostic only. With no current URI, `delivery_state` is `missing_uri`, no

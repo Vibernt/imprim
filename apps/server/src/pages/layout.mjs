@@ -9,7 +9,8 @@ import { initialsOf } from '../auth/session.mjs';
 import { adminRole } from '../services/admission.mjs';
 import { escapeHtml, dotLogo, dotMark, icon, result } from './ui.mjs';
 import { fireLabelScript } from './fire-labels.mjs';
-import { nextSteps, stepsBlock } from './next-steps.mjs';
+import { nextSteps } from './next-steps.mjs';
+import { appList, listedApps } from './app-list.mjs';
 import { t, tHtml, localeOf, htmlLang, brandCopy } from '../i18n/index.mjs';
 export { escapeHtml, icon };
 const marker = name => `<!--identity:${name}-->`;
@@ -60,19 +61,21 @@ ${FOOTER}</div></main>`, options);
 // A signed-out visit to the account or second-factor pages. People sign in through an app, which leaves a session
 // this page can use; the realm's apps with a sign-in page are offered (pages/next-steps.mjs). The page is for
 // customers, so it does not point at the administrators' sign-in (/login).
-export async function signedOutPage(env) {
-    const apps = stepsBlock(await nextSteps(env).catch(() => []));
+export async function signedOutPage(env, { forRequest = false } = {}) {
+    const apps = forRequest && env.SIGN_IN?.app ? await nextSteps(env) : appList(env, await listedApps(env));
     return page(t(env, 'Sign in'), `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="neutral">${icon('lock')}</span>
 <h1 class="fd-h1">${escapeHtml(t(env, 'Sign in to see your account'))}</h1>
 <p class="fd-muted">${tHtml(env, 'Your {brand} account opens from the apps that use it. Sign in to one of them in this browser, then come back here.').replace('{brand}', BRAND)}</p></header>
-${apps}`, { status: 401 });
+${apps}`, { status: 401, client: forRequest && env.SIGN_IN?.app ? { id: env.SIGN_IN.app } : null });
 }
 // A sign-in that stopped. The page offers the next step: the sign-in again, the app, or a retry of its own (options.retry).
 export async function errorPage(env, message, status = 400, options = {}) {
-    // A failure to look up the next step (the database itself, say) leaves the page as it was, never a second error.
-    const steps = stepsBlock(await nextSteps(env, options).catch(() => []));
-    return page(t(env, 'Sign-in stopped'), result('circle-alert', 'danger', t(env, 'Sign-in stopped'), message) +
-        (steps || `<p class="fd-screen-note">${escapeHtml(t(env, 'Go back to the app and start again.'))}</p>`), { status });
+    const steps = env.REALM && status < 500 ? await nextSteps(env, options) : '';
+    const title = options.expired ? t(env, 'This sign-in has expired') : t(env, 'Sign-in stopped');
+    const restart = t(env, 'Go back to the app and start again.');
+    return page(title, result('circle-alert', 'danger', title, options.expired ? restart : message) +
+        (steps || (!options.expired && status < 500 ? `<p class="fd-screen-note">${escapeHtml(restart)}</p>` : '')),
+        { status, client: env.SIGN_IN?.app ? { id: env.SIGN_IN.app } : null });
 }
 // Fills the markers for the request's realm and, if the page names one, its app: look, name, logo (with a dark variant)
 // or the brand's initial in dots, favicon, brand stylesheet and footer; then the signed-in person, and the parts only

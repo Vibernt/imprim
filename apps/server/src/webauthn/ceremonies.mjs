@@ -98,7 +98,7 @@ export async function addPasskey(request, env, ctx, session, body) {
         throw error;
     }
     notify(env, ctx, session.email, 'passkey_added', { name });
-    return { added: true, name, recovery_codes: recovery.codes };
+    return { added: true, id: result.credentialId, name, recovery_codes: recovery.codes };
 }
 // Sign-in (purpose 'login', discoverable credentials, from an app that offers passkeys) or second factor ('mfa').
 export async function assertionOptions(request, env) {

@@ -32,7 +32,7 @@ test('hosted sign-up uses Fire, app branding and the authorization language', as
     const html = await response.text();
     const id = html.match(/data-request-id="([^"]+)"/)[1];
     assert.match(html, /<html lang="fr"/);
-    assert.match(html, /id="open-signup"[^>]*>Créer un compte/);
+    assert.match(html, /<footer class="fd-card-foot"[^>]*>[\s\S]*id="open-signup"[^>]*>Créez un compte/);
     assert.match(html, /class="fd-field-label" for="workspace-name">Nom de l’espace de travail/);
     assert.match(html, /id="workspace-name"[^>]*name="workspace_name"/);
     assert.match(html, /data-sitekey="test-site-key" data-action="sign_in"/);

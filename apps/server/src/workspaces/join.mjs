@@ -25,7 +25,14 @@ export async function workspaceJoin(request, env) {
         'access_denied', 'Workspace join is unavailable for this sign-in request.', 403);
     if (!post) {
         const workspaces = await joinableTeamWorkspaces(env, realmId(env), session.user_id, client.product, state.workspace_ids.length, state.workspace_ids);
-        return workspaceJoinPage(env, pending, cookies(request)[CSRF_COOKIE], workspaces);
+        const products = [...new Set(workspaces.flatMap(workspace => workspace.products))];
+        const { results } = await env.DB.prepare(`SELECT product,json_extract(branding,'$.name') AS name FROM clients
+            WHERE realm_id=? AND product IN (SELECT value FROM json_each(?)) ORDER BY name COLLATE NOCASE,id`)
+            .bind(realmId(env), JSON.stringify(products)).all();
+        const named = workspaces.map(workspace => ({ ...workspace,
+            appNames: [...new Set(results.filter(app => app.name && workspace.products.includes(app.product)).map(app => app.name))]
+        }));
+        return workspaceJoinPage(env, pending, session.email, cookies(request)[CSRF_COOKIE], named);
     }
     const now = Date.now(), guard = workspaceJoinRequestGuard(env, pending, now);
     if (body.action === 'decline') {
@@ -35,7 +42,7 @@ export async function workspaceJoin(request, env) {
         invariant(meta.changes === 1, 'invalid_request', 'This request was already answered or has expired.');
         return authorizationResponse(env, row, { error: 'access_denied' });
     }
-    invariant(body.action === 'join', 'invalid_request', 'Choose Use this workspace or Not now.');
+    invariant(body.action === 'join', 'invalid_request', 'Choose a workspace to connect, or choose Not now.');
     const id = body.workspace_id;
     invariant(state.workspace_ids.includes(id), 'not_found', 'Workspace not found.', 404);
     const claim = env.DB.prepare(`UPDATE auth_requests SET workspace_join=json_remove(workspace_join,'$.product','$.workspace_ids') WHERE id=?`)

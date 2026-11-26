@@ -65,21 +65,22 @@ class ServicesScreen extends AdminScreen<{ services: Service[] }> {
     const disabling = this.deleting?.source === 'workspace';
     return html`
       <div class="fd-stack" data-gap="6">
-        ${listCount(services.length, 'service client', 'service clients')}
+        ${services.length ? listCount(services.length, 'service client', 'service clients') : nothing}
         ${table('Service clients', ['Name', 'Client ID', 'App', 'Scopes', 'Owner', 'Workspace', 'Accountable person', 'Expires', 'Status', 'Actions'],
           services.map(service => [service.name, mono(service.id), mono(service.app_id), service.scopes.join(' '),
             service.owner_email, service.workspace_name ?? '', service.accountable_email ?? '', service.expires_at ? when(service.expires_at) : '',
             status(service.status === 'active' && service.expires_at && service.expires_at <= Date.now() ? 'expired' : service.status), html`
-              <div class="fd-row" data-gap="2">
+              <div class="fd-row" data-wrap data-gap="2">
                 ${service.source === 'workspace' ? service.status === 'active' ? html`
-                  <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
+                  <button class="fd-btn" type="button" data-variant="ghost" ?disabled=${locked}
                     aria-label=${'Disable ' + service.id} @click=${() => this.review(service, 'delete')}>Disable</button>` : nothing : html`
-                  <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
+                  <button class="fd-btn" type="button" data-variant="ghost" ?disabled=${locked}
                     aria-label=${'Edit ' + service.id} @click=${() => this.review(service, 'edit')}>Edit</button>
-                  <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
+                  <button class="fd-btn" type="button" data-variant="ghost" ?disabled=${locked}
                     aria-label=${'Delete ' + service.id} @click=${() => this.review(service, 'delete')}>Delete</button>`}
               </div>`,
-          ]), ['No service clients yet', 'Create one to let a service authenticate with its public key.'])}
+          ]), ['No service clients yet', 'Create one to let a service authenticate with its public key.', !this.editing ? this.createButton() : undefined],
+          { emptyOnly: true })}
         ${this.editing ? keyed(this.editing, html`<section class="fd-stack" data-gap="3">
           <h2 class="fd-title" id="service-editor-title">${this.editing.id ? 'Edit service client' : 'Create service client'}</h2>
           ${serviceForm(this.editing, this.pending, this.save, this.close)}
@@ -91,12 +92,16 @@ class ServicesScreen extends AdminScreen<{ services: Service[] }> {
       </div>`;
   }
 
+  private createButton() {
+    return html`<div class="fd-row" data-justify="center"><button class="fd-btn" type="button" data-variant="primary"
+      @click=${() => this.review(newService, 'edit')}>Create service client</button></div>`;
+  }
+
   protected override render() {
     return corePage('Service clients', 'Machines acting as themselves for one app, with client credentials and a signed key.',
       this.content(({ services }) => this.listing(services)), {
         busy: this.pending || (!this.data && !this.failure),
-        actions: this.data && !this.editing && !this.deleting ? html`
-          <button class="fd-btn" type="button" data-variant="primary" @click=${() => this.review(newService, 'edit')}>Create service client</button>` : undefined,
+        actions: this.data?.services.length && !this.editing && !this.deleting ? this.createButton() : undefined,
       });
   }
 }

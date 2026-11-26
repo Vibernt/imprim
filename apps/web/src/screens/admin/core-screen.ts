@@ -12,12 +12,16 @@ const describe = (error: unknown) => error instanceof ApiError ? error.descripti
 
 export abstract class AdminScreen<T> extends FireLight {
   static override properties: PropertyDeclarations = {
-    view: { attribute: false }, data: { state: true }, failure: { state: true }, pending: { state: true },
+    view: { attribute: false }, data: { state: true }, failure: { state: true }, pending: { state: true }, saveError: { state: true },
   };
   declare view: View;
   declare protected data: T | undefined;
   declare protected failure: string | undefined;
   declare protected pending: boolean;
+  // A screen with a sticky save bar sets inlineSaveErrors and renders saveErrorNotice() beside it: a notice in the
+  // corner would cover the bar's Save button, the one control the person needs next.
+  declare protected saveError: string | undefined;
+  protected inlineSaveErrors = false;
   private read = 0;
   private path?: string;
 
@@ -60,14 +64,22 @@ export abstract class AdminScreen<T> extends FireLight {
       if (!this.isConnected || read !== this.read) return;
       await apply(result);
       const delivery = (result as { delivery?: { message?: string } }).delivery;
+      this.saveError = undefined;
       toast({ title: typeof success === 'string' ? success : success(result), description: delivery?.message, tone: 'success' });
     } catch (error) {
       if (this.isConnected && read === this.read && !redirecting(error)) {
-        toast({ title: 'Change could not be saved', description: describe(error), tone: 'danger' });
+        if (this.inlineSaveErrors) this.saveError = describe(error);
+        else toast({ title: 'Change could not be saved', description: describe(error), tone: 'danger' });
       }
     } finally {
       if (current === this.path) this.pending = false;
     }
+  }
+
+  protected saveErrorNotice() {
+    return this.saveError ? html`
+      <div class="fd-callout" data-tone="danger" role="alert">${icon('circle-alert')}<div class="fd-callout-content">
+        <p class="fd-callout-title">Change could not be saved</p><p class="fd-callout-body">${this.saveError}</p></div></div>` : nothing;
   }
 
   protected content(render: (data: T) => TemplateResult) {

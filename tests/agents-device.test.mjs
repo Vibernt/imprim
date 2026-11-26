@@ -32,8 +32,12 @@ test('device user-code entry, pending, permanent slow_down, consent, tokens and 
     const consentHtml = await consent.text();
     assert.match(consentHtml, /Example Agent.*team-one.*Read workspace/s);
     // A device code reaches whoever started the flow, so the device consent always carries the phishing alert.
-    assert.match(consentHtml, /<div class="fd-callout" data-tone="danger" role="alert">/);
+    assert.match(consentHtml, /<div class="fd-callout" data-tone="warning" role="note">/);
+    assert.match(consentHtml, /Read workspace <code class="fd-mono-sm">read/);
+    assert.ok(consentHtml.indexOf('just now.') < consentHtml.indexOf('value="approve"'));
     const entry = await (await w.call('/device', { headers: { cookie: w.cookie } })).text();
+    assert.match(entry, /Enter the code from your agent/);
+    assert.match(entry, /Signed in as person@example.com/);
     assert.match(entry, /<form class="fd-stack" data-gap="4" method="get" action="\/device"><div class="fd-field"><label class="fd-field-label" for="user_code">Device code<\/label><input class="fd-input"[^>]* name="user_code"[^>]* required/);
     const approved = await w.approve(browser); assert.equal(approved.status, 200);
     assert.match(await approved.text(), /<h1 class="fd-h1">Agent connected<\/h1>/);

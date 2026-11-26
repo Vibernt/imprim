@@ -71,10 +71,9 @@ class RealmsScreen extends AdminRealmScreen<{ realms: Realm[] }> {
     if (this.creating) return realmForm(undefined, this.pending, this.saveRealm);
     if (!this.selected) return html`<div class="fd-stack" data-gap="3">
       ${listCount(realms.length, 'realm', 'realms')}
-      ${table('Realms', ['Realm', 'Issuer', 'Status', 'Admins', 'Actions'], realms.map(realm => [
+      ${table('Realms', ['Realm', 'Issuer', 'Status', 'Admins'], realms.map(realm => [
         html`${link(realmUrl(realm.id), realm.display_name)} ${mono(realm.id)}`, mono(realm.issuer ?? 'Not set'),
         realmStatus(realm.status), realm.admins.map(admin => `${admin.email} (${cap(admin.role)})`).join(', ') || 'None',
-        link(realmUrl(realm.id), 'Edit'),
       ]), ['No realms yet', 'Create a realm to add a brand to this deployment.'])}
     </div>`;
     const realm = realms.find(row => row.id === this.selected);

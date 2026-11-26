@@ -63,7 +63,7 @@ test('the signed-in shell uses the person’s language, realm look, and strict h
     for (const headers of [{ accept: 'application/json' }, { accept: 'text/html;q=0, application/json' }, {}]) {
         assert.equal((await w.call('/account', { headers: { ...headers, cookie } })).status, 404);
     }
-    for (const path of ['/account/security', '/account/sessions', '/account/agents']) {
+    for (const path of ['/account/apps', '/account/security', '/account/sessions', '/account/agents']) {
         const shell = await w.call(path, { headers: { ...accept, cookie } });
         assert.equal(shell.status, 200);
         assert.match(await shell.text(), /<app-shell><\/app-shell>/);
@@ -74,7 +74,7 @@ test('the signed-in shell uses the person’s language, realm look, and strict h
     const admin = await w.call('/admin/clients', { headers: accept });
     assert.equal(admin.headers.get('location'), '/login?next=%2Fadmin%2Fclients');
     assert.equal((await w.call('/ui/index.html', { headers: { ...accept, cookie } })).status, 404);
-    assert.equal(requests.length, 4);
+    assert.equal(requests.length, 5);
 });
 
 test('a missing or misrouted asset fails as unavailable', async t => {
@@ -110,22 +110,39 @@ test('a parameterized admin path is subject to the existing scoped MFA and platf
     db.prepare('UPDATE sessions SET mfa_at=0 WHERE admin_until IS NOT NULL').run();
     assert.equal((await get(admin.cookie)).headers.get('location'), '/mfa?next=%2Fadmin%2Fkeys%2Fcurrent');
     db.prepare('UPDATE sessions SET mfa_at=? WHERE admin_until IS NOT NULL').run(Date.now());
-    assert.equal((await get(admin.cookie, path + '/extra')).status, 404);
     assert.equal(reads, 0);
+    const unknown = await get(admin.cookie, path + '/extra');
+    assert.equal(unknown.status, 404);
+    assert.match(await unknown.text(), /<app-shell><\/app-shell>/);
     const shell = await get(admin.cookie);
     assert.equal(shell.status, 200);
     assert.match(await shell.text(), /<app-shell><\/app-shell>/);
-    assert.equal(reads, 1);
+    assert.equal(reads, 2);
 });
 
 test('the Lit shell registers all account and admin routes', () => {
     assert.deepEqual(WEB_PATHS, new Set([
-        '/account', '/account/security', '/account/sessions', '/account/agents',
+        '/account', '/account/apps', '/account/security', '/account/sessions', '/account/agents',
         '/admin', '/admin/clients', '/admin/clients/new', '/admin/clients/:id', '/admin/services',
         '/admin/users', '/admin/users/:id', '/admin/users/:id/merge', '/admin/audit', '/admin/signups',
         '/admin/workspaces', '/admin/workspaces/:id', '/admin/workspaces/:id/close',
         '/admin/branding', '/admin/settings', '/admin/keys', '/admin/realms'
     ]));
+});
+
+test('the hosted account shell has the same account tab order and keeps sign-out in the phone menu', async t => {
+    const w = await world(t), person = await login(w, t);
+    const response = await w.call('/account/password', { headers: { ...accept, cookie: person.cookie } });
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    const links = markup => [...markup.matchAll(/href="(\/account[^"]*)"/g)].map(match => match[1]);
+    const account = ['/account', '/account/apps', '/account/security', '/account/sessions', '/account/agents'];
+    assert.deepEqual(links(html.match(/<nav class="fd-nav"[^>]*>(.*?)<\/nav>/s)[1]), account);
+    const tabs = html.match(/<nav class="fd-tabbar"[^>]*>(.*?)<\/nav>/s)[1];
+    assert.deepEqual(links(tabs), account);
+    assert.match(tabs, /href="\/account\/security" aria-current="page"/);
+    assert.match(html, /class="fd-topbar-title">Security</);
+    assert.match(html, /id="shell-menu".*href="\/logout"><span>Sign out/s);
 });
 
 test('ported admin URLs serve the English Lit shell and keep the preview paths outside it', async t => {
@@ -171,5 +188,32 @@ test('ported admin URLs serve the English Lit shell and keep the preview paths o
     for (const path of ['/admin/branding/preview/extra', '/admin/api/branding/preview/extra', '/admin/api/branding/email-preview']) {
         assert.equal((await w.call(path, { headers: { ...accept, cookie: admin.cookie } })).status, 404, path);
     }
-    assert.equal(shellReads, paths.length);
+    assert.equal(shellReads, paths.length + 1);
+});
+
+test('unknown account and admin documents are 404 shells only after their own session checks', async t => {
+    globalThis.HTMLRewriter = TestHTMLRewriter;
+    t.after(() => { delete globalThis.HTMLRewriter; });
+    const w = await world(t), person = await login(w, t), admin = await adminLogin(w);
+    let reads = 0;
+    w.env.ASSETS = { fetch() { reads++; return new Response(index, { headers: { 'content-type': 'text/html' } }); } };
+    const accountPath = '/account/missing/nested', adminPath = '/admin/missing/nested/more';
+    const get = (path, cookie = '', headers = accept) => w.call(path, { headers: { ...headers, cookie } });
+    assert.equal((await get(accountPath)).status, 401);
+    assert.equal((await get(adminPath)).headers.get('location'), '/login?next=' + encodeURIComponent(adminPath));
+    assert.equal((await get(adminPath, person.cookie)).status, 403);
+    assert.doesNotMatch(await (await get(accountPath, person.cookie, { accept: 'application/json' })).text(), /<app-shell>/);
+    for (const path of ['/admin/api', '/admin/api/missing']) {
+        const response = await get(path, admin.cookie);
+        assert.equal(response.status, 404);
+        assert.match(response.headers.get('content-type'), /application\/json/);
+    }
+    assert.equal(reads, 0);
+    for (const [path, cookie] of [[accountPath, person.cookie], [adminPath, admin.cookie]]) {
+        const response = await get(path, cookie);
+        assert.equal(response.status, 404);
+        assert.equal(response.headers.get('content-security-policy'), csp);
+        assert.match(await response.text(), /<app-shell><\/app-shell>/);
+    }
+    assert.equal(reads, 2);
 });

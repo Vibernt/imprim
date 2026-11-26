@@ -1,7 +1,9 @@
 import { html, nothing } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 import { t } from '../../lib/i18n';
-import { card, setting } from '../page-layout';
-import { day, empty, when } from './access-view';
+import { card } from '../page-layout';
+import { empty, when } from './access-view';
+import { connectionRow, useTime } from './connection-row';
 
 export interface MachineClient {
   client_id: string; name: string; app: string; workspace: string; resources: string[]; scopes: string[];
@@ -12,27 +14,23 @@ export interface MachineClient {
 export function machineClients(clients: MachineClient[], pending: boolean, renew: (client: MachineClient) => void,
   review: (client: MachineClient) => void) {
   const title = t('Machines you’re accountable for');
-  return card(title, clients.length ? html`<div role="group" aria-label=${title}>
-    ${clients.map(client => setting(client.name, html`<div class="fd-stack" data-gap="1">
-      <div class="fd-kv-value" data-plain>${t('App')} · ${client.app} · ${t('Workspace: {workspace}', { workspace: client.workspace })}</div>
-      <div class="fd-stack" data-gap="1">${client.resources.map(resource => html`<code class="fd-code fd-kv-value">${resource}</code>`)}</div>
-      <div class="fd-row" data-wrap data-gap="1"><span>${t('Scopes')}</span>
-        ${client.scopes.map(scope => html`<code class="fd-code fd-kv-value">${scope}</code>`)}
-      </div>
-      <div>${t('Approved {date}', { date: day(client.created) })}</div>
-      <div>${t('Expires {date}', { date: day(client.expires_at) })}</div>
-      <div>${t('Last used')} · ${when(client.last_used)}</div>
-    </div>`, html`<div class="fd-row" data-wrap data-gap="2">
-      ${client.status === 'active' ? html`<span class="fd-status" data-tone="success">${t('Active')}</span>`
-        : client.status === 'expired' ? html`<span class="fd-status" data-tone="warning">${t('Expired')}</span>`
-        : html`<span class="fd-status">${client.can_disable ? t('Inactive') : t('Disabled')}</span>`}
-      ${client.status === 'active' ? html`<button class="fd-btn" data-variant="outline" data-size="sm" type="button"
-        aria-label=${t('Renew {name}', { name: client.name })} ?disabled=${pending} @click=${() => renew(client)}>${t('Renew')}</button>` : nothing}
-      ${client.can_disable ? html`<button class="fd-btn" data-variant="danger-soft" data-size="sm" type="button"
-        id=${'disable-' + client.client_id} aria-label=${t('Disable {name}', { name: client.name })}
-        ?disabled=${pending} @click=${() => review(client)}>${t('Disable')}</button>` : nothing}
-    </div>`))}
-  </div>` : empty(t('No machines yet'), t('Machines you approve for a workspace appear here.')));
+  return card(title, clients.length ? html`<ul class="fd-list" data-divided aria-label=${title}>
+    ${repeat(clients, client => client.client_id, client => connectionRow({ id: `machine-${client.client_id}`, title: client.name,
+      description: [client.app, client.workspace].filter(Boolean).join(' · '), pending,
+      meta: client.status === 'active' ? useTime(client.last_used) : client.status === 'expired' ? t('Expired') :
+        client.can_disable ? t('Inactive') : t('Disabled'),
+      actions: [
+        ...(client.status === 'active' ? [{ label: t('Renew'), run: () => renew(client) }] : []),
+        ...(client.can_disable ? [{ label: t('Disable'), run: () => review(client), danger: true }] : []),
+      ],
+      details: html`
+        ${client.resources.map(resource => html`<code class="fd-mono-sm"><span class="im-breakable">${resource}</span></code>`)}
+        ${client.scopes.length ? html`<div class="fd-row" data-wrap><span>${t('Scopes')}</span>
+          ${client.scopes.map(scope => html`<code class="fd-mono-sm"><span class="im-breakable">${scope}</span></code>`)}</div>` : nothing}
+        <p class="fd-small">${t('Approved {date}', { date: when(client.created) })}</p>
+        <p class="fd-small">${t('Expires {date}', { date: when(client.expires_at) })}</p>`,
+    }))}
+  </ul>` : empty(t('No machines yet')));
 }
 
 export function confirmDisableMachine(client: MachineClient, pending: boolean, disable: () => void, cancel: () => void) {

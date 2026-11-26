@@ -65,8 +65,8 @@ test('approval grants only the checked scopes in code exchange, JWT, refresh, au
     const w = await agentWorld(t), db = w.env.DB.db, flow = await w.start({ scope: 'read write' });
     const page = await (await consent(w, flow)).text();
     assert.deepEqual(offered(page, 'scope'), [['read', true], ['write', true]]);
-    assert.match(page, /<form[^>]+action="\/agent\/consent"[\s\S]+type="checkbox"[\s\S]+>Deny<[\s\S]+>Approve<[\s\S]+<\/form>/);
-    assert.match(page, /<code class="fd-code">write<\/code> Edit workspace/);
+    assert.match(page, /<form[^>]+action="\/agent\/consent"[\s\S]+type="checkbox"[\s\S]+>Approve<[\s\S]+>Deny<[\s\S]+<\/form>/);
+    assert.match(page, /Edit workspace <code class="fd-mono-sm">write<\/code>/);
     assert.doesNotMatch(page, /<script[^>]+src="\/fire\/| style=|Already connected/);
     const tokens = await exchange(w, await submit(w, flow, ['write']));
     assert.equal(tokens.scope, 'write');
@@ -170,7 +170,7 @@ test('replacing a connection carries checked permissions and revokes the old gra
     assert.deepEqual(offered(page, 'replace'), [[oldId, true], ['', false]]);
     assert.deepEqual(offered(page, 'scope'), [['read', true], ['write', true]]);
     assert.match(page, /Work laptop.*Approved on Firefox on Linux · FR · Connected .* · write/s);
-    assert.match(page, /Edit workspace · Already allowed/);
+    assert.match(page, /Edit workspace <code class="fd-mono-sm">write<\/code> · Already allowed/);
     const tokens = await exchange(w, await submit(w, flow, ['write', 'read'], { replace: oldId }));
     const newId = claims(tokens).grant_id;
     assert.equal(tokens.scope, 'read write');

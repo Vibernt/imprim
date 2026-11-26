@@ -1,9 +1,12 @@
 // Fire components rendered on the server, so pages that handle credentials need no client-side framework. Markup follows
 // the Fire docs (docs/fire/VOCABULARY.md); copy follows docs/fire/WRITING.md. Every argument that is text is escaped here.
 import { ICONS } from 'fire-design/fire/js/icons.js';
-import { t } from '../i18n/index.mjs';
+import { t, tHtml } from '../i18n/index.mjs';
 export const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const e = escapeHtml;
+// Preserve exact text for copying while allowing unusually long, unspaced labels to wrap.
+export const breakableText = text => String(text).split(/(\S{36,})/u)
+    .map((part, index) => index % 2 ? part.match(/.{1,24}/gu).map(e).join('<wbr>') : e(part)).join('');
 export const attrs = (pairs = {}) => Object.entries(pairs).filter(([, v]) => v !== undefined && v !== null && v !== false)
     .map(([k, v]) => v === true ? ` ${k}` : ` ${k}="${e(v)}"`).join('');
 // Lucide icons from Fire's set, inline (Fire's own <i data-icon> needs its JavaScript).
@@ -15,11 +18,11 @@ export { dotLogo, dotMark } from './dots.mjs';
 // The head of a centred screen: its heading and one line, centred.
 export const heading = (title, description = '') => `<header class="fd-screen-head"><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${e(description)}</p>` : ''}</header>`;
 // The top of a result screen (link sent, signed out, stopped): an icon tile, then the heading, centred.
-export const result = (name, tone, title, description = '') => `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="${tone}">${icon(name)}</span><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${e(description)}</p>` : ''}</header>`;
+export const result = (name, tone, title, description = '', { muted = true } = {}) => `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="${tone}">${icon(name)}</span><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="${muted ? 'fd-muted' : 'fd-body'}">${e(description)}</p>` : ''}</header>`;
 export const section = (title, description, body) => `<section class="fd-stack" data-gap="3"><div class="fd-stack" data-gap="1"><h2 class="fd-h3">${e(title)}</h2>${description ? `<p class="fd-small fd-muted">${e(description)}</p>` : ''}</div>${body}</section>`;
 // A button. `html` is already-safe inner markup (an icon plus escaped text); otherwise `label` is escaped.
-export function button(label, { variant, size, block, type = 'submit', icon: name, html, ...rest } = {}) {
-    return `<button class="fd-btn"${attrs({ type, 'data-variant': variant, 'data-size': size, 'data-block': block, ...rest })}>${name ? icon(name) : ''}<span>${html ?? e(label)}</span></button>`;
+export function button(label, { variant, size, block, type = 'submit', icon: name, html, truncate = false, ...rest } = {}) {
+    return `<button class="fd-btn"${attrs({ type, 'data-variant': variant, 'data-size': size, 'data-block': block, ...rest })}>${name ? icon(name) : ''}<span${truncate ? ' class="fd-truncate"' : ''}>${html ?? e(label)}</span></button>`;
 }
 export const linkButton = (label, href, { variant, size, block, icon: name } = {}) =>
     `<a class="fd-btn"${attrs({ href, 'data-variant': variant, 'data-size': size, 'data-block': block })}>${name ? icon(name) : ''}<span>${e(label)}</span></a>`;
@@ -51,13 +54,17 @@ export const radio = (name, label, { value, checked, required, description } = {
 export const hidden = (name, value) => `<input type="hidden" name="${e(name)}" value="${e(value ?? '')}">`;
 const TONE_ICON = { danger: 'circle-alert', warning: 'triangle-alert', success: 'circle-check', info: 'info' };
 export const callout = (title, body = '', { tone, role = tone === 'danger' ? 'alert' : 'note' } = {}) =>
-    `<div class="fd-callout"${attrs({ 'data-tone': tone, role })}>${icon(TONE_ICON[tone] || 'info').replace('class="fd-icon"', 'class="fd-icon fd-callout-icon"')}<div class="fd-callout-content"><p class="fd-callout-title">${e(title)}</p>${body ? `<p class="fd-callout-body">${e(body)}</p>` : ''}</div></div>`;
+    `<div class="fd-callout"${attrs({ 'data-tone': tone, role })}>${icon(TONE_ICON[tone] || 'info').replace('class="fd-icon"', 'class="fd-icon fd-callout-icon"')}<div class="fd-callout-content">${title ? `<p class="fd-callout-title">${e(title)}</p>` : ''}${body ? `<p class="fd-callout-body">${e(body)}</p>` : ''}</div></div>`;
+// Where a page's script reports a failure (sign-in.js, passkey.js): a danger notice, hidden until there is a message.
+export const messageBox = () => callout('', '', { tone: 'danger' })
+    .replace('<div class="fd-callout"', '<div class="fd-callout" id="message-box" hidden')
+    .replace('<div class="fd-callout-content"></div>', '<div class="fd-callout-content"><p class="fd-callout-body" id="message"></p></div>');
 // A settings row: title and description on the left, a control (already-safe markup) on the right.
 export const setting = (title, description, control = '') => `<div class="fd-setting"><div class="fd-setting-text"><h3 class="fd-setting-title">${e(title)}</h3>${description ? `<p class="fd-setting-desc">${description}</p>` : ''}</div>${control ? `<div class="fd-setting-control">${control}</div>` : ''}</div>`;
 // Key-value pairs; values are already-safe markup. fd-kv-value is a flex row, so mixed text and code go in one fd-kv-text.
 export const kv = (pairs, cols = 2) => `<dl class="fd-kv" data-cols="${cols}">${pairs.map(([key, value]) => `<div class="fd-kv-item"><dt class="fd-kv-key">${e(key)}</dt><dd class="fd-kv-value"><span class="fd-kv-text">${value}</span></dd></div>`).join('')}</dl>`;
 // A list in a card. Each row: { title, desc, meta, trail } where desc, meta and trail are already-safe markup.
-export const list = (label, rows) => `<ul class="fd-list" data-card aria-label="${e(label)}">${rows.map(row => `<li class="fd-list-row"><div class="fd-list-body"><span class="fd-list-title">${e(row.title)}</span>${row.desc ? `<span class="fd-list-desc">${row.desc}</span>` : ''}</div>${row.meta ? `<span class="fd-list-meta">${row.meta}</span>` : ''}${row.trail ? `<div class="fd-list-trail">${row.trail}</div>` : ''}</li>`).join('')}</ul>`;
+export const list = (label, rows, { divided = false } = {}) => `<ul class="fd-list"${divided ? ' data-divided' : ' data-card'} aria-label="${e(label)}">${rows.map(row => `<li class="fd-list-row"><div class="fd-list-body"><span class="fd-list-title">${e(row.title)}</span>${row.desc ? `<span class="fd-list-desc">${row.desc}</span>` : ''}</div>${row.meta ? `<span class="fd-list-meta">${row.meta}</span>` : ''}${row.trail ? `<div class="fd-list-trail">${row.trail}</div>` : ''}</li>`).join('')}</ul>`;
 export const empty = (title, text, action = '') => `<div class="fd-empty" data-size="sm"><h3 class="fd-empty-title">${e(title)}</h3><p class="fd-empty-text">${e(text)}</p>${action ? `<div class="fd-empty-actions">${action}</div>` : ''}</div>`;
 export const status = (label, tone) => `<span class="fd-status"${attrs({ 'data-tone': tone })}>${e(label)}</span>`;
 export const badge = (label, tone) => `<span class="fd-badge"${attrs({ 'data-tone': tone })}>${e(label)}</span>`;
@@ -68,3 +75,22 @@ export const actions = (...buttons) => `<div class="fd-form-actions">${buttons.j
 // "or" between two ways to do one thing.
 export const orDivider = env => { const or = e(t(env, 'or')); return `<div class="fd-row" data-gap="3" role="separator" aria-label="${or}"><hr class="fd-divider fd-grow"><span class="fd-eyebrow">${or}</span><hr class="fd-divider fd-grow"></div>`; };
 export const small = text => `<p class="fd-small fd-muted">${e(text)}</p>`;
+
+export function appRows(label, apps) {
+    const rows = apps.map(({ name, summary, mark, href }) => `<li class="fd-list-row">
+<span class="fd-list-lead" data-tone="accent" aria-hidden="true">${mark
+        ? `<img src="/assets/brand/${e(mark)}" alt="">` : e(Array.from(name)[0].toLocaleUpperCase())}</span>
+<div class="fd-list-body"><a class="fd-list-link" href="${e(href)}"><div class="fd-list-title">${e(name)}</div></a>${summary ? `<span class="fd-list-desc">${breakableText(summary)}</span>` : ''}</div>
+<span class="fd-list-trail fd-list-chevron">${icon('chevron-right')}</span></li>`).join('');
+    return `<section class="fd-stack" data-gap="1"><h2 class="fd-label" id="app-list-title">${e(label)}</h2>
+<ul class="fd-list" data-divided data-interactive aria-labelledby="app-list-title">${rows}</ul></section>`;
+}
+
+export function accountLine(env, email, { id, csrf } = {}) {
+    const label = `<p class="fd-body">${tHtml(env, 'Signed in as {email}', { email: { html: breakableText(email) } })}</p>`;
+    if (!id) return label;
+    return `<div class="fd-row" data-wrap data-gap="2">${label}<form method="post" action="/switch-account">
+${hidden('request_id', id)}${hidden('csrf', csrf)}<button class="fd-btn-text" data-tone="accent" type="submit">${e(t(env, 'Not you?'))}</button></form></div>`;
+}
+export const decisionActions = (...buttons) =>
+    `<div class="fd-grid" data-cols="2" data-min="md" data-gap="2">${buttons.join('')}</div>`;

@@ -12,6 +12,8 @@ test('hosted join lists eligible teams, joins a product and admits the owner and
     const w = await joinWorld(t), owner = await w.person(), member = await w.person('member@example.com');
     const logo = 'a'.repeat(64);
     w.db.prepare("UPDATE clients SET branding=? WHERE id='other'").run(JSON.stringify({ name: 'Tasks <HQ>', logo_light: logo }));
+    w.db.exec(`UPDATE clients SET branding='{"name":"Notes"}' WHERE id='app';
+        INSERT INTO clients(id,redirect_uris,workspaces,product,branding) VALUES('files','[]','shared','files','{"name":"Files"}')`);
     addTeam(w.db, 'team', owner.user.id, { name: 'Alpha <Team>' });
     addTeam(w.db, 'second', owner.user.id, { name: 'Beta', product: 'files' });
     addTeam(w.db, 'closed', owner.user.id, { status: 'closed' });
@@ -28,7 +30,7 @@ test('hosted join lists eligible teams, joins a product and admits the owner and
     assert.doesNotMatch(html, /<script[^>]*src="(?!\/imprim\/head\.js")|\bchecked\b|admin-only|someone-elses/);
     assert.match(html, /Use a workspace for Tasks &lt;HQ&gt;/);
     assert.match(html, new RegExp('/assets/brand/' + logo));
-    assert.match(html, /Alpha &lt;Team&gt;[\s\S]*>notes<.*>Beta<[\s\S]*>files</);
+    assert.match(html, /Alpha &lt;Team&gt;[\s\S]*>Used by Notes<.*>Beta<[\s\S]*>Used by Files</);
     assert.deepEqual([...html.matchAll(/name="workspace_id" value="([^"]+)"/g)].map(match => match[1]), ['team', 'second']);
     assert.equal(w.db.prepare('SELECT count(*) AS n FROM client_admissions').get().n, 0);
 
@@ -59,14 +61,14 @@ test('hosted join lists eligible teams, joins a product and admits the owner and
         ['workspace', 'workspace']);
 });
 
-test('hosted join limits the ordered choice list to 20 and localizes a single preselected workspace', async t => {
+test('hosted join limits the ordered choice list to 20 and localizes a single workspace with a hidden choice', async t => {
     const w = await joinWorld(t), owner = await w.person();
     addTeam(w.db, 'team', owner.user.id);
     const single = await w.offer(owner, { ui_locales: 'es' });
     const html = await (await w.call(single.path, { headers: { cookie: single.cookie } })).text();
-    assert.match(html, /name="workspace_id" value="team" checked required/);
+    assert.match(html, /type="hidden" name="workspace_id" value="team"/);
     assert.match(html, /lang="es"/);
-    assert.match(html, /Usar este espacio de trabajo/);
+    assert.match(html, /Conectar team/);
     for (let i = 25; i >= 1; i--) addTeam(w.db, 'id-' + i, owner.user.id, { name: String(i).padStart(2, '0') });
     const many = await w.offer(owner);
     const htmlMany = await (await w.call(many.path, { headers: { cookie: many.cookie } })).text();
@@ -85,10 +87,10 @@ test('ordinary refusals and already-admitted authorization do not offer hosted j
     for (const role of ['admin', 'member']) addTeam(w.db, role, owner.user.id, { role });
     addTeam(w.db, 'closed', owner.user.id, { status: 'closed' });
     addTeam(w.db, 'personal', owner.user.id, { kind: 'personal' });
-    await refusal();
+    assert.equal(location(await w.start(owner)).pathname, '/workspace-access');
     addTeam(w.db, 'team', owner.user.id);
     w.db.exec("UPDATE clients SET join_workspaces='off' WHERE id='other'");
-    await refusal();
+    assert.equal(location(await w.start(owner)).pathname, '/workspace-access');
     w.db.exec("UPDATE clients SET join_workspaces='on' WHERE id='other'");
     await refusal(owner, { prompt: 'none' });
     w.db.exec("UPDATE realms SET config=json_set(config,'$.workspaces','off')");

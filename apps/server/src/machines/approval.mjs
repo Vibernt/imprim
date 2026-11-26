@@ -46,7 +46,7 @@ export async function machineApproval(request, env) {
         const { results } = await env.DB.prepare(`SELECT resource,name FROM workspace_resources
             WHERE workspace_id=? AND client_id=? AND resource IN (SELECT value FROM json_each(?))`)
             .bind(row.workspace_id, app.id, row.resources).all();
-        return machineApprovalPage(request, env, row, app, appName, settings.agent_scope_catalogue, new Map(results.map(r => [r.resource, r.name])));
+        return machineApprovalPage(request, env, row, app, appName, settings.agent_scope_catalogue, new Map(results.map(r => [r.resource, r.name])), session.email);
     }
     invariant(['approve', 'deny'].includes(body.decision), 'invalid_request', 'Choose Approve or Deny.');
     const approved = body.decision === 'approve';

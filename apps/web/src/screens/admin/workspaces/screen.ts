@@ -57,10 +57,10 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
     this.pending = true;
     const endpoint = action === 'create' ? apiRoot : apiRoot + '/' + encodeURIComponent(this.workspaceId) + '/' + action;
     try {
-      const body: Record<string, unknown> = Object.fromEntries(form);
-      for (const key of ['products', 'add', 'remove']) {
-        if (form.has(key)) body[key] = JSON.parse(String(form.get(key)));
-      }
+      const body: Record<string, unknown> = action === 'products'
+        ? { add: form.getAll('add_product'), remove: form.getAll('remove_product') }
+        : Object.fromEntries(form);
+      if (action === 'create') body.products = JSON.parse(String(form.get('products')));
       if (action === 'close') body.confirm = String(body.confirm).trim();
       const { workspace_id } = await api<{ workspace_id: string }>(endpoint, { method: 'POST', body });
       if (!this.isConnected) return;

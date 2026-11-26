@@ -22,6 +22,13 @@ endpoints). It opens no listener and sends no email. `check` validates ESM synta
 packages or imports. Passing both does not prove native browser cookie behaviour, real mail delivery, Cloudflare
 rate limits, Worker egress, Queue delivery or OpenID conformance: those are [release gates](#release-gates).
 
+## Admin console
+
+On phones, Clients, Users, Workspaces and Sign-ups are in the tab bar. More opens the other destinations available
+to your role. Sign-up requests awaiting a decision are counted in the sidebar. Registering a client opens its draft
+in the editor. Set its HTTPS back-channel URL and activate it to enable sign-in and receive the client secret.
+Audit can filter by event, UTC date range, actor and target. [Control plane](CONTROL_PLANE.md)
+
 ## Keys and rotation
 
 Each realm has two rings of signing keys: ES256 (P-256), which signs everything by default, and RS256 (RSA 2048), which
@@ -90,7 +97,7 @@ until delivery or expiry. Use the dead-letter queue to see that an app is failin
 `backchannel_uri`. An app with no `backchannel_uri` shows as `missing_uri` and its events stay pending. Delivery is
 at least once, so apps must deduplicate the event `jti`.
 
-The console's Settings page shows pending counts, the oldest pending event and apps with no destination. Each
+The console's Configuration page shows pending counts, the oldest pending event and apps with no destination. Each
 client page shows its undelivered and expired events with their last error.
 
 ## Monitoring and logs

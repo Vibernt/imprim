@@ -13,13 +13,18 @@ export function machineClientSmoke(browser, open) {
             viewport: { width: 375, height: 900 } }));
         await context.addCookies(server.cookies);
         const page = await context.newPage();
-        for (const [decision, result] of [['Approve', 'Machine allowed.'], ['Deny', 'Request denied.']]) {
+        for (const [decision, result] of [['Allow Editorial bot', 'Machine allowed.'], ['Deny', 'Request denied.']]) {
             const { request_id } = await seededRequest(server);
             const response = await page.goto(server.origin + approvalPath(request_id));
             assert.equal(response.status(), 200);
             await page.getByRole('heading', { name: 'Allow a machine to act for Editorial team?' }).waitFor();
-            await page.getByText('Editorial tools', { exact: true }).waitFor();
+            await page.getByText('Editorial tools', { exact: true }).first().waitFor();
             assert.equal(await page.locator('script[src^="/fire/"], [style]').count(), 0);
+            const disclosure = page.locator('details.fd-disclosure');
+            const thumbprints = disclosure.getByRole('heading', { name: 'Public key thumbprints' });
+            assert.equal(await thumbprints.isVisible(), false);
+            await disclosure.locator('summary').press('Space');
+            await thumbprints.waitFor();
             assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
             await page.getByRole('button', { name: decision, exact: true }).press('Enter');
             await page.getByRole('heading', { name: result, exact: true }).waitFor();
@@ -48,10 +53,13 @@ export function machineClientSmoke(browser, open) {
             await byButton('Disable ' + id).click();
         } else {
             await page.getByRole('heading', { name: 'Machines you’re accountable for' }).waitFor();
-            await byButton('Renew Editorial bot').click();
+            const menu = byButton('More actions for Editorial bot');
+            await menu.click();
+            await page.getByRole('menuitem', { name: 'Renew' }).click();
             await page.getByText('Machine renewed', { exact: true }).waitFor();
             assert.ok(db.prepare('SELECT expires_at FROM service_clients WHERE id=?').get(id).expires_at > now + 60000);
-            await byButton('Disable Editorial bot').press('Enter');
+            await menu.press('Enter');
+            await page.getByRole('menuitem', { name: 'Disable' }).press('Enter');
             assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
         }
         const confirm = byButton(role ? 'Disable service client' : 'Disable machine');

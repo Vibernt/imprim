@@ -4,10 +4,11 @@
 OAuth 2.1 authorization server that runs on Cloudflare Workers with D1. The Worker has no runtime dependencies; the account and admin app needs a build.
 
 - **People sign in once** per brand, with an email link, a password (breach-checked), a passkey, GitHub, Google,
-  Microsoft, Apple or any OpenID Connect provider, chosen per app. SSO across that brand's apps.
+  Microsoft, Apple or any OpenID Connect provider, chosen per app. SSO across that brand's apps. Every sign-in page
+  carries the app's name and look from start to finish, and pages that end a sign-in lead back to the person's own apps.
 - **Two-factor where it matters:** authenticator apps, passkeys and recovery codes; per-app MFA policy, step-up
-  (`acr_values`, `max_age`) and MFA for admins and for approving agents. An account page covers sessions, apps,
-  agents, email change and deletion.
+  (`acr_values`, `max_age`) and MFA for admins and for approving agents. The account console has Profile, Apps,
+  Security, Sessions and Agents pages; people can change their email, delete their account or revoke an agent’s access.
 - **Agents connect for a person, never as one.** A person gives their agent (Claude Code, Cursor, Codex, a CLI) an
   app's MCP address. The agent discovers Imprim, the person approves one workspace and ticks the permissions they
   want to give, and the agent gets 60-second, audience-bound tokens that the person can revoke at any time. An app can
@@ -126,7 +127,7 @@ npm run check
 | `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, languages (`i18n/`), email, maintenance |
 | `apps/server/public/` | Static assets: generated Fire assets (`fire/`), the built app (`ui/`) and `_headers` |
 | `apps/web/` | The Lit account and admin app |
-| `apps/server/migrations/` | D1 schema, `0001` to `0030` |
+| `apps/server/migrations/` | D1 schema, `0001` to `0033` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
 | `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
 | `scripts/` | Offline SQL generators for realms, clients and user imports; checks (including translations); email preview; client build |

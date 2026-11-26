@@ -17,6 +17,7 @@ import { liveSignupEnabled, liveSignupMode, requireSignup, signupOff, signupWork
 import { completeOpenSignup } from '../workspaces/signup.mjs';
 import { recordSignupRequest } from '../workspaces/signup-requests.mjs';
 import { notifySignupAdmins } from '../workspaces/signup-email.mjs';
+import { checkEmailCookie } from './check-email-state.mjs';
 import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
 const linkKinds = { sign_in: 'sign_in_link', password: 'password_link', signup: 'signup_link' };
 
@@ -46,7 +47,8 @@ export async function requestMagic(request, env, ctx) {
         console.error(JSON.stringify({ type: 'magic_delivery_failed', code: error.code || 'delivery_failed' }));
         await audit(env, 'magic_delivery_failed', null, { code: error.code || 'delivery_failed' });
     }));
-    return json({ accepted: true }, purpose === 'signup' ? 202 : 200);
+    return json({ accepted: true }, purpose === 'signup' ? 202 : 200, body.browser_page === true
+        ? { 'set-cookie': checkEmailCookie(pending?.row.id || '', body.email) } : {});
 }
 async function deliverMagic(env, request, email, browser, pending, challengeMode, purpose, name) {
     if (!await limitEmail(env, email, request, challengeMode === 'degraded')) return;

@@ -7,12 +7,14 @@ import { auditStatement } from './auth.mjs';
 import { validateBranding } from '../branding/tokens.mjs';
 import { assetExists } from '../branding/assets.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { checkClientId, checkClientUris } from './client-basics.mjs';
+import { claimDraft, clientDraft, draftClientView } from './client-drafts.mjs';
 const jsonFields = ['redirect_uris','post_logout_uris','allowed_domains','branding','sign_in_methods','google_hosted_domains','token_exchange_from',
     ...settingNames.filter(k => !['agent_access','agent_max_grant_days'].includes(k))];
 export function publicClient(row) {
     const { secret_hash, ...value } = row;
     for (const field of jsonFields) value[field] = JSON.parse(value[field]);
-    return { ...value, confidential: Boolean(secret_hash) };
+    return { ...value, listed: value.listed === 1, confidential: Boolean(secret_hash) };
 }
 export async function getAdminClient(env, id) {
     const row = await env.DB.prepare('SELECT * FROM clients WHERE id=? AND realm_id=?').bind(id, realmId(env)).first();
@@ -45,6 +47,7 @@ function validateWorkspaceSettings({ product = null, workspaces = 'app', persona
 }
 // Shared with scripts/seed-client.mjs. The redirect URLs have already been validated.
 export function validatePolicySettings(config, agent) {
+    invariant(config.listed === undefined || typeof config.listed === 'boolean', 'invalid_request', 'listed must be a boolean.');
     validateWorkspaceSettings(config);
     invariant(!agent.agent_workspace_resources.length || (config.workspaces === 'shared' && config.product && agent.agent_access === 'on'),
         'invalid_request', 'Workspace-choice resources require shared workspaces, a product and agent access.');
@@ -63,29 +66,26 @@ export function validatePolicySettings(config, agent) {
             scopes.every(scope => Object.hasOwn(agent.agent_scope_catalogue, scope))), 'invalid_request', 'token_exchange_from maps other client ids to scopes from this app\'s catalogue.');
 }
 function validate(config) {
-    invariant(typeof config.id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(config.id), 'invalid_request', 'Invalid client id.');
+    checkClientId(config.id);
     const { methods, domains } = validateSignInSettings(config.sign_in_methods, config.google_hosted_domains);
     const agent = validateAgentSettings(config);
     invariant(['invited','open'].includes(config.signup_policy) && [0,1].includes(config.dev), 'invalid_request', 'Invalid signup policy or dev flag.');
     // Leaving out PKCE is safe only with a client secret: a public app always uses PKCE.
     invariant(config.classic_oidc !== 'on' || config.confidential !== false, 'invalid_request', 'Classic OpenID Connect needs a confidential app.');
-    for (const name of ['redirect_uris','post_logout_uris']) {
-        invariant(Array.isArray(config[name]) && config[name].length <= 100 && (name !== 'redirect_uris' || config[name].length), 'invalid_request', 'Invalid URI list.');
-        for (const uri of config[name]) registeredUri({ dev: config.dev, [name]: JSON.stringify(config[name]) }, uri, name);
-    }
+    for (const name of ['redirect_uris','post_logout_uris']) checkClientUris(config[name], name, config.dev);
     validatePolicySettings(config, agent);
     invariant(typeof config.backchannel_uri === 'string' && config.backchannel_uri.length > 0, 'invalid_request', 'A back-channel URI is required for session termination.');
     registeredUri({ redirect_uris: JSON.stringify([config.backchannel_uri]), dev: 0 }, config.backchannel_uri);
     validateSignInSettings(methods, config.allowed_domains);
     // App branding overrides the realm's fields and look, key by key.
     validateBranding(config.branding, { app: true });
-    const value = { ...config, sign_in_methods: methods, google_hosted_domains: domains, ...agent };
+    const value = { ...config, sign_in_methods: methods, google_hosted_domains: domains, ...agent, listed: config.listed ? 1 : 0 };
     delete value.confidential;
     return Object.fromEntries(Object.entries(value).map(([k,v]) => [k, jsonFields.includes(k) ? JSON.stringify(v) : v]));
 }
 const newClient = () => ({
     redirect_uris: [], post_logout_uris: [], backchannel_uri: null, signup_policy: 'invited',
-    allowed_domains: [], branding: { name: '' }, dev: 0, sign_in_methods: ['email'], google_hosted_domains: []
+    allowed_domains: [], branding: { name: '' }, listed: true, dev: 0, sign_in_methods: ['email'], google_hosted_domains: []
 });
 export function clientEditorDefaults() {
     const defaults = newClient();
@@ -96,9 +96,17 @@ export function clientEditorDefaults() {
         agent_token_rate: 3000, token_exchange_from: {}, user_events: 'off'
     };
 }
-export async function saveClient(env, actor, id, input) {
+export async function activateClientDraft(env, actor, id, input) {
+    const draft = await clientDraft(env, id);
+    invariant(draft, 'not_found', 'Client draft not found.', 404);
+    invariant(input.version === 0 && input.id === undefined, 'conflict', 'Reload the client draft before activating.', 409);
+    const { version, ...fields } = input;
+    return saveClient(env, actor, undefined, fields, draft);
+}
+
+export async function saveClient(env, actor, id, input, draft = null) {
     const old = id ? await getAdminClient(env, id) : null;
-    const allowed = ['id','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev',
+    const allowed = ['id','redirect_uris','post_logout_uris','backchannel_uri','signup_policy','allowed_domains','branding','dev','listed',
         'sign_in_methods','google_hosted_domains','mfa','mfa_trusted_device_days','agent_consent_mfa','agent_dpop','token_exchange_from','user_events','classic_oidc','id_token_signed_response_alg','agent_token_rate',
         ...settingNames, ...workspaceSettingNames, ...(old ? ['version'] : [])];
     invariant(Object.keys(input).every(k => allowed.includes(k)), 'invalid_request', 'Unknown client field; secrets cannot be supplied.');
@@ -107,7 +115,13 @@ export async function saveClient(env, actor, id, input) {
         invariant(Number.isSafeInteger(input.version) && input.version >= 0, 'invalid_request', 'The client version is required.');
         invariant(input.version === old.version, 'conflict', 'Client changed; reload before editing.', 409);
     }
-    const config = { ...newClient(), ...old, ...input };
+    const initial = draft ? draftClientView(draft, clientEditorDefaults()) : null;
+    if (initial) {
+        delete initial.draft;
+        delete initial.confidential;
+        delete initial.version;
+    }
+    const config = { ...newClient(), ...initial, ...old, ...input };
     let value;
     try {
         value = validate(config);
@@ -117,7 +131,7 @@ export async function saveClient(env, actor, id, input) {
         if (error.code || error instanceof TypeError) invariant(false, 'invalid_request', 'Invalid client configuration: ' + (error.code ? error.message : 'malformed field.'));
         throw error;
     }
-    value.version = old ? old.version + 1 : 0;
+    value.version = old ? old.version + 1 : draft ? 1 : 0;
     delete value.realm_id;
     if (!old) value.realm_id = realmId(env);
     const secret = old ? null : randomToken();
@@ -131,14 +145,14 @@ export async function saveClient(env, actor, id, input) {
     // Turning it back on revives nothing: each person connects their agent again.
     const disabling = old?.agent_access === 'on' && value.agent_access === 'off';
     try {
-        await env.DB.batch([...(old ? [versionGuard(env, id, old.version)] : []), statement,
+        await env.DB.batch([...(old ? [versionGuard(env, id, old.version)] : []), ...(draft ? claimDraft(env, draft) : []), statement,
             ...(disabling ? revokeAppGrants(env, id) : []),
-            auditStatement(env, actor, old ? 'admin_client_update' : 'admin_client_create', value.id, { fields: Object.keys(input).filter(k => k !== 'id'), ...(disabling ? { revoked_agent_grants: true } : {}) })]);
+            auditStatement(env, actor, old ? 'admin_client_update' : draft ? 'admin_client_activate' : 'admin_client_create', value.id, { fields: Object.keys(input).filter(k => k !== 'id'), ...(disabling ? { revoked_agent_grants: true } : {}) })]);
     } catch (error) {
         if (String(error.message).includes('agent_workspace_resource_registered'))
             invariant(false, 'invalid_request', 'A workspace-choice resource is already registered to a workspace.');
         if (String(error.message).includes('admin_assertions')) invariant(false, 'conflict', 'Client changed; reload before editing.', 409);
-        if (String(error.message).includes('UNIQUE constraint')) invariant(false, 'conflict', 'Client already exists.', 409);
+        if (/client_id_reserved|UNIQUE constraint/.test(String(error.message))) invariant(false, 'conflict', 'Client already exists.', 409);
         throw error;
     }
     return { client: await getAdminClient(env, value.id), ...(secret ? { client_secret: secret } : {}) };

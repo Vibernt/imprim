@@ -1,5 +1,6 @@
 /* Fire's layout starts at the elements rendered by these light-DOM components. */
 app-shell,
+screen-apps,
 screen-profile,
 screen-security,
 screen-sessions,
@@ -11,6 +12,7 @@ screen-admin-users,
 screen-admin-user,
 screen-admin-merge,
 screen-admin-audit,
+screen-admin-signups,
 screen-workspaces,
 screen-branding,
 screen-realm-settings,
@@ -21,4 +23,14 @@ screen-not-found,
 screen-no-access,
 screen-load-error {
   display: contents;
+}
+
+.im-app-mark { width: 100%; height: 100%; object-fit: contain; }
+.im-summary { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.im-breakable { overflow-wrap: anywhere; }
+.im-connection-meta { white-space: normal; }
+
+/* Fire's top-bar menu still serves the full navigation between the tab-bar and sidebar breakpoints. */
+@container fd-app (max-width: 639.98px) {
+  .im-phone-tab-destination { display: none; }
 }

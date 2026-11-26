@@ -3,6 +3,38 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-26.4
+
+Migrations: `0031_hosted_app_access.sql` (an app's `listed` setting, the workspace-access step),
+`0032_account_activity.sql` (each app's last sign-in per person) and `0033_client_drafts.sql` (client drafts).
+
+A design release: every screen was reviewed against Fire at phone and desktop width, light and dark, in English and
+German, and the findings were fixed.
+
+- **Your apps.** Pages that end or stop a sign-in list the person's own apps (those they can open now) as rows with
+  the app's mark and an optional one-line description (`branding.summary`, translatable). Signed out, they list only
+  apps marked **Show to everyone** (`listed`, on by default). With exactly one app, "You're signed in" and an expired
+  sign-in go straight to it (never for administrators, never after signing out).
+- **Account › Apps** shows the person's apps as cards that open them. Sessions › Apps adds Open beside Sign out.
+- **Workspace members.** A member refused by a shared app because their team has not added its product sees
+  `/workspace-access`, which says whom to ask, then returns the usual `access_denied`.
+- **Which account.** Second factor, agent consent, workspace pages and device codes show "Signed in as …" with
+  **Not you?** (`POST /switch-account`), which signs out and restarts the same sign-in.
+- **Sign-in pages** keep the app's branding through every step (check email, set password, second factor, consent and
+  their results); provider buttons carry Google's, GitHub's, Microsoft's and Apple's marks (see NOTICE); sign-in,
+  passkey and second-factor errors appear as a notice; the consent page's phishing warning is one line above the
+  buttons, permissions lead with their names, and decision buttons fill the width on phones.
+- **Account › Agents** shows active connections as compact rows (app, workspace by name, where approved, last used)
+  with a menu for Rename and Revoke and the details folded under each; ended connections are folded away with the
+  reason. Times are local. Profile and Security are reorganised; unknown account and console addresses show "Page not
+  found".
+- **Console.** Its own tab bar on phones and tables that stack; readable user records and audit events with event
+  type and time filters; Register client asks only for the essentials and keeps a draft until a back-channel URL is
+  set; workspace and agent settings show only when they apply; Settings is now Configuration; one Save bar on Branding.
+- Fixes found by the review: a client saved in the console no longer comes back with an empty scope list in the
+  form; an open audit filter no longer closes when the list reloads; a failed client save no longer covers the Save
+  button.
+
 ## 2026-11-26.3
 
 No migration. Documentation only.

@@ -12,6 +12,7 @@ import { fireDataScript, fireLabelScript } from '../pages/fire-labels.mjs';
 
 export const WEB_PATHS = new Set([
     '/account',
+    '/account/apps',
     '/account/security',
     '/account/sessions',
     '/account/agents',
@@ -41,13 +42,20 @@ function matches(pattern, path) {
     return wanted.length === actual.length && wanted.every((part, i) => part.startsWith(':') ? actual[i] !== '' : part === actual[i]);
 }
 
+const knownPath = path => [...WEB_PATHS].some(pattern => matches(pattern, path));
+const normalizedPath = path => path.replace(/\/+$/, '');
+const adminDocuments = new Set(['/admin/branding/preview', '/admin/branding/email-preview']);
+const accountDocuments = new Set(['/account/mfa', '/account/password', '/account/email/confirm']);
+
 export function webRequest(request, path) {
     const html = request.headers.get('accept')?.split(',').some(item => {
         const [type, ...params] = item.trim().toLowerCase().split(';');
         return type.trim() === 'text/html' && !params.some(param => /^q\s*=\s*0(?:\.0*)?$/.test(param.trim()));
     });
-    const routePath = path.startsWith('/admin/') ? path.replace(/\/+$/, '') : path;
-    return request.method === 'GET' && html && [...WEB_PATHS].some(pattern => matches(pattern, routePath));
+    const routePath = normalizedPath(path);
+    return request.method === 'GET' && html && !adminDocuments.has(routePath) && !accountDocuments.has(routePath) &&
+        !/^\/admin\/api(?:\/|$)/.test(path) &&
+        (knownPath(routePath) || /^\/(?:account|admin)\//.test(path));
 }
 
 function rewriteShell(response, { lang, attributes, opening, stylesheet }) {
@@ -75,6 +83,7 @@ export async function serveWeb(request, env, url) {
         return redirect(`/login?next=${next}`);
     }
     const admin = url.pathname.startsWith('/admin');
+    const known = knownPath(normalizedPath(url.pathname));
     if (admin) {
         let session;
         try { session = await adminSession(request, env); }
@@ -83,8 +92,8 @@ export async function serveWeb(request, env, url) {
             if (error.code === 'mfa_required') return redirect(`/mfa?next=${next}`);
             throw error;
         }
-        adminParts(url.pathname, false);
-        if (/^\/admin\/(keys|realms)(\/|$)/.test(url.pathname)) requirePlatform(session);
+        if (known) adminParts(url.pathname, false);
+        if (known && /^\/admin\/(keys|realms)(\/|$)/.test(url.pathname)) requirePlatform(session);
     }
     invariant(env.ASSETS?.fetch, 'assets_config', 'The account interface is unavailable.', 503);
     const index = await env.ASSETS.fetch(new Request(new URL(WEB_INDEX, url)));
@@ -100,8 +109,14 @@ export async function serveWeb(request, env, url) {
         }),
         stylesheet: `<link rel="stylesheet" href="/assets/theme.css?v=${version}">`
     });
-    return new Response(rewritten.body, { headers: {
+    const response = new Response(rewritten.body, { status: known ? 200 : 404, headers: {
         'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': CSP,
         vary: 'Accept'
     } });
+    shellResponses.add(response);
+    return response;
 }
+// The app shell is branded here (rewriteShell). Every other HTML page, including server pages under /account/ such as
+// /account/password and /account/mfa, still goes through withBrand, which also removes administrator-only parts.
+const shellResponses = new WeakSet();
+export const isShellResponse = response => shellResponses.has(response);

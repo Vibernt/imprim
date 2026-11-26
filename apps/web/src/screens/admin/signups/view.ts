@@ -46,25 +46,26 @@ function confirmation(row: SignupRow, action: Decision, pending: boolean, cancel
   </div>`;
 }
 
-export function signupTable(rows: SignupRow[], selection: { id: string; action: Decision } | undefined,
+export function signupTable(rows: SignupRow[], filter: string, selection: { id: string; action: Decision } | undefined,
   pending: boolean, select: (id: string, action: Decision) => void, cancel: () => void,
   submit: (id: string, action: Decision, body: object) => void) {
-  return table('Sign-up requests', ['Email', 'Workspace name', 'Product / app', 'Requested', 'Status', 'Actions'],
-    rows.map(row => [
+  const isPending = filter === 'pending';
+  const selected = rows.find(row => row.id === selection?.id && row.status === 'pending');
+  return html`${table('Sign-up requests', ['Email', 'Workspace name', 'Product / app', 'Requested',
+    ...(isPending ? ['Actions'] : ['Status'])], rows.map(row => [
       row.email, row.workspace_name,
       html`<div class="fd-table-two"><span>${mono(row.product)}</span><span class="fd-table-sub">${row.app_name ?? row.client_id}</span></div>`,
       when(row.created),
-      html`<div class="fd-table-two">
-        ${status(row.status, row.status === 'approved' ? 'success' : undefined)}
-        ${row.reason ? html`<span class="fd-table-sub fd-table-trunc" title=${row.reason}>${row.reason}</span>` : nothing}
-      </div>`,
-      row.status !== 'pending' ? '—' : html`
-        <button id=${actionId(row.id, 'approve')} class="fd-btn" type="button" data-size="sm" data-variant="outline"
+      isPending ? html`<div class="fd-row" data-wrap data-gap="2">
+        <button id=${actionId(row.id, 'approve')} class="fd-btn" type="button" data-variant="outline"
           ?disabled=${pending} @click=${() => select(row.id, 'approve')}>Approve</button>
-        <button id=${actionId(row.id, 'decline')} class="fd-btn" type="button" data-size="sm" data-variant="ghost"
-          ?disabled=${pending} @click=${() => select(row.id, 'decline')}>Decline</button>`,
-    ]),
-    ['No requests in this status', 'Choose another status or check again later.'],
-    rows.map(row => selection?.id === row.id && row.status === 'pending'
-      ? confirmation(row, selection.action, pending, cancel, body => submit(row.id, selection.action, body)) : nothing));
+        <button id=${actionId(row.id, 'decline')} class="fd-btn" type="button" data-variant="secondary"
+          ?disabled=${pending} @click=${() => select(row.id, 'decline')}>Decline</button>
+      </div>` : html`<div class="fd-table-two">
+        ${status(row.status, row.status === 'approved' ? 'success' : undefined)}
+        ${row.reason ? html`<span class="fd-table-sub">${row.reason}</span>` : nothing}
+      </div>`,
+    ]), ['No requests in this status', 'Choose another status or check again later.'])}
+    ${selected && selection ? confirmation(selected, selection.action, pending, cancel,
+      body => submit(selected.id, selection.action, body)) : nothing}`;
 }

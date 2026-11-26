@@ -28,7 +28,7 @@ test('/login with a live request of this browser is that app’s sign-in page ag
         const plain = await page(w, `/login?request_id=${id}`, cookie);
         assert.equal(plain.response.status, 200);
         assert.match(plain.text, /data-request-id=""/);
-        assert.match(plain.text, /Administrators sign in by email/);
+        assert.doesNotMatch(plain.text, /Administrators sign in by email/);
     }
     w.env.DB.db.prepare('UPDATE auth_requests SET expires_at=0 WHERE id=?').run(flow.request_id);
     assert.match((await page(w, `/login?request_id=${flow.request_id}`, flow.cookie)).text, /data-request-id=""/);
@@ -86,7 +86,8 @@ test('with no app in view, the pages that say "sign in" list the realm’s apps 
     setLoginUri(w, 'app', 'https://app.example/start', 'Example App');
     const error = await page(w, '/error');
     assert.match(error.text, /href="https:\/\/app\.example\/start"/);
-    assert.match(error.text, /Sign in to Example App/);
+    assert.match(error.text, /Sign in to an app/);
+    assert.match(error.text, /fd-list-title">Example App/);
     const account = await page(w, '/account');
     assert.equal(account.response.status, 401);
     assert.match(account.text, /Sign in to see your account/);
@@ -98,7 +99,7 @@ test('with no app in view, the pages that say "sign in" list the realm’s apps 
     // An app without a name is listed by its id; a branding name with markup is escaped.
     setLoginUri(w, 'other', 'https://other.example/start', '<b>Other</b>');
     const two = (await page(w, '/signed-out')).text;
-    assert.match(two, /Sign in to &lt;b&gt;Other&lt;\/b&gt;/);
+    assert.match(two, /fd-list-title">&lt;b&gt;Other&lt;\/b&gt;/);
     assert.doesNotMatch(two, /<b>Other<\/b>/);
     // More apps than a short choice: none are listed.
     for (let i = 0; i < MAX_LISTED_APPS; i += 1) w.env.DB.db.prepare(`INSERT INTO clients(id,redirect_uris,initiate_login_uri) VALUES(?,?,?)`)
@@ -107,19 +108,19 @@ test('with no app in view, the pages that say "sign in" list the realm’s apps 
     assert.match((await page(w, '/error')).text, /Go back to the app and start again/);
 });
 
-test('a failed lookup of the apps leaves the signed-out and error pages as they were', async t => {
+test('an unavailable app list fails explicitly on the signed-out and error pages', async t => {
     const w = await world(t);
     setLoginUri(w, 'app', 'https://app.example/start', 'Example App');
     const prepare = w.env.DB.prepare.bind(w.env.DB);
     w.env.DB.prepare = sql => { if (/initiate_login_uri IS NOT NULL/.test(sql)) throw new Error('database unavailable'); return prepare(sql); };
     t.after(() => { w.env.DB.prepare = prepare; });
     const out = await page(w, '/signed-out');
-    assert.equal(out.response.status, 200);
-    assert.match(out.text, /You’re signed out/);
+    assert.equal(out.response.status, 500);
+    assert.match(out.text, /The request could not be completed/);
     assert.doesNotMatch(out.text, /app\.example/);
     const error = await page(w, '/error');
-    assert.equal(error.response.status, 400);
-    assert.match(error.text, /Go back to the app and start again/);
+    assert.equal(error.response.status, 500);
+    assert.match(error.text, /The request could not be completed/);
 });
 
 test('another realm’s apps are never offered', async t => {

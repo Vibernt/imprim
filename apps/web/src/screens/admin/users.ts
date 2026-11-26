@@ -2,12 +2,16 @@ import { html } from 'lit';
 import { icon } from '../../lib/icon';
 import { navigate, type View } from '../../lib/router';
 import { AdminScreen, corePage } from './core-screen';
-import { link, mono, nextPage, status, table, userPath } from './core-view';
+import { link, nextPage, status, table, userPath, when } from './core-view';
 
-export interface UserSummary { id: string; email: string; status: string; merged_into: string | null; created: number }
+import { listCount } from './list-view';
+
+export interface UserSummary {
+  id: string; email: string; display_name: string | null; status: string; merged_into: string | null; created: number;
+}
 const path = '/admin/users';
 
-class UsersScreen extends AdminScreen<{ users: UserSummary[]; next: string | null }> {
+class UsersScreen extends AdminScreen<{ users: (UserSummary & { last_sign_in: number | null })[]; next: string | null; total: number }> {
   protected requestPath(view: View) { return '/admin/api/users?' + view.query; }
 
   private search = (event: SubmitEvent) => {
@@ -28,9 +32,11 @@ class UsersScreen extends AdminScreen<{ users: UserSummary[]; next: string | nul
           </label>
           <button class="fd-btn" type="submit">Search</button>
         </form>
-        ${this.content(({ users, next }) => html`
-          ${table('Users', ['Email', 'Status', 'User ID', 'Actions'], users.map(user =>
-            [link(userPath(user.id), user.email), status(user.status), mono(user.id), link(userPath(user.id), 'View')]),
+        ${this.content(({ users, next, total }) => html`
+          ${listCount(total, 'user', 'users')}
+          ${table('Users', ['Email', 'Name', 'Status', 'Last sign-in', 'Created'], users.map(user =>
+            [link(userPath(user.id), user.email), user.display_name || '—', status(user.status),
+              user.last_sign_in === null ? '—' : when(user.last_sign_in), when(user.created)]),
             search ? ['No users match', 'Try another email or a full user ID.']
               : ['No users yet', 'People appear here after their first sign-in.'])}
           ${nextPage(path, query, next)}

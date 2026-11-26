@@ -11,6 +11,11 @@ const statuses = ['pending', 'approved', 'declined', 'expired'];
 const pageSize = 50;
 const validId = id => typeof id === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id);
 
+export async function signupSummary(env) {
+    return env.DB.prepare("SELECT count(*) AS pending FROM signup_requests WHERE realm_id=? AND status='pending' AND verified_at>?")
+        .bind(realmId(env), Date.now() - signupRequestLifetime).first();
+}
+
 export async function listSignupRequests(env, query) {
     const realm = realmId(env), status = query.get('status') ?? 'pending', before = query.get('before');
     invariant(statuses.includes(status), 'invalid_request', 'Invalid sign-up request status.');
@@ -18,10 +23,11 @@ export async function listSignupRequests(env, query) {
     const { results } = await env.DB.prepare(`SELECT s.id,s.email,s.workspace_name,s.product,s.client_id,s.status,s.created,s.reason,
         json_extract(c.branding,'$.name') AS app_name
         FROM signup_requests s LEFT JOIN clients c ON c.id=s.client_id AND c.realm_id=s.realm_id
-        WHERE s.realm_id=? AND s.status=? AND (? IS NULL OR (s.created,s.id)<
+        WHERE s.realm_id=? AND s.status=? AND (s.status!='pending' OR s.verified_at>?)
+            AND (? IS NULL OR (s.created,s.id)<
             (SELECT created,id FROM signup_requests WHERE realm_id=? AND id=?))
         ORDER BY s.created DESC,s.id DESC LIMIT ?`)
-        .bind(realm, status, before, realm, before, pageSize + 1).all();
+        .bind(realm, status, Date.now() - signupRequestLifetime, before, realm, before, pageSize + 1).all();
     return { requests: results.slice(0, pageSize), next: results.length > pageSize ? results[pageSize - 1].id : null };
 }
 

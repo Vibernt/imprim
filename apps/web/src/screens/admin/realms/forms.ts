@@ -47,7 +47,7 @@ export function adminRoster(realm: Realm, viewer: { realm: { id: string }; email
   return card('Administrators', html`
     ${realm.admins.length ? table('Administrators', ['Email', 'Role', 'Actions'], realm.admins.map(admin => [admin.email, cap(admin.role),
       viewer.realm.id === realm.id && viewer.email === admin.email ? 'Your role' : html`
-        <button type="button" class="fd-btn" data-variant="outline" data-size="sm" ?disabled=${pending}
+        <button type="button" class="fd-btn" data-variant="outline" ?disabled=${pending}
           aria-label=${'Remove administrator ' + admin.email} @click=${() => remove(admin)}>Remove</button>`]))
       : html`<p class="fd-muted">No administrators yet.</p>`}
     <form class="fd-form" method="post" @submit=${submit}>

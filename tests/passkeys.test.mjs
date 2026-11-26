@@ -164,5 +164,68 @@ test('the account page lists passkeys with escaped names; the second-factor step
     assertFireMarkup(html);
     assert.ok(html.includes(`<button class="fd-btn" type="button" data-variant="outline" data-size="lg" data-block id="passkey-mfa" data-request-id="${location.searchParams.get('request_id')}" data-next="">`));
     assert.ok(html.includes('<script src="/assets/passkey.js" defer></script>'));
-    assert.ok(html.includes('<p class="fd-small" id="message" role="status" aria-live="polite"></p>'));
+    // Script failures appear in a danger notice that stays hidden until there is one.
+    assert.match(html, /<div class="fd-callout" id="message-box" hidden data-tone="danger" role="alert">.*?<p class="fd-callout-body" id="message"><\/p><\/div><\/div>/);
+});
+
+test('hosted passkey registration uses a default name and a fresh same-account form can rename it', async t => {
+    const w = await world(t);
+    const { flow, cookie } = await login(w, t);
+    const jar = jarOf(flow.cookie, cookie), hardware = await authenticator();
+    const options = await (await api(w, '/account/passkeys/options', {}, jar)).json();
+    const registered = await api(w, '/account/passkeys/register', await hardware.create(options.publicKey), jar);
+    assert.equal(registered.status, 200);
+    const { id, name, recovery_codes } = await registered.json();
+    assert.equal(name, 'Passkey');
+    assert.equal(id, hardware.id);
+    assert.equal(recovery_codes.length, 10);
+    const db = w.env.DB.db;
+    const lookup = db.prepare('SELECT name FROM webauthn_credentials WHERE id=?');
+    const rename = (values = {}, headers = {}) => w.call('/account/mfa', { method: 'POST',
+        headers: { cookie: jar, origin: w.env.ISSUER, 'content-type': 'application/x-www-form-urlencoded', ...headers },
+        body: new URLSearchParams({ action: 'rename-passkey', csrf: csrfOf(jar), id, name: 'New name', ...values }) });
+    assert.equal((await rename({ name: '   ' })).status, 400);
+    assert.equal((await rename({ csrf: 'wrong' })).status, 403);
+    assert.equal((await rename({}, { origin: 'https://other.example.com' })).status, 403);
+    const ownerId = db.prepare('SELECT id FROM users').get().id;
+    db.prepare("INSERT INTO users(id,email,email_verified,created) VALUES('another','another@example.com',1,0)").run();
+    db.prepare("UPDATE webauthn_credentials SET user_id='another' WHERE id=?").run(id);
+    assert.equal((await rename()).status, 404);
+    db.prepare('UPDATE webauthn_credentials SET user_id=? WHERE id=?').run(ownerId, id);
+    assert.equal(lookup.get(id).name, 'Passkey');
+    assert.equal((await rename({ name: ' Work <laptop> ' })).status, 303);
+    assert.equal(lookup.get(id).name, 'Work <laptop>');
+    const overview = await (await w.call('/account/mfa', { headers: { cookie: jar } })).text();
+    assertFireMarkup(overview);
+    assert.match(overview, /Work &lt;laptop&gt;/);
+    db.exec('UPDATE sessions SET mfa_at=1');
+    assert.equal((await rename()).status, 403);
+    assert.equal(lookup.get(id).name, 'Work <laptop>');
+});
+
+test('the account passkey rename API requires a fresh, same-origin session and a credential in its realm', async t => {
+    const w = await world(t), { jar, device } = await registered(w, t);
+    const path = '/v1/account/passkeys/rename', db = w.env.DB.db;
+    const body = { id: device.id, name: '  Work laptop  ' };
+    const rename = (headers = {}, changes = {}) => w.post(path, { ...body, ...changes }, jar, { 'x-csrf-token': csrfOf(jar), ...headers });
+    const name = () => db.prepare('SELECT name FROM webauthn_credentials WHERE id=?').get(device.id).name;
+    assert.equal((await w.post(path, body)).status, 401);
+    assert.equal((await w.call(path, { headers: { cookie: jar } })).status, 404);
+    assert.equal((await w.post(path, body, jar)).status, 403);
+    assert.equal((await rename({ origin: 'https://other.example.com' })).status, 403);
+    assert.equal((await rename({}, { name: '\u202ename' })).status, 400);
+    const owner = db.prepare('SELECT user_id FROM webauthn_credentials WHERE id=?').get(device.id).user_id;
+    db.exec(`INSERT INTO users(id,email,created) VALUES('other-person','other@example.com',0);
+        INSERT INTO realms(id,display_name,created) VALUES('foreign','Foreign',0);`);
+    db.prepare(`UPDATE webauthn_credentials SET user_id='other-person' WHERE id=?`).run(device.id);
+    assert.equal((await rename()).status, 404);
+    db.prepare(`UPDATE webauthn_credentials SET user_id=?,realm_id='foreign' WHERE id=?`).run(owner, device.id);
+    assert.equal((await rename()).status, 404);
+    db.prepare(`UPDATE webauthn_credentials SET realm_id='default' WHERE id=?`).run(device.id);
+    assert.equal(name(), 'Laptop');
+    assert.equal((await rename()).status, 200);
+    assert.equal(name(), 'Work laptop');
+    db.exec('UPDATE sessions SET mfa_at=0');
+    assert.equal((await rename({}, { name: 'Unverified edit' })).status, 403);
+    assert.equal(name(), 'Work laptop');
 });

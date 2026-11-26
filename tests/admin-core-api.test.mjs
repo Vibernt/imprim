@@ -6,9 +6,9 @@ import { ensureUser } from '../apps/server/src/services/admission.mjs';
 import { issueSession } from '../apps/server/src/auth/session.mjs';
 import { useWebShell } from './support/web-shell.mjs';
 
-const reads = ['clients', 'clients/app', 'clients/editor/defaults', 'services', 'users', 'users/someone',
-    'users/someone/merge?surviving_id=other', 'audit', 'audit/export'];
-const writes = ['clients', 'clients/app', 'clients/app/rotate-secret', 'services', 'services/worker', 'services/worker/delete',
+const reads = ['clients', 'clients?include_drafts=1', 'clients/app', 'clients/editor/defaults', 'services', 'users', 'users/someone',
+    'users/someone/merge?surviving_id=other', 'audit', 'audit?event=admin_sign_in&from=2026-01-01', 'audit/export', 'signups', 'signups/summary', 'settings'];
+const writes = ['clients', 'clients/editor/drafts', 'clients/someone/activate', 'clients/app', 'clients/app/rotate-secret', 'services', 'services/worker', 'services/worker/delete',
     ...['block', 'unblock', 'delete', 'merge', 'revoke-session', 'reset-mfa'].map(action => 'users/someone/' + action)];
 const get = (w, path, cookie = '') => w.call('/admin/api/' + path, { headers: { cookie } });
 
@@ -34,6 +34,9 @@ test('all admin core reads and writes require a scoped administrator, second fac
     ]) await denied(writes, path => admin.post(path, {}, headers), 403, code);
 
     db.exec('UPDATE sessions SET mfa_at=0 WHERE admin_until IS NOT NULL');
+    await denied(reads, admin.get, 403, 'mfa_required');
+    await denied(writes, admin.post, 403, 'mfa_required');
+    db.prepare('UPDATE sessions SET mfa_at=? WHERE admin_until IS NOT NULL').run(Date.now() - 3600001);
     await denied(reads, admin.get, 403, 'mfa_required');
     await denied(writes, admin.post, 403, 'mfa_required');
 
@@ -139,6 +142,8 @@ test('users and audit keep search filters and cursor order across pages', async 
 
     const first = await (await admin.get('users?q=SaMpLe-')).json();
     const last = await (await admin.get('users?q=SaMpLe-&before=' + first.next)).json();
+    assert.equal(first.total, 51);
+    assert.equal(last.total, 51);
     assert.equal(first.users.length, 50);
     assert.equal(first.next, 'page-01');
     assert.deepEqual(last.users.map(user => user.id), ['page-00']);

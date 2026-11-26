@@ -27,6 +27,7 @@ Planned, roughly in order. Each item is an issue to discuss before code:
 1. **Enterprise.** Per-customer SSO routed by email domain (OIDC and SAML), and SCIM provisioning.
 2. **Native review of the translations.** The Spanish, French, German and Portuguese catalogues are drafts until
    native speakers have read them. Then more languages, and the admin console.
+3. **Realm switcher.** Let platform administrators move between realms from the console top bar.
 
 Certification: the conformance suite's Basic, Config, RP-Initiated Logout and Back-Channel Logout plans passed on
 staging on 2026-11-17 with no failures; what remains is submitting them to self-certify

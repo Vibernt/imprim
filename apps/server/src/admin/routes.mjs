@@ -5,7 +5,8 @@ import { adminSession, adminMutation, mutationEnvironment, requirePlatform, requ
 import { listRealms, saveRealm, saveAdmin } from './realms.mjs';
 import { saveService, deleteService } from './services.mjs';
 import { realmBranding, saveRealmBranding, uploadAsset, preview } from './branding.mjs';
-import { saveClient, rotateSecret } from './clients.mjs';
+import { activateClientDraft, saveClient, rotateSecret } from './clients.mjs';
+import { createClientDraft } from './client-drafts.mjs';
 import { revokeSession } from './sessions.mjs';
 import { changeUser, resetMfa } from './users.mjs';
 import { rotateNow, keyList, revokeKeyNow } from '../oidc/keys.mjs';
@@ -20,7 +21,7 @@ import { workspaceApi, workspaceFormPost } from './workspaces/api.mjs';
 import { sampleEmail } from './branding-email.mjs';
 import { newPath as newWorkspacePath } from './workspaces/read.mjs';
 import { clientFromForm } from './client-form.mjs';
-import { decideSignupRequest, listSignupRequests } from './signups.mjs';
+import { decideSignupRequest, listSignupRequests, signupSummary } from './signups.mjs';
 // A form the console posted and the server refused: the console says why, in place. Scripts and the admin API (which
 // do not ask for HTML) still get the JSON error from the worker.
 export async function admin(request, env, ctx) {
@@ -38,7 +39,7 @@ export async function admin(request, env, ctx) {
     }
 }
 async function handle(request, env, ctx) {
-    const url = new URL(request.url), api = url.pathname.startsWith('/admin/api/');
+    const url = new URL(request.url), api = url.pathname === '/admin/api' || url.pathname.startsWith('/admin/api/');
     if (!api && webRequest(request, url.pathname)) return serveWeb(request, env, url);
     if (request.method === 'GET' && !api && !await getSession(request, env)) return redirect(env.ISSUER + '/login');
     let session;
@@ -49,12 +50,14 @@ async function handle(request, env, ctx) {
             return redirect(`${env.ISSUER}${error.code === 'mfa_required' ? '/mfa' : '/account/mfa'}?next=${encodeURIComponent(url.pathname)}`);
         throw error;
     }
-    const [section = 'clients', id, action] = adminParts(url.pathname, api);
+    const [section = api ? undefined : 'clients', id, action] = adminParts(url.pathname, api);
+    invariant(section, 'not_found', 'Admin endpoint not found.', 404);
     if (request.method === 'GET') {
         if (section === 'branding' && id === 'preview' && !action) return preview(env, url.searchParams.get('client'));
         if (!api && section === 'branding' && id === 'email-preview' && !action) return sampleEmail(env);
         if (api) {
             if (section === 'workspaces') return workspaceApi(request, env, ctx, session, id, action, url.searchParams);
+            if (section === 'signups' && id === 'summary' && !action) return json(await signupSummary(env));
             if (section === 'signups' && !id) return json(await listSignupRequests(env, url.searchParams));
             const response = await coreRead(env, section, id, action, url.searchParams);
             if (response) return response;
@@ -85,7 +88,11 @@ async function handle(request, env, ctx) {
         if (api && section === 'signups' && id && ['approve', 'decline'].includes(action))
             return json(await decideSignupRequest(writeEnv, ctx, session.user_id, id, action, body));
         let result;
-        if (section === 'clients' && !action) {
+        if (api && section === 'clients' && id === 'editor' && action === 'drafts') {
+            result = await createClientDraft(writeEnv, session.user_id, body);
+        } else if (api && section === 'clients' && id && action === 'activate') {
+            result = await activateClientDraft(writeEnv, session.user_id, id, body);
+        } else if (section === 'clients' && !action) {
             result = await saveClient(writeEnv, session.user_id, id, api ? body : clientFromForm(body));
             ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'admin_dispatch_failed', session.user_id, { pending: true })));
         } else if (section === 'clients' && id && action === 'rotate-secret') {
@@ -96,7 +103,7 @@ async function handle(request, env, ctx) {
             result = action === 'revoke-session' ? await revokeSession(writeEnv, session.user_id, id, body.sid) :
                 action === 'reset-mfa' ? await resetMfa(writeEnv, session.user_id, id, body.reason) :
                 await changeUser(writeEnv, session.user_id, id, action, body.surviving_id, body.confirm_source_email);
-            if (action !== 'unblock') result.delivery = { state: 'pending', message: 'Access revoked locally; outbox delivery is asynchronous. See Settings for outstanding events.' };
+            if (action !== 'unblock') result.delivery = { state: 'pending', message: 'Access revoked locally; outbox delivery is asynchronous. See Configuration for outstanding events.' };
             ctx.waitUntil(dispatchDeliveries(env).catch(() => audit(env, 'admin_dispatch_failed', session.user_id, { pending: true })));
         } else if (section === 'keys' && id === 'rotate' && !action) { requirePlatform(session); result = await rotateNow(writeEnv, session.user_id); }
         else if (section === 'keys' && id && action === 'revoke') { requirePlatform(session); result = await revokeKeyNow(writeEnv, session.user_id, id); }

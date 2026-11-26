@@ -2,12 +2,12 @@ import { focusQuiet } from 'fire-design';
 import { ApiError, api } from '../../lib/api';
 import { t } from '../../lib/i18n';
 import { AccountScreen, post, success } from './account-screen';
-import { overview, passwordTitle, type Actions, type Security } from './security-overview';
+import { hasSecondFactor, overview, passwordTitle, type Actions, type Security } from './security-overview';
 import { setupView, passwordView, recoveryView, type Setup } from './security-setup';
-import { createPasskey } from './security-passkeys';
+import { createPasskey, namePasskey, type AddedPasskey } from './security-passkeys';
 
 interface Recovery { recovery_codes: string[] }
-type Step = { setup: Setup } | { recovery: string[]; regenerated: boolean } | 'password';
+type Step = { setup: Setup } | { recovery: string[]; regenerated: boolean } | { passkey: AddedPasskey } | 'password';
 
 class ScreenSecurity extends AccountScreen<Security> {
   static override properties = { step: { state: true } };
@@ -76,18 +76,18 @@ class ScreenSecurity extends AccountScreen<Security> {
       const setup = await post<Setup>('mfa/start');
       if (this.isConnected) this.show({ setup });
     }),
-    passkey: (event) => {
-      event.preventDefault();
-      const name = new FormData(event.currentTarget as HTMLFormElement).get('name');
+    passkey: () => {
       void this.mutate(async () => {
         const controller = this.passkeyRequest = new AbortController();
         try {
-          const result = await createPasskey(name, controller.signal).catch((error: unknown) => {
+          const result = await createPasskey(controller.signal).catch((error: unknown) => {
             if (error instanceof ApiError) throw error;
             throw new ApiError(400, 'passkey_failed', t('The passkey step didn’t finish. Try again.'));
           });
-          if (this.isConnected) success(t('Passkey added'));
-          this.showCodes(result, false);
+          if (this.isConnected) {
+            success(t('Passkey added'));
+            this.show({ passkey: result });
+          }
         } finally {
           this.passkeyRequest = undefined;
         }
@@ -104,6 +104,15 @@ class ScreenSecurity extends AccountScreen<Security> {
     password: () => this.show('password'),
   };
 
+  private savePasskeyName(passkey: AddedPasskey, event: SubmitEvent) {
+    event.preventDefault();
+    const name = new FormData(event.currentTarget as HTMLFormElement).get('name');
+    return this.mutate(async () => {
+      await post('passkeys/rename', { id: passkey.id, name });
+      this.showCodes(passkey, false);
+    });
+  }
+
   protected override render() {
     if (this.step === 'password' && this.data) return this.page(passwordTitle(this.data.password), t('Use it to sign in to apps that offer passwords.'),
       data => passwordView(data.password, this.pending, () => this.show(), this.savePassword));
@@ -111,11 +120,14 @@ class ScreenSecurity extends AccountScreen<Security> {
     if (step && typeof step === 'object') {
       if ('setup' in step) return this.page(t('Add an authenticator app'), t('Scan the code, then enter the 6-digit code your app shows.'),
         () => setupView(step.setup, this.pending, () => this.show(), this.confirm, event => { this.code = event.detail.value; }));
+      if ('passkey' in step) return this.page(t('Name your passkey'), '',
+        () => namePasskey(step.passkey, this.pending, event => this.savePasskeyName(step.passkey, event), () => this.showCodes(step.passkey, false)));
       return this.page(step.regenerated ? t('New recovery codes') : t('Save these recovery codes now'),
         step.regenerated ? t('Your old codes stopped working. Save these before you leave.') : t('They are shown once. Each code signs you in one time.'),
         () => recoveryView(step.recovery, this.done));
     }
-    return this.page(t('Security'), t('How you sign in, and the browsers you trust.'), data => overview(data, this.pending, this.actions));
+    const status = this.data ? (hasSecondFactor(this.data) ? t('Two-step sign-in is on.') : t('Two-step sign-in is off.')) : '';
+    return this.page(t('Security'), status, data => overview(data, this.pending, this.actions));
   }
 }
 customElements.define('screen-security', ScreenSecurity);

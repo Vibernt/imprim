@@ -50,14 +50,14 @@ test('fragment page never sends token on load; explicit click posts once and nav
     } };
     runInNewContext(script, {
         document, URLSearchParams, window: {},
-        location: { hash: '#token=' + 'a'.repeat(43), pathname: '/login', assign(url) { navigations.push(url); } },
+        location: { hash: '#token=' + 'a'.repeat(43), pathname: '/login', search: '?request_id=example', assign(url) { navigations.push(url); } },
         history: { replaceState(...args) { history.push(args); } },
         async fetch(url, options) { requests.push({ url, options }); return Response.json({ redirect: 'https://app.example/callback?code=issued' }); }
     });
     assert.equal(requests.length, 0);
     assert.equal(document.getElementById('confirm').hidden, false);
     assert.equal(document.getElementById('request').hidden, true);
-    assert.equal(history[0][2], '/login');
+    assert.equal(history[0][2], '/login?request_id=example');
     await document.getElementById('verify').handlers.click();
     assert.equal(requests.length, 1); assert.equal(requests[0].url, '/v1/auth/magic/verify');
     assert.equal(requests[0].options.method, 'POST');

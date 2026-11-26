@@ -57,7 +57,7 @@ test('consent lists only eligible workspaces in order and refuses forged, missin
     assert.deepEqual(offered(html), [['personal', false], ['z-team', false]]);
     assert.match(html, /Z &lt;Team&gt;.*Team workspace/s);
     assert.match(html, /A personal workspace.*Personal workspace/s);
-    assert.match(html, /Workspace<\/dt>.*choose below/);
+    assert.doesNotMatch(html, /Workspace<\/dt>|choose below/);
     assert.match(html, /formnovalidate><span>Deny/);
     for (const workspaceId of [undefined, 'other-member', 'other-product', 'closed', 'foreign', 'absent'])
         await error(await w.approve(flow, workspaceId), 'invalid_request', 400);
@@ -108,7 +108,7 @@ test('membership removed in the consent write race grants nothing and leaves the
     const w = await setup(t);
     w.addWorkspace('selected');
     const flow = await w.start();
-    assert.deepEqual(offered(await (await w.getConsent(flow)).text()), [['selected', true]]);
+    assert.deepEqual(offered(await (await w.getConsent(flow)).text()), [['selected', false]]);
     const batch = w.env.DB.batch;
     const intercepted = t.mock.method(w.env.DB, 'batch', statements => {
         if (statements.length > 2) w.db.prepare("DELETE FROM workspace_members WHERE workspace_id='selected'").run();
@@ -161,7 +161,7 @@ test('device flow lists and requires the workspace and redeems a scoped token on
     const browser = await w.call('/device?user_code=' + device.user_code, { headers: { cookie: w.cookie } });
     assert.equal(browser.status, 303);
     const flow = { id: new URL(browser.headers.get('location')).searchParams.get('request_id'), cookie: w.cookie + '; ' + cookieJar(browser) };
-    assert.deepEqual(offered(await (await w.getConsent(flow)).text()), [['device-workspace', true]]);
+    assert.deepEqual(offered(await (await w.getConsent(flow)).text()), [['device-workspace', false]]);
     await error(await w.approve(flow, undefined), 'invalid_request', 400);
     await error(await w.approve(flow, 'invalid'), 'invalid_request', 400);
     assert.equal(w.db.prepare('SELECT status FROM agent_devices').get().status, 'pending');

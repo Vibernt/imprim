@@ -77,7 +77,10 @@ export async function token(request, env, ctx) {
         env.DB.prepare('UPDATE consumed_codes SET access_hash=? WHERE hash=? AND EXISTS(SELECT 1 FROM access_tokens WHERE hash=?)').bind(accessHash, hash, accessHash),
         env.DB.prepare(`INSERT OR IGNORE INTO app_sessions(client_id,user_id,sid,created)
             SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM access_tokens WHERE hash=?)`)
-            .bind(client.id, session.user_id, session.sid, now, accessHash)
+            .bind(client.id, session.user_id, session.sid, now, accessHash),
+        env.DB.prepare(`UPDATE client_admissions SET last_signed_in=max(coalesce(last_signed_in,0),?)
+            WHERE user_id=? AND client_id=? AND EXISTS(SELECT 1 FROM access_tokens WHERE hash=?)`)
+            .bind(now, session.user_id, client.id, accessHash)
     ]);
     invariant(issued[0].meta.changes === 1, 'invalid_grant', 'Session or account unavailable.');
     await audit(env, 'token_issued', session.user_id, { client_id: client.id });

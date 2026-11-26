@@ -90,7 +90,7 @@ export function fireLabelScript(env) {
         'posts.of': t(env, 'of'),
         'posts.noun': t(env, 'entries'),
         'signup.required': t(env, 'Enter your email address.'),
-        'signup.invalid': t(env, 'Use a full address, like dana@quarry.dev.'),
+        'signup.invalid': t(env, 'Use a full address, like dana@example.com.'),
         'signup.failed': t(env, 'Couldn’t subscribe you just now. Try again in a minute.'),
         'filters.title': t(env, 'Filter'),
         'filters.search': t(env, 'Add filter…'),

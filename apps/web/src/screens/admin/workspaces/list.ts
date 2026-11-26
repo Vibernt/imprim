@@ -33,10 +33,10 @@ function statusFilter(filter: string) {
 export const workspaceList = (data: ListPage, filter: string, before: string | null) => html`
   <div class="fd-stack" data-gap="4">
     ${statusFilter(filter)}
-    ${table('Workspaces', ['Name', 'Kind', 'Status', 'Products', 'Members', 'Actions'],
+    ${table('Workspaces', ['Name', 'Kind', 'Status', 'Products', 'Members'],
       data.workspaces.map(row => [link(workspacePath(row.id), row.name), cap(row.kind),
-        status(cap(row.status), row.status === 'active' ? 'success' : 'neutral'), products(row.products), row.members, link(workspacePath(row.id), 'View')]),
-      filter ? ['No workspaces match', 'Choose another status.'] : ['No workspaces yet', 'Create a team to share membership across products.'])}
+        status(cap(row.status), row.status === 'active' ? 'success' : 'neutral'), products(row.products), row.members]),
+      filter ? ['No workspaces match', 'Choose another status.'] : ['No workspaces yet', 'Create a team to share membership across products.'], { numeric: ['Members'] })}
     ${data.next || before ? html`
       <nav class="fd-pagination" aria-label="Workspace pages"><div class="fd-pagination-pages">
         ${before ? html`<a class="fd-btn" data-variant="ghost" href=${url(filter)}>First page</a>` : nothing}

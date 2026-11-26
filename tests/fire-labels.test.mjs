@@ -10,6 +10,8 @@ const core = readFileSync(new URL('../node_modules/fire-design/fire/js/core.js',
 const labelContract = core.slice(core.indexOf('Keys and English defaults'), core.indexOf('let dictionary'));
 const defaults = Object.fromEntries([...labelContract.matchAll(/([a-z][\w-]*\.[\w.-]+) "([^"]*)"/g)]
     .map(([, key, id]) => [key, id]));
+// Imprim's sample address uses the same reserved domain as its other examples.
+defaults['signup.invalid'] = 'Use a full address, like dana@example.com.';
 
 test('the page dictionary covers every Fire label in all shipped languages and keeps runtime placeholders', () => {
     assert.ok(Object.keys(defaults).length > 100);

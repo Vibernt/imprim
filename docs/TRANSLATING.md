@@ -8,9 +8,9 @@ pull requests.
 ## What is translated
 
 - Every page a person sees: sign-in, check email, signed in and out, errors, second factor, set password, agent
-  consent, device code, logout, and the account pages (Profile, Security, Sessions and apps, Agents, two-factor).
+  consent, device code, workspace join and access, account switching, logout, and the account pages (Profile, Security, Sessions and apps, Agents, two-factor).
 - The errors those pages and their scripts show: HTML error pages, and the `error_description` of the browser
-  endpoints (`/v1/auth/*`, `/account/*`, `/mfa`, `/agent/consent`, `/device`, `/logout`, `/login`). The scripts
+  endpoints (`/v1/auth/*`, `/account/*`, `/mfa`, `/agent/consent`, `/device`, `/workspace-access`, `/switch-account`, `/logout`, `/login`). The scripts
   `/assets/sign-in.js` and `/assets/passkey.js` are served per language as `?lang=<tag>`.
 - Every email: subject, text part and HTML part ([Branding](BRANDING.md#emails)).
 
@@ -52,7 +52,7 @@ The English text in the code is each message's id. `apps/server/src/i18n/<tag>.m
 export default Object.freeze({
     "Sign in to {name}": "Bei {name} anmelden",
     "{count} passkeys": { one: "{count} Passkey", other: "{count} Passkeys" },
-    "{host}, <0>claimed, not verified</0>. Any program can use this name.": "{host}, <0>nur behauptet, nicht verifiziert</0>. Jedes Programm kann diesen Namen verwenden."
+    "New to {app}? <0>Create an account</0>": "Neu bei {app}? <0>Erstellen Sie ein Konto</0>"
 });
 ```
 

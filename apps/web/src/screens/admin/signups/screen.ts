@@ -38,7 +38,11 @@ class SignupScreen extends AdminScreen<Page> {
     void this.write<{ status: 'approved' | 'declined' }>(
       endpoint + '/' + encodeURIComponent(id) + '/' + action, body,
       result => result.status === 'approved' ? 'Request approved' : 'Request declined',
-      async () => { this.selection = undefined; await this.reload(); });
+      async () => {
+        this.selection = undefined;
+        this.dispatchEvent(new Event('im-signup-decided', { bubbles: true }));
+        await this.reload();
+      });
   };
 
   protected override render() {
@@ -50,7 +54,7 @@ class SignupScreen extends AdminScreen<Page> {
       <div class="fd-stack" data-gap="3">
         ${statusFilter(filter)}
         ${this.content(({ requests, next }) => html`
-          ${signupTable(requests, this.selection, this.pending, this.select, this.cancel, this.decide)}
+          ${signupTable(requests, filter, this.selection, this.pending, this.select, this.cancel, this.decide)}
           ${next || this.view.query.has('before') ? html`<div class="fd-row" data-justify="end">
             ${this.view.query.has('before') ? html`<a class="fd-btn" data-variant="ghost" href=${href(first)}>First page</a>` : nothing}
             ${nextPage(path, this.view.query, next)}

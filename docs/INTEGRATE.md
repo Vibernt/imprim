@@ -20,12 +20,17 @@ A realm admin registers the client in `<issuer>/admin` (or with `scripts/seed-cl
 
 A confidential client gets its secret once, at creation. Store it as a secret in your app.
 
+Set `initiate_login_uri` to the app's own sign-in page. Imprim uses it for the app's entry in a person's
+list of admitted apps. Set `listed: false` in the client API or seed to hide it from public lists. The default
+is `true`. Add `branding.summary` for a short app description and `branding.locale_copy` for translations.
+[Branding](BRANDING.md#fields)
+
 ### Opt in to shared workspaces
 
 1. Ask the realm admin to set the realm's `workspaces` to `on`, and the app's `workspaces` to `shared` with a
    `product` such as `notes`. Apps for the same product use the same product name.
 2. Register the app's back-channel URL and set `initiate_login_uri` to its sign-in page for invitation emails
-   and for the [next step](PROTOCOL.md#next-steps-on-pages-that-stop) on Imprim's pages that stop.
+   and the [app lists and next steps](PROTOCOL.md#next-steps-on-pages-that-stop) on Imprim's hosted pages.
    Enable `personal_workspaces` for personal workspace creation and `workspace_admin` when the app needs team
    creation or product management.
 3. Use client 0.12.0 on the server to read memberships and manage workspaces. For actions on a person's behalf,

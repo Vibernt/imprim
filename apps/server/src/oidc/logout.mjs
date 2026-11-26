@@ -4,7 +4,7 @@ import { getSession, requireCsrf, cookie, SESSION_COOKIE, CSRF_COOKIE, cookies }
 import { uniqueParams, readBody, redirect } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { page } from '../pages/layout.mjs';
-import { result, hidden, button, linkButton } from '../pages/ui.mjs';
+import { accountLine, result, hidden, button, linkButton, escapeHtml } from '../pages/ui.mjs';
 import { audit } from '../services/audit.mjs';
 import { logoutHint } from './logout-hint.mjs';
 import { t, useLocale } from '../i18n/index.mjs';
@@ -41,16 +41,20 @@ export async function logout(request, env, ctx) {
     if (request.method === 'GET') {
         if (!session) return redirect(destination(env, values));
         const fields = { client_id: values.client_id || '', post_logout_redirect_uri: values.post_logout_redirect_uri || '', state: values.state || '', id_token_hint: values.id_token_hint || '', csrf: cookies(request)[CSRF_COOKIE] || '' };
-        return page(t(env, 'Sign out'), result('log-out', 'neutral', t(env, 'Sign out of {name}?', { name: env.REALM.display_name }), t(env, 'This ends your session in this browser.')) +
+        return page(t(env, 'Sign out'), result('log-out', 'neutral', t(env, 'Sign out of {name}?', { name: env.REALM.display_name })) + accountLine(env, session.email) +
+            `<p class="fd-body">${escapeHtml(t(env, 'This ends your session in this browser.'))}</p>` +
             `<form method="post" action="/logout">${Object.entries(fields).map(([k, v]) => hidden(k, v)).join('')}${button(t(env, 'Sign out'), { variant: 'primary', size: 'lg', block: true })}</form>` +
             (values.client_id ? '' : linkButton(t(env, 'Stay signed in'), '/account', { variant: 'ghost', size: 'lg', block: true })),
             { formTargets: values.post_logout_redirect_uri ? [values.post_logout_redirect_uri] : [] });
     }
     await requireCsrf(request, env, session, values.csrf);
-    await env.DB.batch([...logoutStatements(env, session.user_id, session.sid),
+    return redirect(destination(env, values), await endIdentitySession(env, ctx, session));
+}
+export async function endIdentitySession(env, ctx, session, extra = []) {
+    await env.DB.batch([...extra, ...logoutStatements(env, session.user_id, session.sid),
         env.DB.prepare('DELETE FROM sessions WHERE hash=?').bind(session.hash),
         env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES('sign_out',?,?,?,?)")
             .bind(session.user_id, JSON.stringify({ sid: session.sid }), Date.now(), env.REALM.id)]);
     ctx.waitUntil(flushLogouts(env).catch(() => audit(env, 'logout_dispatch_failed', null, { pending: true })));
-    return redirect(destination(env, values), [cookie(SESSION_COOKIE, '', 0), cookie(CSRF_COOKIE, '', 0, false)]);
+    return [cookie(SESSION_COOKIE, '', 0), cookie(CSRF_COOKIE, '', 0, false)];
 }

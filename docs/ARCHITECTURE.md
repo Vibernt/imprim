@@ -24,14 +24,15 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 
 ## D1 schema
 
-Migrations `0001` through `0030` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0033` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|
 | `users` | Stable subject, normalized email, verification, active/blocked/deleted status and saved language. |
 | `user_identities` | A provider id and that provider's subject (GitHub numeric id, Google `sub`, or a registry provider's `sub`) linked to a user. |
 | `clients` | App credentials, URLs, admission, sign-in and agent policy. |
-| `auth_requests` | Browser-bound pending app or agent authorization request, with its sanitized `ui_locales` and any workspace-join offer (person, product, offered workspaces). |
+| `client_drafts` | Reserved app IDs and registration essentials before activation. |
+| `auth_requests` | Browser-bound pending app or agent authorization request, with its sanitized `ui_locales` and any workspace-join or access offer bound to the person and product. A join offer also records the offered workspaces. |
 | `magic_links` | Hashed, browser-bound email link and request reference. |
 | `oauth_states` | Hashed upstream state, PKCE verifier, provider and nonce. |
 | `sessions` | Hashed identity session and CSRF, `sid`, method, `amr`, second-factor time, admin scope, device, place and Google `hd`. |

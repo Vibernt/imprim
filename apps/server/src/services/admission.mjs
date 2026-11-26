@@ -64,9 +64,9 @@ function sharedSessionProof(session) {
     return ['email', 'password', 'passkey', 'github', 'google'].includes(session.method)
         ? mailboxProof(session.method, session.email, session.google_hd) : 'claim';
 }
-const liveAdmission = `a.source='app' OR (${workspaceClientSql('c')}
+export const liveAdmissionSql = `a.source='app' OR (a.source='workspace' AND ${workspaceClientSql('c')}
     AND ${reachesProductSql('c.realm_id', 'c.product', 'a.user_id')})`;
-const currentAdmission = (env, client, userId) => env.DB.prepare(`SELECT a.source,(${liveAdmission}) AS allowed
+const currentAdmission = (env, client, userId) => env.DB.prepare(`SELECT a.source,(${liveAdmissionSql}) AS allowed
     FROM client_admissions a JOIN clients c ON c.id=a.client_id WHERE a.user_id=? AND a.client_id=?`)
     .bind(userId, client.id).first();
 
@@ -111,7 +111,7 @@ async function writeSharedAdmission(env, client, subject, proof, hasWorkspaceAdm
 // SQL fence for credential issuance: `user` is the SQL expression naming the user id.
 export const admissionGuard = (user, clientId) => ({
     sql: `EXISTS(SELECT 1 FROM client_admissions a JOIN clients c ON c.id=a.client_id
-        WHERE a.user_id=${user} AND a.client_id=? AND (${liveAdmission}))`,
+        WHERE a.user_id=${user} AND a.client_id=? AND (${liveAdmissionSql}))`,
     args: [clientId]
 });
 // `verified` is true only with mailbox proof. An account a provider created on its say-so stays unverified until an

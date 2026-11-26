@@ -3,13 +3,17 @@ import { changeAccountMachine, readAccountMachines } from '../machines/account.m
 import { endSessions, endAppSessions, forgetBrowser, readSessions } from '../account/sessions.mjs';
 import { json, uniqueParams } from '../lib/http.mjs';
 import { readJson, requireApiSession, requireCsrf } from './json.mjs';
+import { yourApps } from '../pages/app-list.mjs';
 
 export async function accountAccessApi(request, env, ctx, action) {
     const session = await requireApiSession(request, env);
     if (request.method === 'GET') {
         if (action === 'sessions') return json(await readSessions(env, session));
-        const { before } = uniqueParams(new URL(request.url).searchParams);
-        const [agents, machineClients] = await Promise.all([readConnectedAgents(env, session, before), readAccountMachines(env, session)]);
+        if (action === 'apps') return json({ apps: (await yourApps(env, session.user_id)).map(app => ({ ...app,
+            summary: app.summary ?? null, mark: app.mark ?? null })) });
+        const { before, status } = uniqueParams(new URL(request.url).searchParams);
+        if (status === 'ended') return json(await readConnectedAgents(env, session, before, status));
+        const [agents, machineClients] = await Promise.all([readConnectedAgents(env, session, before, status), readAccountMachines(env, session)]);
         return json({ ...agents, machine_clients: machineClients });
     }
     await requireCsrf(request, env, session);

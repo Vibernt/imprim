@@ -17,7 +17,7 @@ export const ENGLISH_ONLY = [/^admin\//, /^machines\/(?!(?:account|approval(?:-w
     /^services\/(invitations|outbox|outbox-destination|outbox-expiry|maintenance|retention|user-events|audit|notify)\.mjs$/,
     /^lib\/(crypto|cbor|qr)\.mjs$/,
     // The app workspace API stays English. The invitation email and hosted join step are translated.
-    /^workspaces\/(?!(?:email|join)\.mjs$)/];
+    /^workspaces\/(?!(?:email|join|hosted-access)\.mjs$)/];
 const STRING = String.raw`'((?:\\.|[^'\\])*)'`;
 const unquote = text => text.replace(/\\(.)/g, '$1');
 async function files(dir, base = '', extension = '.mjs') {

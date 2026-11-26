@@ -3,7 +3,7 @@ import type { IconName } from 'fire-design';
 import { FireLight } from '../lib/fire-light';
 import { t } from '../lib/i18n';
 import { icon } from '../lib/icon';
-import { href, retry } from '../lib/router';
+import { href, retry, type View } from '../lib/router';
 import { pageHead } from '../screens/page-layout';
 
 const page = (title: string, glyph: IconName, description: string, actions: TemplateResult, tone?: string) => html`
@@ -22,8 +22,21 @@ const page = (title: string, glyph: IconName, description: string, actions: Temp
 const home = () => html`<a class="fd-btn" data-variant="primary" href=${href('/account')}>${t('Your account')}</a>`;
 
 class ScreenNotFound extends FireLight {
+  declare view: View;
   protected override render() {
-    return page(t('Page not found'), 'search', t('Check the address or return to your account.'), home());
+    const admin = this.view.route.area === 'admin';
+    const title = admin ? 'Page not found' : t('Page not found');
+    return html`<main class="fd-page"><div class="fd-frame">
+      <section class="fd-band" data-grow aria-label=${title}>
+        <div class="fd-empty" data-size="lg">
+          <span class="fd-empty-icon">${icon('search')}</span>
+          <h1 class="fd-h1">${title}</h1>
+          <p class="fd-empty-text">${admin ? 'Check the address or return to your account.' : t('Check the address or return to your account.')}</p>
+          <div class="fd-empty-actions"><a class="fd-btn" data-variant="primary" href=${href('/account')}
+            ?data-im-document=${admin && this.view.session.locale !== 'en'}>${admin ? 'Profile' : t('Profile')}</a></div>
+        </div>
+      </section>
+    </div></main>`;
   }
 }
 

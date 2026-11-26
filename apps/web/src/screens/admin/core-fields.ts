@@ -6,19 +6,25 @@ type Field = {
   id: string; label: string; name: string; value?: string | null; hint?: string; required?: boolean;
   mono?: boolean; type?: string; placeholder?: string; pattern?: string; maxlength?: number; minlength?: number;
 };
-type Label = Pick<Field, 'id' | 'label' | 'hint' | 'required'>;
-const describedBy = (field: Label) => field.hint ? field.id + '-hint' : nothing;
+type Label = Pick<Field, 'id' | 'label' | 'hint' | 'required'> & { warning?: string };
+const describedBy = (field: Label) => [
+  field.hint && field.id + '-hint', field.warning && field.id + '-warning',
+].filter(Boolean).join(' ') || nothing;
+// A small warning notice wraps; a status pill does not, and a long warning would push the field past a phone's edge.
+const warning = (field: Label) => field.warning ? html`
+  <div class="fd-callout" data-tone="warning" data-size="sm" role="status" id=${field.id + '-warning'}>${icon('triangle-alert')}<div class="fd-callout-content">
+    <p class="fd-callout-body">${field.warning}</p></div></div>` : nothing;
 const hint = (field: Label) => field.hint
   ? html`<p class="fd-field-hint" id=${field.id + '-hint'}>${field.hint}</p>` : nothing;
 
 function labelled(field: Label, control: TemplateResult) {
   return html`<div class="fd-field">
     <label class="fd-field-label" for=${field.id} ?data-required=${field.required}>${field.label}</label>
-    ${control}${hint(field)}
+    ${control}${hint(field)}${warning(field)}
   </div>`;
 }
 
-export const text = (field: Field) => labelled(field, html`
+export const text = (field: Field & { warning?: string }) => labelled(field, html`
   <input class="fd-input" id=${field.id} name=${field.name} type=${field.type ?? 'text'} .value=${field.value ?? ''}
     ?data-mono=${field.mono} ?required=${field.required} placeholder=${field.placeholder ?? nothing}
     pattern=${field.pattern ?? nothing} maxlength=${field.maxlength ?? nothing} minlength=${field.minlength ?? nothing}
@@ -91,13 +97,14 @@ export const checks = (field: Options & { chosen: string[] }) => html`
     </div>${hint(field)}
   </div>`;
 
-export const toggle = (field: Control & { desc: string; on: string; checked: boolean }) => html`
+export const toggle = (field: Control & { desc: string; on: string; checked: boolean; warning?: string }) => html`
   <div class="fd-form-row"><div class="fd-form-row-text">
     <span class="fd-form-row-label" id=${field.id + '-label'}>${field.label}</span>
     <span class="fd-form-row-desc" id=${field.id + '-desc'}>${field.desc}</span>
+    ${warning(field)}
   </div><div class="fd-form-row-control"><label class="fd-switch">
     <input type="checkbox" role="switch" id=${field.id} name=${field.name} value=${field.on} ?checked=${field.checked}
-      aria-labelledby=${field.id + '-label'} aria-describedby=${field.id + '-desc'}><span class="fd-switch-track"></span>
+      aria-labelledby=${field.id + '-label'} aria-describedby=${field.id + '-desc' + (field.warning ? ' ' + field.id + '-warning' : '')}><span class="fd-switch-track"></span>
   </label></div></div>`;
 
 export const amount = (field: Control & { value: number; unit: string; min: number; max?: number }) =>

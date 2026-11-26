@@ -1,6 +1,6 @@
 # Shared workspaces
 
-Status: built (migrations `0024`, `0027`, `0029` and `0030`, client `0.12.0`). This page is the specification; the code matches it.
+Status: built (migrations `0024`, `0027`, `0029`, `0030` and `0031`, client `0.12.0`). This page is the specification; the code matches it.
 
 By default each app keeps its own workspaces, memberships and roles, and Imprim only admits people per app. A realm
 can instead hold **shared workspaces** for a family of products. Imprim then keeps each workspace's members, base
@@ -143,6 +143,11 @@ owns in the realm and whose products do not include the app's product. The owner
 Confirming adds the product and resumes the same authorization request through normal admission and any required MFA.
 Declining returns `access_denied` to the app. Agent requests and `prompt=none` requests skip this step.
 The hosted setting grants only this owner-confirmed action and can be enabled independently of `workspace_admin`.
+
+If there is no join offer and the signed-in person belongs to an active team that does not use the product, Imprim
+shows `/workspace-access`. It names up to five eligible teams the person belongs to and tells them whom to contact.
+**Back to {app}** submits a same-origin form in the original browser and returns the usual `access_denied` once.
+Without an eligible team, or for an agent or `prompt=none` request, admission keeps its usual refusal.
 
 Use the app API when the person can already sign in to the calling app and the app provides its own product-joining
 interface. This path requires `workspace_admin='on'`.

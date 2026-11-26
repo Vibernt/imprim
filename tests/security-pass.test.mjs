@@ -30,21 +30,21 @@ test('S1: a metadata document without grant_types cannot start a device flow', a
     w.network.document = plain;
     await error(await w.form('/device_authorization', { client_id: metadataId, resource, scope: 'read' }), 'unauthorized_client');
 });
-test('S1: device and loopback consents say the agent host is claimed and warn about remote phishing', async t => {
+test('S1: device and loopback consents mark unverified agents and warn about remote phishing', async t => {
     const w = await agentWorld(t);
     const loopback = await w.start();
     const html = await (await w.call(`/agent/consent?request_id=${loopback.id}`, { headers: { cookie: loopback.cookie } })).text();
-    assert.match(html, /<h1 class="fd-h1">Connect an agent calling itself “Example Agent”\?<\/h1>/);
-    assert.match(html, /claimed, not verified/);
-    assert.match(html, /<div class="fd-callout" data-tone="danger" role="alert">.*If someone sent you this link or code, choose Deny/s);
+    assert.match(html, /<h1 class="fd-h1">Connect an unverified agent calling itself “Example Agent”\?<\/h1>/);
+    assert.doesNotMatch(html, />Agent host</);
+    assert.match(html, /<div class="fd-callout" data-tone="warning" role="note">.*Approve only a connection you started yourself, just now\./s);
     const https = await w.start({ redirect_uri: 'https://agent.example/callback' });
     const verified = await (await w.call(`/agent/consent?request_id=${https.id}`, { headers: { cookie: https.cookie } })).text();
     assert.match(verified, /verified by its HTTPS callback/);
     assert.doesNotMatch(verified, /role="alert"/);
     assert.match(html, /<form class="fd-form" method="post" action="\/agent\/consent"><input type="hidden" name="request_id" value="[^"]+"><input type="hidden" name="csrf" value="[^"]+">/);
-    assert.match(html, /<button class="fd-btn" type="submit" data-variant="outline" name="decision" value="deny"><span>Deny<\/span><\/button><button class="fd-btn" type="submit" data-variant="primary" name="decision" value="approve"><span>Approve<\/span><\/button>/);
+    assert.match(html, /data-variant="primary"[^>]*value="approve"><span>Approve<\/span><\/button><button[^>]*data-variant="secondary"[^>]*value="deny"/);
     assert.equal((html.match(/data-variant="primary"/g) || []).length, 1);
-    assert.doesNotMatch(verified, /claimed, not verified/);
+    assert.doesNotMatch(verified, /Approve only a connection/);
 });
 test('S1: a key-bound agent must sign every token request; a claimed client_id alone gets nothing', async t => {
     const w = await agentWorld(t), pair = await keyPair();
@@ -147,11 +147,11 @@ test('S5: /account pages connected agents and a person cannot hold more than the
         assert.equal(response.status, 200);
         return response.json();
     };
-    const page = await read('');
+    const page = await read('?status=active');
     assert.equal(page.agents.length, 50);
     assert.ok(page.agents.every(agent => agent.status === 'active'));
     assert.ok(page.next);
-    const older = await read(`?before=${encodeURIComponent(page.next)}`);
+    const older = await read(`?status=active&before=${encodeURIComponent(page.next)}`);
     assert.equal(older.agents.length, MAX_LIVE_GRANTS + 1 - 50);
     assert.ok(older.agents.every(agent => !page.agents.some(first => first.id === agent.id)));
     const flow = await w.start();

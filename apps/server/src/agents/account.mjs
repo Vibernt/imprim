@@ -1,14 +1,14 @@
 import { invariant } from '../lib/errors.mjs';
 import { readBody, redirect } from '../lib/http.mjs';
 import { getSession, requireCsrf } from '../auth/session.mjs';
-import { workspace } from './uris.mjs';
 import { revokeGrant, queueRevocation } from './revocation.mjs';
 import { realmId } from '../realms/realm.mjs';
 
 const PAGE = 50;
 export async function revokeConnectedAgent(env, ctx, session, { grant_id }) {
     invariant(typeof grant_id === 'string' && grant_id.length > 0 && grant_id.length <= 64, 'invalid_request', 'Choose an agent to revoke.');
-    const owned = await env.DB.prepare('SELECT 1 FROM agent_grants WHERE id=? AND user_id=?').bind(grant_id, session.user_id).first();
+    const owned = await env.DB.prepare(`SELECT 1 FROM agent_grants g JOIN clients c ON c.id=g.app_id
+        WHERE g.id=? AND g.user_id=? AND c.realm_id=?`).bind(grant_id, session.user_id, realmId(env)).first();
     invariant(owned, 'access_denied', 'That agent isn’t connected to your account. Reload the page.', 403);
     queueRevocation(env, ctx, await revokeGrant(env, grant_id, session.user_id));
 }
@@ -39,26 +39,47 @@ export async function labelConnectedAgent(env, session, { grant_id, label }) {
 }
 
 // Keyset pagination keeps the page bounded even when a person has many grants (S5).
-export async function readConnectedAgents(env, session, before = '') {
+export async function readConnectedAgents(env, session, before = '', status) {
     invariant(before === '' || /^\d{1,16}:[0-9a-f-]{36}$/.test(before), 'invalid_request', 'This page link is broken. Open your account page again.');
+    invariant(status === undefined || status === 'active' || status === 'ended', 'invalid_request', 'Choose active or ended connections.');
     const [created, id] = before ? before.split(':') : [Number.MAX_SAFE_INTEGER, ''];
-    const { results: rows } = await env.DB.prepare(`SELECT g.id,g.client_name,g.registration_method,g.client_id,g.app_id,
+    const now = Date.now(), owner = [session.user_id, realmId(env)];
+    const life = status === 'active' ? 'AND g.revoked_at IS NULL AND g.expires_at>?' :
+        status === 'ended' ? 'AND (g.revoked_at IS NOT NULL OR g.expires_at<=?)' : '';
+    const from = 'FROM agent_grants g JOIN clients c ON c.id=g.app_id';
+    const where = 'WHERE g.user_id=? AND c.realm_id=?';
+    const [result, total] = await Promise.all([env.DB.prepare(`SELECT g.id,g.client_name,g.registration_method,g.client_id,g.app_id,
         g.resource,g.scope,g.last_used,g.created,g.revoked_at,g.expires_at,g.label,g.approved_device,g.approved_location,c.branding,
-        g.workspace_id,w.name AS workspace_name,
-        (SELECT wr.name FROM workspace_resources wr JOIN workspaces registered ON registered.id=wr.workspace_id
-            WHERE wr.resource=g.resource AND wr.client_id=g.app_id AND registered.realm_id=c.realm_id) AS resource_name
-        FROM agent_grants g JOIN clients c ON c.id=g.app_id
+        c.agent_scope_catalogue,g.workspace_id,CASE WHEN g.workspace_id IS NULL THEN registered.name ELSE w.name END AS workspace_name,
+        CASE WHEN registered.id IS NOT NULL THEN wr.name END AS resource_name,
+        (SELECT reason FROM agent_revocation_outbox o WHERE o.grant_id=g.id AND o.app_id=g.app_id
+            AND o.user_id=g.user_id AND o.created=g.revoked_at ORDER BY o.id LIMIT 1) AS reason
+        ${from}
         LEFT JOIN workspaces w ON w.id=g.workspace_id AND w.realm_id=c.realm_id
-        WHERE g.user_id=? AND c.realm_id=? AND (g.created<? OR (g.created=? AND g.id<?)) ORDER BY g.created DESC,g.id DESC LIMIT ?`)
-        .bind(session.user_id, realmId(env), Number(created), Number(created), id || '\uffff', PAGE + 1).all();
-    const page = rows.slice(0, PAGE), last = page.at(-1), now = Date.now();
+        LEFT JOIN workspace_resources wr ON wr.resource=g.resource AND wr.client_id=g.app_id
+        LEFT JOIN workspaces registered ON registered.id=wr.workspace_id AND registered.realm_id=c.realm_id
+        ${where} ${life} AND (g.created<? OR (g.created=? AND g.id<?)) ORDER BY g.created DESC,g.id DESC LIMIT ?`)
+        .bind(...owner, ...(life ? [now] : []), Number(created), Number(created), id || '\uffff', PAGE + 1).all(),
+    status === 'ended' ? env.DB.prepare(`SELECT count(*) AS count ${from} ${where} ${life}`).bind(...owner, now).first() : null]);
+    const rows = result.results, page = rows.slice(0, PAGE), last = page.at(-1);
     return {
-        agents: page.map(g => ({ id: g.id, name: g.client_name, app: JSON.parse(g.branding).name || g.app_id,
-            host: g.registration_method === 'dynamic' ? null : new URL(g.client_id).host,
-            workspace: workspace(g.resource), workspace_id: g.workspace_id, workspace_name: g.workspace_name,
-            resource: g.resource, resource_name: g.resource_name, scopes: String(g.scope).split(' ').filter(Boolean),
-            label: g.label, approved_device: g.approved_device, approved_location: g.approved_location,
-            last_used: g.last_used, created: g.created, status: g.revoked_at ? 'revoked' : g.expires_at <= now ? 'expired' : 'active' })),
+        agents: page.map(grant => connection(grant, now)),
+        ...(total ? { total: total.count } : {}),
         next: rows.length > PAGE ? `${last.created}:${last.id}` : null
     };
+}
+
+function connection(grant, now) {
+    const catalogue = JSON.parse(grant.agent_scope_catalogue);
+    const revoked = grant.revoked_at !== null, expired = grant.expires_at <= now;
+    const status = revoked ? 'revoked' : expired ? 'expired' : 'active';
+    return { id: grant.id, name: grant.client_name, app: JSON.parse(grant.branding).name || grant.app_id,
+        host: grant.registration_method === 'dynamic' ? null : new URL(grant.client_id).host,
+        workspace_id: grant.workspace_id, workspace_name: grant.workspace_name,
+        resource: grant.resource, resource_name: grant.resource_name,
+        scopes: grant.scope.split(' ').filter(Boolean).map(code => ({ code, label: Object.hasOwn(catalogue, code) ? catalogue[code] : null })),
+        label: grant.label, approved_device: grant.approved_device, approved_location: grant.approved_location,
+        last_used: grant.last_used, created: grant.created, expires_at: grant.expires_at, status,
+        ended_at: revoked ? grant.revoked_at : expired ? grant.expires_at : null,
+        ended_reason: revoked ? grant.reason : expired ? 'expired' : null };
 }

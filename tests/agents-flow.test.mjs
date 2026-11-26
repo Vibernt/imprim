@@ -32,7 +32,7 @@ test('MCP resource challenge → discovery → metadata registration → consent
     const flow = await w.start(); assert.equal(flow.response.status, 303);
     const consent = await w.call(`/agent/consent?request_id=${flow.id}`, { headers: { cookie: flow.cookie } });
     const html = await consent.text();
-    for (const text of ['Example Agent','agent.example','Example App','team-one','Read workspace']) assert.ok(html.includes(text));
+    for (const text of ['Example Agent','Example App','team-one','Read workspace']) assert.ok(html.includes(text));
     // The consent form redirects to the agent's callback, so form-action names that origin and nothing else changes.
     assert.equal(consent.headers.get('content-security-policy'),
         (await w.call('/device')).headers.get('content-security-policy').replace("form-action 'self'", "form-action 'self' http://127.0.0.1:4567"));

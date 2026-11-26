@@ -1,4 +1,4 @@
-import { webRequest, serveWeb } from './web/serve.mjs';
+import { webRequest, serveWeb, isShellResponse } from './web/serve.mjs';
 import { viewer } from './api/viewer.mjs';
 import { catalogueResponse } from './api/catalogue.mjs';
 import { profileApi } from './api/profile.mjs';
@@ -28,7 +28,7 @@ import { introspect, revoke, appGrants } from './machines/endpoints.mjs';
 import { appUser } from './machines/users.mjs';
 import { githubStart, githubCallback, OAUTH_COOKIE } from './auth/github-sign-in.mjs';
 import { googleStart, googleCallback, GOOGLE_COOKIE } from './auth/google-sign-in.mjs';
-import { cookie, getSession } from './auth/session.mjs';
+import { cookie } from './auth/session.mjs';
 import { authorize } from './oidc/authorize.mjs';
 import { token, userinfo } from './oidc/token.mjs';
 import { discovery } from './oidc/discovery.mjs';
@@ -38,15 +38,16 @@ import { invite } from './services/invitations.mjs';
 import { scheduled, queue } from './services/maintenance.mjs';
 import { loginPage, signInScriptFor } from './pages/sign-in.mjs';
 import { checkEmailPage, pendingSignupPage } from './pages/signup.mjs';
-import { page, localCss, errorPage, signedOutPage, withBrand, only } from './pages/layout.mjs';
-import { nextSteps, stepsBlock } from './pages/next-steps.mjs';
+import { localCss, errorPage, signedOutPage, withBrand } from './pages/layout.mjs';
+import { signedIn, signedOut, signInError } from './pages/status.mjs';
 import { pendingRequest } from './oidc/requests.mjs';
-import { result, linkButton } from './pages/ui.mjs';
 import { themeResponse } from './branding/theme.mjs';
-import { startLocale, t, tError, brandCopy } from './i18n/index.mjs';
+import { startLocale, t, tError } from './i18n/index.mjs';
 import { serveAsset } from './branding/assets.mjs';
 import { workspaceApi, workspaceApiPath } from './workspaces/api.mjs';
 import { workspaceJoin } from './workspaces/join.mjs';
+import { workspaceAccess } from './workspaces/hosted-access.mjs';
+import { switchAccount } from './auth/switch-account.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
 async function route(request, env, ctx, url) {
     if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return admin(request, env, ctx);
@@ -77,6 +78,8 @@ async function route(request, env, ctx, url) {
         case 'GET /device': return devicePage(request, env);
         case 'GET /machine-client': case 'POST /machine-client': return machineApproval(request, env);
         case 'GET /agent/consent': case 'POST /agent/consent': return consent(request, env);
+        case 'POST /switch-account': return switchAccount(request, env, ctx);
+        case 'GET /workspace-access': case 'POST /workspace-access': return workspaceAccess(request, env);
         case 'GET /workspace-join': case 'POST /workspace-join': return workspaceJoin(request, env);
         case 'POST /account/revoke': return account(request, env, ctx);
         case 'GET /v1/me': return viewer(request, env);
@@ -85,7 +88,7 @@ async function route(request, env, ctx, url) {
         case 'POST /v1/account/email': return profileApi(request, env, ctx, 'email');
         case 'POST /v1/account/delete': return profileApi(request, env, ctx, 'delete');
         case 'GET /v1/account/sessions': case 'POST /v1/account/sessions': return accountAccessApi(request, env, ctx, 'sessions');
-        case 'POST /v1/account/apps': return accountAccessApi(request, env, ctx, 'apps');
+        case 'GET /v1/account/apps': case 'POST /v1/account/apps': return accountAccessApi(request, env, ctx, 'apps');
         case 'POST /v1/account/devices': return accountAccessApi(request, env, ctx, 'devices');
         case 'GET /v1/account/agents': case 'POST /v1/account/agents/revoke': return accountAccessApi(request, env, ctx, 'agents');
         case 'POST /v1/account/machine-clients/disable': return accountAccessApi(request, env, ctx, 'machine-disable');
@@ -98,6 +101,7 @@ async function route(request, env, ctx, url) {
         case 'POST /v1/account/mfa/recovery': return accountSecurityApi(request, env, ctx, 'recovery');
         case 'POST /v1/account/passkeys/options': return accountSecurityApi(request, env, ctx, 'passkey-options');
         case 'POST /v1/account/passkeys/register': return accountSecurityApi(request, env, ctx, 'passkey-register');
+        case 'POST /v1/account/passkeys/rename': return accountSecurityApi(request, env, ctx, 'passkey-rename');
         case 'POST /v1/account/passkeys/remove': return accountSecurityApi(request, env, ctx, 'passkey-remove');
         case 'POST /v1/account/password': return accountSecurityApi(request, env, ctx, 'password');
         case 'GET /authorize': case 'POST /authorize': return authorize(request, env);
@@ -125,16 +129,14 @@ async function route(request, env, ctx, url) {
         case 'GET /login': return loginPage(request, env, url);
         case 'GET /check-email': return checkEmailPage(request, env, url.searchParams.get('request_id'));
         case 'GET /signup-pending': return pendingSignupPage(request, env, url.searchParams.get('request_id'));
-        case 'GET /signed-in': {
-            if (!await getSession(request, env)) throw new AppError(401, 'login_required', 'Sign in first.');
-            return page(t(env, 'Signed in'), result('circle-check', 'success', t(env, 'You’re signed in'), t(env, 'Go back to your app to continue.')) +
-                `<div class="fd-stack" data-gap="2-5">${only('admin', linkButton(t(env, 'Open the admin console'), '/admin', { variant: 'primary', size: 'lg', block: true }))}${linkButton(t(env, 'Your account'), '/account', { size: 'lg', block: true })}</div>`);
-        }
-        case 'GET /signed-out': return page(t(env, 'Signed out'), result('log-out', 'neutral', t(env, 'You’re signed out'), brandCopy(env, env.REALM.branding || {}, 'signed_out') || t(env, 'Apps you used keep their own sessions until you sign out there.')) +
-            // A failed lookup of the apps leaves the page as it was (pages/layout.mjs does the same).
-            stepsBlock(await nextSteps(env).catch(() => [])));
+        case 'GET /signed-in': return signedIn(request, env);
+        case 'GET /signed-out': return signedOut(env);
         case 'GET /assets/theme.css': return themeResponse(env, url);
-        case 'GET /error': return errorPage(env, t(env, 'This sign-in request is missing or has expired.'));
+        case 'GET /error': {
+            await lookUpSignIn(env, request, url);
+            return signInError(request, env, t(env, 'Go back to the app and start again.'), 400, { expired: !env.SIGN_IN?.id &&
+                (!env.SIGN_IN?.app || env.SIGN_IN_EXPIRED) });
+        }
         default:
             if (webRequest(request, url.pathname)) return serveWeb(request, env, url);
             throw new AppError(404, 'not_found', 'Endpoint not found.');
@@ -150,15 +152,17 @@ export function limiterFor(method, path) {
     return path.startsWith('/v1/auth/') || path.startsWith('/login/provider/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';
 }
 // Browser endpoints whose errors a person reads (sign-in.js, passkey.js and the account forms show them).
-const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|machine-client$|workspace-join$|device$|logout$|login$|signed-in$)/;
+const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|machine-client$|workspace-join$|workspace-access$|switch-account$|device$|logout$|login$|signed-in$)/;
 // Browser form posts whose refusals are pages (with Accept: text/html); scripts on these paths use fetch, which does not ask for HTML.
-const HTML_FORMS = new Set(['/authorize', '/workspace-join', '/agent/consent', '/machine-client', '/mfa', '/account/password']);
+const HTML_FORMS = new Set(['/authorize', '/workspace-join', '/workspace-access', '/switch-account', '/agent/consent', '/machine-client', '/mfa', '/account/password']);
 // The request_id of a GET query or of a form posted to HTML_FORMS, looked up only to offer "Sign in again" on the page.
 async function lookUpSignIn(env, request, url, form) {
     try {
         const id = request.method === 'GET' ? url.searchParams.get('request_id') : form ? (await form.formData()).get('request_id') : null;
         if (typeof id === 'string' && id) await pendingRequest(env, request, id);
-    } catch { /* Not a live request of this browser: the page offers the app instead (pages/next-steps.mjs). */ }
+    } catch (error) {
+        if (!(error instanceof AppError) || error.status >= 500) throw error;
+    }
 }
 export async function handleRequest(request, base, ctx) {
     const url = new URL(request.url);
@@ -181,7 +185,7 @@ export async function handleRequest(request, base, ctx) {
         // codes to apps, still send no referrer.
         response.headers.set('referrer-policy', 'same-origin');
         response.headers.set('strict-transport-security', 'max-age=31536000');
-        return webRequest(request, url.pathname) ? response : withBrand(response, env);
+        return isShellResponse(response) ? response : await withBrand(response, env);
     } catch (error) {
         const known = error instanceof AppError;
         if (!known) console.error(JSON.stringify({ type: 'request_failed', path: url.pathname, code: 'internal_error' }));
@@ -189,13 +193,10 @@ export async function handleRequest(request, base, ctx) {
         // A person's browser may POST an authorization request (OIDC Core 3.1.2.1); refusals before the redirect is trusted are pages.
         const workspaceRequest = workspaceApiPath(request.method, url.pathname);
         const jsonRequest = workspaceRequest || (request.method === 'GET' && url.pathname === '/v1/users') ||
-            /^\/(?:v1\/(?:me$|account\/|i18n\/)|admin\/api\/)/.test(url.pathname);
+            /^\/(?:v1\/(?:me$|account\/|i18n\/)|admin\/api(?:\/|$))/.test(url.pathname);
         // Forms people submit on Imprim's pages answer a page too: a JSON body in the browser is a dead end.
         const html = !jsonRequest && (request.method === 'GET' || HTML_FORMS.has(url.pathname)) &&
             request.headers.get('accept')?.includes('text/html');
-        // The page offers the way back into a sign-in request the URL or the form names, when this browser started it
-        // (the handler may have stopped before it looked the request up or chosen to offer only the app).
-        if (html && !env.SIGN_IN) await lookUpSignIn(env, request, url, form);
         // People read the message on an error page, or in the sign-in and account scripts, so it is translated there.
         // Protocol endpoints keep English: RFC 6749 limits error_description to ASCII, and developers read it.
         const message = known ? (html || PEOPLE_PATHS.test(url.pathname) ? tError(env, error) : error.message)
@@ -203,13 +204,28 @@ export async function handleRequest(request, base, ctx) {
         // A person who opens their account page while signed out gets a page that says how to sign in, whatever
         // the request's Accept header; API clients of the same paths use POST and still get JSON.
         const signedOut = code === 'login_required' && request.method === 'GET' && /^\/(account(\/|$)|mfa$)/.test(url.pathname);
-        const response = signedOut ? await signedOutPage(env) : html ? await errorPage(env, message, status, { retry: env.RETRY }) : json({ error: code, error_description: message }, status);
+        const requestStep = ['/mfa', '/account/mfa', '/account/password'].includes(url.pathname);
+        let response;
+        try {
+            const expired = request.method === 'GET' && ['browser_binding', 'invalid_request'].includes(code) && env.SIGN_IN_EXPIRED;
+            // Link back into a sign-in request when the error handler stopped before looking it up.
+            if ((signedOut ? requestStep : html) && env.REALM && status < 500 && !env.SIGN_IN) await lookUpSignIn(env, request, url, form);
+            response = signedOut ? await signedOutPage(env, { forRequest: requestStep })
+                : html && env.REALM && status < 500 ? await signInError(request, env, message, status, { retry: env.RETRY, expired })
+                : html ? await errorPage(env, message, status)
+                : json({ error: code, error_description: message }, status);
+            if (html || signedOut) response = await withBrand(response, env);
+        } catch {
+            console.error(JSON.stringify({ type: 'error_page_failed', path: url.pathname, code: 'internal_error' }));
+            const errorEnv = { ...env, SIGN_IN: null };
+            return withBrand(await errorPage(errorEnv, t(errorEnv, 'The request could not be completed.'), 500), errorEnv);
+        }
         if (code === 'invalid_client' && status === 401) response.headers.set('www-authenticate', `Basic realm="${(env.REALM?.display_name || 'identity').replace(/[^\x20-\x7e]|["\\]/g, '')}"`);
         if (code === 'invalid_token') response.headers.set('www-authenticate', 'Bearer error="invalid_token"');
         if (url.pathname === '/auth/github/callback') response.headers.append('set-cookie', cookie(OAUTH_COOKIE, '', 0));
         if (url.pathname === '/login/google/callback') response.headers.append('set-cookie', cookie(GOOGLE_COOKIE, '', 0));
         if (PROVIDER_CALLBACK.test(url.pathname)) response.headers.append('set-cookie', `${UPSTREAM_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=None; Max-Age=0`);
-        return withBrand(response, env);
+        return response;
     }
 }
 export default { fetch: handleRequest, async scheduled(_event, env) { await scheduled(env); }, queue };

@@ -3,7 +3,7 @@ import { overlays } from 'fire-design';
 import { ApiError, api } from '../../lib/api';
 import { FireLight } from '../../lib/fire-light';
 import { t } from '../../lib/i18n';
-import { deleteSection, profileFields, type Action, type Profile } from './profile-view';
+import { deleteSection, profileFields, type Action, type Drafts, type Profile } from './profile-view';
 import { pageHead } from '../page-layout';
 
 const { toast } = overlays;
@@ -11,15 +11,20 @@ const describe = (error: unknown) => error instanceof ApiError ? error.descripti
 
 class ScreenProfile extends FireLight {
   static override properties = {
-    profile: { state: true }, pending: { state: true }, loadError: { state: true },
+    profile: { state: true }, pending: { state: true }, loadError: { state: true }, drafts: { state: true },
+    emailOpen: { state: true },
   };
   declare private profile: Profile | undefined;
   declare private pending: Action | null;
   declare private loadError: string | undefined;
+  declare private drafts: Drafts;
+  declare private emailOpen: boolean;
 
   constructor() {
     super();
     this.pending = null;
+    this.drafts = {};
+    this.emailOpen = false;
   }
 
   override connectedCallback() {
@@ -52,8 +57,11 @@ class ScreenProfile extends FireLight {
   private submit = async (action: Action, event: SubmitEvent) => {
     event.preventDefault();
     if (this.pending || !this.profile) return;
+    if (action === 'profile' && this.drafts.profile === undefined) return;
+    if (action === 'language' && (this.drafts.language === undefined || this.drafts.profile !== undefined)) return;
     const form = event.currentTarget as HTMLFormElement;
     const body = Object.fromEntries(new FormData(form));
+    let emailSent = false;
     this.pending = action;
     try {
       const options = { method: 'POST', body };
@@ -62,10 +70,11 @@ class ScreenProfile extends FireLight {
         this.profile = { ...this.profile, ...result };
         const field = form.elements.namedItem('display_name') as HTMLInputElement;
         field.value = result.display_name ?? '';
+        this.change('profile', field.value);
         toast({ title: t('Name saved'), tone: 'success' });
       } else if (action === 'email') {
         const result = await api<{ title: string; body: string }>('/v1/account/email', options);
-        form.reset();
+        emailSent = true;
         toast({ title: result.title, description: result.body, tone: 'success' });
       } else if (action === 'language') {
         await api('/v1/account/language', options);
@@ -80,11 +89,25 @@ class ScreenProfile extends FireLight {
       });
     } finally {
       this.pending = null;
+      if (emailSent) await this.toggleEmail(false);
     }
   };
 
+  private change = (field: keyof Drafts, value: string) => {
+    const saved = field === 'profile' ? this.profile?.display_name : this.profile?.locale;
+    this.drafts = { ...this.drafts, [field]: value === (saved ?? '') ? undefined : value };
+  };
+
+  private toggleEmail = async (open: boolean) => {
+    this.emailOpen = open;
+    await this.updateComplete;
+    (open ? this.querySelector<HTMLElement>('#new_email') : this.querySelector<HTMLElement>('#im-change-email'))?.focus();
+  };
+
   private fields(): TemplateResult {
-    if (this.profile) return profileFields(this.profile, this.pending, this.submit);
+    if (this.profile) return profileFields(this.profile, this.pending, this.submit, {
+      drafts: this.drafts, change: this.change, emailOpen: this.emailOpen, toggleEmail: this.toggleEmail,
+    });
     if (this.loadError) return html`
       <div class="fd-empty" data-tone="danger" role="alert">
         <h2 class="fd-h3">${t('The page did not load')}</h2>
