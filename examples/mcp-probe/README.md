@@ -87,6 +87,10 @@ lifetime, the audience boundary between workspaces, the app grant API, introspec
 after a lost refresh response, reuse detection revoking the grant, and that the revocation event reaches the probe
 before the last token expires. It takes about a minute and a half.
 
+Add `--flow loopback` to sign in the way a desktop agent does instead: the script prints an address to open in a
+browser on the same computer, and the approval comes back to a one-time listener on `127.0.0.1` (RFC 8252). It then
+checks that the code redeems once, and runs the same checks.
+
 ```bash
 node examples/mcp-probe/agent/run.mjs check --resource https://probe.example.com/w/team-one/mcp --app-secret-file ~/.imprim-probe-secret
 ```

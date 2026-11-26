@@ -40,8 +40,12 @@ export function otp({ id, label, name, hint, error, autofocus, length = 6 }) {
         inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: length, pattern: `[0-9]{${length}}`, required: true, autofocus, 'aria-invalid': error ? 'true' : undefined, 'aria-describedby': describedBy })}></div>${
         hint ? `<p class="fd-field-hint" id="${e(id)}-hint">${e(hint)}</p>` : ''}${error ? `<p class="fd-field-error" id="${e(id)}-error">${icon('circle-alert', 14)}<span>${e(error)}</span></p>` : ''}</div>`;
 }
-export const checkbox = (name, label, { value = '1', checked, required } = {}) =>
-    `<label class="fd-checkbox"><input type="checkbox"${attrs({ name, value, checked, required })}><span class="fd-checkbox-box"></span><span class="fd-checkbox-text"><span class="fd-checkbox-label">${e(label)}</span></span></label>`;
+// Fire's forms.js puts this mark in an empty box (fire/js/forms.js, CHECK_SVG) and keeps one already there. Server
+// pages that load no Fire JavaScript (consent) render it themselves, or a ticked box shows no tick.
+const CHECK_MARK = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path class="fd-check-tick" pathLength="1" d="M4.25 8.5l2.5 2.5 5-5.5"/><path class="fd-check-dash" pathLength="1" d="M4.5 8h7"/></svg>';
+// As with button(), html is already-safe label markup.
+export const checkbox = (name, label, { value = '1', checked, required, html } = {}) =>
+    `<label class="fd-checkbox"><input type="checkbox"${attrs({ name, value, checked, required })}><span class="fd-checkbox-box">${CHECK_MARK}</span><span class="fd-checkbox-text"><span class="fd-checkbox-label">${html ?? e(label)}</span></span></label>`;
 export const radio = (name, label, { value, checked, required, description } = {}) =>
     `<label class="fd-radio"><input type="radio"${attrs({ name, value, checked, required })}><span class="fd-radio-box"></span><span class="fd-radio-text"><span class="fd-radio-label">${e(label)}</span>${description ? `<span class="fd-radio-desc">${e(description)}</span>` : ''}</span></label>`;
 export const hidden = (name, value) => `<input type="hidden" name="${e(name)}" value="${e(value ?? '')}">`;

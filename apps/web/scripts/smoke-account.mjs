@@ -74,8 +74,8 @@ export function accountSmoke(open) {
         const db = server.env.DB.db, user = db.prepare('SELECT id FROM users').get(), now = Date.now();
         db.prepare(`INSERT INTO trusted_devices(hash,user_id,client_id,name,created,last_used,expires_at)
             VALUES(?,?,'app','Test browser',?,?,?)`).run('b'.repeat(64), user.id, now, now, now + 60000);
-        db.prepare(`INSERT INTO agent_grants(id,client_id,client_name,registration_method,app_id,user_id,resource,scope,method,created,last_used,expires_at)
-            VALUES(?,'https://agent.example/meta','Test agent','metadata_document','app',?,'https://app.example/w/team/mcp','read','email',?,?,?)`)
+        db.prepare(`INSERT INTO agent_grants(id,client_id,client_name,registration_method,app_id,user_id,resource,scope,method,created,last_used,expires_at,approved_device,approved_location)
+            VALUES(?,'https://agent.example/meta','Test agent','metadata_document','app',?,'https://app.example/w/team/mcp','read','email',?,?,?,'Firefox on Linux','Paris, FR')`)
             .run(crypto.randomUUID(), user.id, now, now, now + 60000);
         const nav = page.locator('.fd-sidebar');
         await nav.getByRole('link', { name: 'Sessions and apps', exact: true }).click();
@@ -90,6 +90,24 @@ export function accountSmoke(open) {
         await page.getByRole('heading', { name: 'Connected agents', exact: true }).waitFor();
         assert.equal(await nav.getByRole('link', { name: 'Agents', exact: true }).getAttribute('aria-current'), 'page');
         const row = page.locator('.fd-setting').filter({ hasText: 'Test agent' });
+        await row.getByText('Approved on Firefox on Linux · Paris, FR', { exact: true }).waitFor();
+        await row.getByRole('button', { name: 'Rename Test agent' }).press('Enter');
+        const label = page.getByLabel('Connection name', { exact: true });
+        await label.waitFor();
+        await page.waitForFunction(() => document.activeElement?.getAttribute('name') === 'label');
+        assert.equal(await row.getByLabel('Connection name').count(), 0);
+        await label.fill('Unused name');
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await label.waitFor({ state: 'detached' });
+        await row.getByRole('button', { name: 'Rename Test agent' }).click();
+        assert.equal(await label.inputValue(), '');
+        await label.fill('  Desk connection  ');
+        await page.getByRole('button', { name: 'Save', exact: true }).click();
+        await label.waitFor({ state: 'detached' });
+        await row.locator('.fd-setting-title').getByText('Desk connection', { exact: true }).waitFor();
+        await row.locator('.fd-setting-desc').getByText('Test agent', { exact: true }).waitFor();
+        assert.equal(db.prepare('SELECT label FROM agent_grants').get().label, 'Desk connection');
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'named connections fit the viewport');
         await row.getByRole('button', { name: 'Revoke Test agent' }).click();
         await page.getByText('Agent revoked', { exact: true }).waitFor();
         await row.getByText('Revoked', { exact: true }).waitFor();

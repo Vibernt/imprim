@@ -5,12 +5,16 @@ export function redirect(location, cookies = []) {
     for (const cookie of cookies) response.headers.append('set-cookie', cookie);
     return response;
 }
-export function uniqueParams(params) {
-    for (const key of params.keys()) invariant(params.getAll(key).length === 1, 'invalid_request', 'Duplicate parameters are not allowed.');
-    return Object.fromEntries(params);
+export function uniqueParams(params, repeated = []) {
+    const entries = Object.fromEntries(params);
+    for (const key of new Set(params.keys())) {
+        if (!repeated.includes(key)) invariant(params.getAll(key).length === 1, 'invalid_request', 'Duplicate parameters are not allowed.');
+    }
+    for (const key of repeated) entries[key] = params.getAll(key);
+    return entries;
 }
 export const validSub = value => typeof value === 'string' && value.length > 0 && value.length <= 200 && !/[\x00-\x1f]/.test(value);
-export async function readBody(request, format = 'json', limit = 16384) {
+export async function readBody(request, format = 'json', limit = 16384, repeated = []) {
     const type = request.headers.get('content-type')?.split(';')[0].trim();
     invariant(type === (format === 'json' ? 'application/json' : 'application/x-www-form-urlencoded'), 'invalid_request', 'Unsupported content type.', 415);
     // Bound streamed input; do not trust Content-Length supplied by the caller.
@@ -24,7 +28,7 @@ export async function readBody(request, format = 'json', limit = 16384) {
     }
     const text = await new Blob(chunks).text();
     try {
-        if (format === 'form') return uniqueParams(new URLSearchParams(text));
+        if (format === 'form') return uniqueParams(new URLSearchParams(text), repeated);
         const value = JSON.parse(text);
         invariant(value && typeof value === 'object' && !Array.isArray(value), 'invalid_request', 'Expected an object.');
         return value;

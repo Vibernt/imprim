@@ -13,7 +13,7 @@ async function setup(t) {
     const browser = async () => {
         const response = await w.call('/device?user_code=' + device.user_code, { headers: { cookie: w.cookie } });
         assert.equal(response.status, 303, await response.clone().text());
-        return { id: new URL(response.headers.get('location')).searchParams.get('request_id'), cookie: w.cookie + '; ' + cookieJar(response) };
+        return { id: new URL(response.headers.get('location')).searchParams.get('request_id'), cookie: w.cookie + '; ' + cookieJar(response), scopes: ['read'] };
     };
     return { ...w, device, poll, ready, browser };
 }

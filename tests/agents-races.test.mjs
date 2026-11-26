@@ -22,7 +22,7 @@ for (const operation of ['consent','code','refresh','device']) for (const change
         if (operation === 'device') {
             const device = await (await w.form('/device_authorization', { client_id: metadataId, resource, scope: 'read' })).json();
             const response = await w.call('/device?user_code=' + device.user_code, { headers: { cookie: w.cookie } });
-            await w.approve({ id: new URL(response.headers.get('location')).searchParams.get('request_id'), cookie: w.cookie + '; ' + cookieJar(response) });
+            await w.approve({ id: new URL(response.headers.get('location')).searchParams.get('request_id'), cookie: w.cookie + '; ' + cookieJar(response), scopes: ['read'] });
             w.env.DB.db.exec('UPDATE agent_devices SET next_poll=0');
             run = () => w.form('/token', { client_id: metadataId, resource, grant_type: 'urn:ietf:params:oauth:grant-type:device_code', device_code: device.device_code });
         }

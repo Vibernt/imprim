@@ -62,9 +62,13 @@ Status: built. This page is the specification for Fire 0.12.4 and the Lit accoun
   fresh_until, realm: { id, display_name } }`. `admin_ready` is true only when the session passes every admin console
   rule (`adminBlock` in `admin/auth.mjs`, the same check the console enforces). Signed out: 401 `login_required`.
 - Account: `/v1/account/*` JSON for every account screen (profile and email change, sessions and apps, agents and
-  their revocation, security: factors, passkeys, recovery codes, password set and change, deletion). Admin:
+  their labels and revocation, security: factors, passkeys, recovery codes, password set and change, deletion). Admin:
   `/admin/api/*` extended to cover every console screen. Each handler reuses the service functions the HTML pages
   call today; no rule moves into the client.
+- `GET /v1/account/agents` includes nullable `label`, `approved_device` and `approved_location` for each grant.
+  The device and location describe the browser used to approve. `POST /v1/account/agents/label` takes JSON
+  `{ grant_id, label }` to name a connection privately. An empty name clears it. Expired and revoked connections
+  can also be named. The same session, Origin and CSRF checks apply.
 - Session cookie as today. Every `POST`, `PUT`, `PATCH` and `DELETE` needs the CSRF header `x-csrf-token` equal to the
   `__Host-vi_csrf` cookie, and a same-origin `Origin`. Errors are `{ error, error_description }`. The client maps
   401 `login_required` to `/login?next=`, 403 `mfa_required` to the second-factor screen, and 403 `reauth_required`

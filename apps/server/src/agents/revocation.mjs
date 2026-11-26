@@ -4,19 +4,26 @@ import { assertDelivered, invariant } from '../lib/errors.mjs';
 import { signAgentJwt } from './grants.mjs';
 import { expireEvent } from '../services/outbox-expiry.mjs';
 import { realmEnvForClient } from '../realms/realm.mjs';
-export async function revokeGrant(env, id, userId, reason = 'agent_revoke') {
-    const now = Date.now(), eventId = crypto.randomUUID();
-    const where = 'id=? AND user_id=? AND revoked_at IS NULL';
+export function revocationStatements(env, id, userId, reason, now, replacementId = null) {
+    const eventId = crypto.randomUUID();
+    const where = `agent_grants.id=? AND agent_grants.user_id=? AND agent_grants.revoked_at IS NULL${replacementId
+        ? ' AND agent_grants.expires_at>? AND EXISTS(SELECT 1 FROM agent_grants WHERE id=?)' : ''}`;
+    const args = replacementId ? [id, userId, now, replacementId] : [id, userId];
     // Durable outbox and revocation are one transaction. Queue outages cannot restore access. The row is written even
     // when the app has no back-channel URI yet, so the loss shows up as missing_uri instead of vanishing (S17).
-    const result = await env.DB.batch([
-        env.DB.prepare(`INSERT INTO agent_revocation_outbox(id,grant_id,app_id,user_id,resource,uri,created)
-            SELECT ?,g.id,g.app_id,g.user_id,g.resource,coalesce(c.backchannel_uri,''),? FROM agent_grants g JOIN clients c ON c.id=g.app_id
-            WHERE g.id=? AND g.user_id=? AND g.revoked_at IS NULL`).bind(eventId, now, id, userId),
+    const statements = [
+        env.DB.prepare(`INSERT INTO agent_revocation_outbox(id,grant_id,app_id,user_id,resource,uri,created,reason)
+            SELECT ?,agent_grants.id,app_id,user_id,resource,coalesce(c.backchannel_uri,''),?,?
+            FROM agent_grants JOIN clients c ON c.id=app_id WHERE ${where}`).bind(eventId, now, reason, ...args),
         env.DB.prepare(`INSERT INTO audit(event,actor,detail,created,realm_id) SELECT ?,user_id,?,?,(SELECT realm_id FROM clients WHERE id=app_id) FROM agent_grants WHERE ${where}`)
-            .bind(reason, JSON.stringify({ grant_id: id }), now, id, userId),
-        env.DB.prepare(`UPDATE agent_grants SET revoked_at=? WHERE ${where}`).bind(now, id, userId)
-    ]);
+            .bind(reason, JSON.stringify({ grant_id: id }), now, ...args),
+        env.DB.prepare(`UPDATE agent_grants SET revoked_at=? WHERE ${where}`).bind(now, ...args)
+    ];
+    return { eventId, statements };
+}
+export async function revokeGrant(env, id, userId, reason = 'agent_revoke') {
+    const { eventId, statements } = revocationStatements(env, id, userId, reason, Date.now());
+    const result = await env.DB.batch(statements);
     return result[2].meta.changes === 1 ? eventId : null;
 }
 export const queueRevocation = (env, ctx, eventId) => queueEvent(env, ctx, 'agent_revocation_outbox', 'agent_revocation', eventId);

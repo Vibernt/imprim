@@ -34,11 +34,15 @@ export async function agentWorld(t) {
         return values;
     };
     const start = async (changes = {}, jar = cookie) => {
-        const response = await w.call('/authorize?' + new URLSearchParams(await query(changes)), { headers: { cookie: jar } });
+        const values = await query(changes);
+        const response = await w.call('/authorize?' + new URLSearchParams(values), { headers: { cookie: jar } });
         const location = response.headers.get('location');
-        return { response, cookie: [jar,cookieJar(response)].filter(Boolean).join('; '), id: location ? new URL(location).searchParams.get('request_id') : null };
+        return { response, cookie: [jar,cookieJar(response)].filter(Boolean).join('; '),
+            id: location ? new URL(location).searchParams.get('request_id') : null, scopes: values.scope?.split(' ') };
     };
-    const approve = async (flow, decision = 'approve') => form('/agent/consent', { request_id: flow.id, csrf, decision }, flow.cookie);
+    const approve = (flow, decision = 'approve') => form('/agent/consent', [
+        ['request_id', flow.id], ['csrf', csrf], ['decision', decision], ...flow.scopes.map(scope => ['scope', scope])
+    ], flow.cookie);
     const exchange = (code, changes = {}) => form('/token', { grant_type: 'authorization_code', client_id: metadataId, resource, code, redirect_uri: redirectUri, code_verifier: w.verifier, ...changes });
     const refresh = (token, changes = {}) => form('/token', { grant_type: 'refresh_token', client_id: metadataId, resource, refresh_token: token, ...changes });
     const grant = async (changes = {}) => {

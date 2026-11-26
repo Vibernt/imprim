@@ -3,6 +3,25 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-26.1
+
+Migration: `0028_agent_grant_labels.sql` (grant labels, where each grant was approved, the revocation reason).
+
+- **Choosing permissions.** The agent consent page lists each permission with a checkbox, all ticked; the person can
+  untick any. The grant, the token response's `scope` and every access token carry only what was approved, and
+  refresh can still only narrow it. Device-code approvals work the same way.
+- **Telling connections apart.** Account › Agents shows where each connection was approved (browser, system and
+  place) and lets the person name it (`POST /v1/account/agents/label`, shown only to them).
+- **Replacing a connection.** When a person approves an agent that already has a live connection to the same
+  resource, the consent page offers to replace it (the default) or keep both. Permissions the old connection had are
+  offered again, marked "Already allowed". Replacing ends the old grant in the same transaction and sends the app a
+  revocation event (reason `agent_replaced`). A device-code approval never replaces or inherits anything: anyone can
+  start one with a public agent's id.
+- The signed-out account page no longer points customers at the administrators' sign-in.
+- Server-rendered checkboxes include Fire's tick mark, since those pages load no Fire JavaScript.
+- MCP probe: `check --flow loopback` signs in the way a desktop agent does, through a one-time listener on
+  `127.0.0.1`; the invitation check expects `201`.
+
 ## 2026-11-26
 
 No migration.

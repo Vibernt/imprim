@@ -163,7 +163,7 @@ the account opens from an app's sign-in, with that sign-in's [next step](#next-s
 - **Sessions:** identity sessions show device, place and last use. Signing one or all others out sends back-channel
   logout.
 - **Apps:** sign out of one app (back-channel logout).
-- **Connected agents:** revoke any of them.
+- **Connected agents:** name or revoke a connection.
 - **Deletion:** needs the typed email, a sign-in within ten minutes and, with a factor, a second factor within ten
   minutes. It ends identity and app sessions, revokes agent grants with revocation events, and removes every sign-in
   method.
@@ -360,12 +360,14 @@ rules apply to the separate public-agent registry and OAuth grants.
 | `GET /.well-known/oauth-authorization-server` | Same issuer/endpoints as OIDC discovery; advertises S256, device/registration endpoints, refresh/device grants and `client_id_metadata_document_supported:true`. |
 | `POST /register` | Public-only RFC 7591 JSON metadata; 201 registration response, no secret. Ten attempts/IP/hour plus existing API binding. |
 | `GET /authorize` | Metadata-URL or dynamic agent ID, S256, state and one resource; sign in through the owning app, then explicit consent. |
-| `GET /agent/consent` | Browser-bound request + signed-in session; escaped agent name/host (or unverified), app, workspace, resource, scope descriptions and grant cap. |
-| `POST /agent/consent` | Same Origin and session CSRF; atomic single-use approval/denial. |
+| `GET /agent/consent` | Browser-bound request + signed-in session. Shows agent identity, app, workspace, resource and grant duration. Permission checkboxes start checked. Redirect flow offers up to five live connections for this person, realm, agent, app and resource, newest first and selected by default. Scopes from those connections that current policy allows follow the requested scopes, marked **Already allowed**. Device flow offers the requested scopes only. |
+| `POST /agent/consent` | Same Origin and session CSRF. Approval requires one or more distinct, currently offered `scope` values, sent as repeated form fields. `replace` can name an offered live connection in redirect flow. An empty or absent `replace` keeps existing connections. Approval, single-use claim and any replacement revocation, audit and outbox write are atomic. Invalid choices give `invalid_request` and the consent can be retried. Denial ignores the scope and replacement choices. |
 | `POST /device_authorization` | Form-encoded public client/resource/scopes; device secret, human code, verification URLs, ten-minute expiry, five-second interval. |
 | `GET /device` | Code-entry form; matching live code starts app sign-in, then the same consent page. GET never grants access. |
-| `POST /token` | Code + S256 verifier, refresh token, or device code; exact client and resource required on every exchange. |
+| `POST /token` | Code + S256 verifier, refresh token, or device code. Every exchange requires the exact client and resource. The response and access JWT include the granted `scope`, or the narrower set selected on refresh. |
 | `GET /account/agents` | Current person's grants, including creation/last-use times and revoked/expired status. |
+| `GET /v1/account/agents` | The current person's paginated grants. Each includes nullable `label` (a private connection name), `approved_device` and `approved_location` (the browser used to approve and its coarse location). |
+| `POST /v1/account/agents/label` | Same Origin, session and CSRF header. JSON `{ grant_id, label }` names any of the person's grants in this realm, including expired or revoked grants. The label is trimmed, with 1–60 characters and no control characters. An empty label clears it. Returns `{}`, 404 `not_found` for missing or unowned grants, or 400 `invalid_request` for an invalid label. |
 | `POST /account/revoke` | Same Origin + CSRF + grant ownership; durable revocation and back-channel outbox. |
 
 Agent IDs do not replace imported subjects. `auth_requests.client_id` remains the owning app for sign-in/admission;
@@ -445,7 +447,9 @@ A correctly bound spent refresh token revokes the grant even if current app poli
 and refresh transactions also fence changes to the validated app policy and the person's active status. No network
 calls occur inside D1 batches. Failed signing or metadata dependencies never return invented tokens.
 
-Audit events include `agent_grant`, `agent_token`, `agent_revoke`, `agent_refresh_reuse` and `agent_code_replay`.
+Audit events include `agent_grant`, `agent_token`, `agent_revoke`, `agent_replaced`, `agent_grant_label`,
+`agent_refresh_reuse` and `agent_code_replay`. The grant records its approved `scope`, `requested_scope` when any
+requested permission was omitted, and `replaced` when another grant was revoked. Label changes audit the grant ID.
 A refresh only updates `last_used`; it writes no audit row. Neither raw credentials nor provider secrets enter audit records. Revocation,
 its audit event and a durable outbox event are one transaction. The outbox row is written even when the app has no
 `backchannel_uri`, so the loss is reported as `missing_uri`. The request queues only its own new event, after the

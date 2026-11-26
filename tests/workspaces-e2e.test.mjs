@@ -221,7 +221,7 @@ async function startAgent(w, login, resource, clientId) {
     return {
         page: () => w.call(consent.pathname + consent.search, { headers: { cookie } }),
         approve: (headers = {}, suppliedCsrf = csrf) => w.form('/agent/consent', {
-            request_id: consent.searchParams.get('request_id'), csrf: suppliedCsrf, decision: 'approve'
+            request_id: consent.searchParams.get('request_id'), csrf: suppliedCsrf, decision: 'approve', scope: 'read'
         }, cookie, headers)
     };
 }

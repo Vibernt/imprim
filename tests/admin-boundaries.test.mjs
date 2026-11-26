@@ -17,7 +17,7 @@ for (const kind of ['agent code','refresh','approved device','pending consent','
     if (kind.includes('device')) {
         const device = await (await w.form('/device_authorization', { client_id: metadataId, resource, scope: 'read' })).json();
         const page = await w.call('/device?user_code=' + device.user_code, { headers: { cookie: w.cookie } });
-        const flow = { id: new URL(page.headers.get('location')).searchParams.get('request_id'), cookie: w.cookie + '; ' + cookieJar(page) };
+        const flow = { id: new URL(page.headers.get('location')).searchParams.get('request_id'), cookie: w.cookie + '; ' + cookieJar(page), scopes: ['read'] };
         if (kind === 'approved device') {
             await w.approve(flow); w.env.DB.db.exec('UPDATE agent_devices SET next_poll=0');
             run = () => w.form('/token', { client_id: metadataId, resource, grant_type: 'urn:ietf:params:oauth:grant-type:device_code', device_code: device.device_code });

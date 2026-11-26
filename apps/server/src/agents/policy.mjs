@@ -6,6 +6,7 @@ import { resourceUrl, underPrefix } from './uris.mjs';
 import { resolveAgent } from './registration.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { workspaceClientSql } from '../workspaces/access.mjs';
+export const catalogueHasScope = (settings, scope) => Object.hasOwn(settings.agent_scope_catalogue, scope);
 export async function ownerOf(env, resource) {
     resourceUrl(resource);
     const { results } = await env.DB.prepare('SELECT * FROM clients WHERE realm_id=?').bind(realmId(env)).all();
@@ -25,7 +26,7 @@ export async function checkPolicy(env, values, session) {
     invariant(!settings.agent_allowlist.length || (method === 'metadata_document' && settings.agent_allowlist.some(entry =>
         entry === values.client_id || entry === new URL(values.client_id).host)), 'access_denied', 'Agent is not allowlisted.', 403);
     const scopes = (values.scope || '').split(' ');
-    invariant(scopes.length > 0 && new Set(scopes).size === scopes.length && scopes.every(scope => Object.hasOwn(settings.agent_scope_catalogue, scope)), 'invalid_scope', 'Request scopes from the app catalogue.');
+    invariant(scopes.length > 0 && new Set(scopes).size === scopes.length && scopes.every(scope => catalogueHasScope(settings, scope)), 'invalid_scope', 'Request scopes from the app catalogue.');
     const agent = await resolveAgent(env, values.client_id);
     // Network I/O has finished: reread owner settings before making a decision.
     const current = await getClient(env, app.id);

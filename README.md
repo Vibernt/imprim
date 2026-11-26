@@ -122,7 +122,7 @@ npm run check
 | `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, languages (`i18n/`), email, maintenance |
 | `apps/server/public/` | Static assets: generated Fire assets (`fire/`), the built app (`ui/`) and `_headers` |
 | `apps/web/` | The Lit account and admin app |
-| `apps/server/migrations/` | D1 schema, `0001` to `0027` |
+| `apps/server/migrations/` | D1 schema, `0001` to `0028` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
 | `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
 | `scripts/` | Offline SQL generators for realms, clients and user imports; checks (including translations); email preview; client build |

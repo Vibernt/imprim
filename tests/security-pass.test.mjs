@@ -41,7 +41,7 @@ test('S1: device and loopback consents say the agent host is claimed and warn ab
     const verified = await (await w.call(`/agent/consent?request_id=${https.id}`, { headers: { cookie: https.cookie } })).text();
     assert.match(verified, /verified by its HTTPS callback/);
     assert.doesNotMatch(verified, /role="alert"/);
-    assert.match(html, /<form method="post" action="\/agent\/consent"><input type="hidden" name="request_id" value="[^"]+"><input type="hidden" name="csrf" value="[^"]+">/);
+    assert.match(html, /<form class="fd-form" method="post" action="\/agent\/consent"><input type="hidden" name="request_id" value="[^"]+"><input type="hidden" name="csrf" value="[^"]+">/);
     assert.match(html, /<button class="fd-btn" type="submit" data-variant="outline" name="decision" value="deny"><span>Deny<\/span><\/button><button class="fd-btn" type="submit" data-variant="primary" name="decision" value="approve"><span>Approve<\/span><\/button>/);
     assert.equal((html.match(/data-variant="primary"/g) || []).length, 1);
     assert.doesNotMatch(verified, /claimed, not verified/);

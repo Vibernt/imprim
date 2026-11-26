@@ -3,21 +3,27 @@
 // discovery, the audience boundary, expiry, refresh, the lost-response retry, reuse detection, and that revocation
 // reaches the app. It never prints a token, a code or a secret.
 //
-//   node examples/mcp-probe/agent/run.mjs check  --resource <MCP URL> [--app-secret-file <path>]
+//   node examples/mcp-probe/agent/run.mjs check  --resource <MCP URL> [--app-secret-file <path>] [--flow device|loopback]
 //   node examples/mcp-probe/agent/run.mjs grants --resource <MCP URL> --app-secret-file <path>
 //   node examples/mcp-probe/agent/run.mjs revoke <grant_id> --resource <MCP URL> --app-secret-file <path>
 //   node examples/mcp-probe/agent/run.mjs invite <email> --resource <MCP URL> --app-secret-file <path>
+//
+// --flow loopback signs in as a desktop agent does: a browser approval that returns to a listener on 127.0.0.1
+// (RFC 8252), instead of the device flow.
 //
 // The app secret (from setup.mjs) is needed only for the app's own calls: the grant list, revocation, introspection
 // and invitations. `check` needs one person to approve the agent in a browser.
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createServer } from 'node:http';
+import { createHash, randomBytes } from 'node:crypto';
 
 const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
 const { values, positionals } = parseArgs({ allowPositionals: true, options: {
-    resource: { type: 'string' }, 'app-secret-file': { type: 'string' }, 'app-id': { type: 'string', default: 'probe' } } });
+    resource: { type: 'string' }, 'app-secret-file': { type: 'string' }, 'app-id': { type: 'string', default: 'probe' }, flow: { type: 'string', default: 'device' } } });
 const [command = 'check', argument] = positionals;
+if (!['device', 'loopback'].includes(values.flow)) usage('--flow is device or loopback.');
 const resource = values.resource;
 if (!resource || !/^https:\/\/[^/]+\/w\/[a-z0-9-]+\/mcp$/.test(resource)) usage('--resource must be a workspace MCP URL such as https://probe.example.com/w/team-one/mcp');
 const origin = new URL(resource).origin, agentId = `${origin}/agent/client.json`;
@@ -88,6 +94,38 @@ async function deviceFlow(server) {
     return null;
 }
 
+// A desktop agent's sign-in: PKCE, a one-time listener on 127.0.0.1 (only the port differs from the registered
+// http://127.0.0.1/callback), state checked, the code exchanged for the exact redirect URI.
+async function loopbackFlow(server) {
+    const verifier = randomBytes(32).toString('base64url'), state = randomBytes(16).toString('base64url');
+    const challenge = createHash('sha256').update(verifier).digest('base64url');
+    let answer;
+    const answered = new Promise(resolve => { answer = resolve; });
+    const listener = createServer((request, response) => {
+        const url = new URL(request.url, 'http://127.0.0.1');
+        if (url.pathname !== '/callback') { response.writeHead(404).end(); return; }
+        response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end('The probe agent got an answer. You can close this tab.');
+        answer(url.searchParams);
+    });
+    await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
+    const redirectUri = `http://127.0.0.1:${listener.address().port}/callback`;
+    const authorize = `${server.authorization_endpoint}?${new URLSearchParams({ response_type: 'code', client_id: agentId, redirect_uri: redirectUri,
+        scope: 'probe.read', resource, state, code_challenge: challenge, code_challenge_method: 'S256' })}`;
+    console.error(`\n  Approve the agent: open this address in a browser on this computer, sign in, and approve.\n  ${authorize}\n`);
+    const params = await Promise.race([answered, sleep(600000).then(() => null)]);
+    listener.close();
+    if (!check('the browser returns to the loopback listener', params !== null, 'no answer within 10 minutes')) return null;
+    if (!check('the answer carries this sign-in state', params.get('state') === state)) return null;
+    if (!check('the person approved', params.has('code'), params.get('error') || '')) return null;
+    const exchanged = await form(server.token_endpoint, { grant_type: 'authorization_code', code: params.get('code'), redirect_uri: redirectUri,
+        code_verifier: verifier, client_id: agentId, resource });
+    if (!check('the code redeems once for the exact redirect URI', exchanged.status === 200, exchanged.body?.error || `HTTP ${exchanged.status}`)) return null;
+    const again = await form(server.token_endpoint, { grant_type: 'authorization_code', code: params.get('code'), redirect_uri: redirectUri,
+        code_verifier: verifier, client_id: agentId, resource });
+    check('a second redemption of the code is refused', again.status === 400 && again.body?.error === 'invalid_grant', again.body?.error || `HTTP ${again.status}`);
+    return exchanged.body;
+}
+
 const refresh = (server, token) => form(server.token_endpoint, { grant_type: 'refresh_token', refresh_token: token, client_id: agentId, resource });
 const introspect = (issuer, token) => form(`${issuer}/introspect`, { token }, { authorization: appAuth });
 async function grantList(issuer) {
@@ -97,7 +135,7 @@ async function grantList(issuer) {
 
 async function checkAll() {
     const { issuer, server } = await discover();
-    let tokens = await deviceFlow(server);
+    let tokens = values.flow === 'loopback' ? await loopbackFlow(server) : await deviceFlow(server);
     if (!tokens) return;
     const first = claimsOf(tokens.access_token);
     check('the access token lives at most 60 seconds', first.exp - first.iat <= 60, `${first.exp - first.iat} s`);
@@ -179,7 +217,7 @@ async function main() {
             if (!argument?.includes('@')) usage('invite needs an email address.');
             const response = await fetch(`${issuer}/v1/invitations`, { method: 'POST', headers: { authorization: appAuth, 'content-type': 'application/json' }, body: JSON.stringify({ email: argument }) });
             const body = await read(response);
-            check('the invitation is accepted', response.status === 200 && body?.accepted === true, body?.error || `HTTP ${response.status}`);
+            check('the invitation is accepted', response.status === 201 && body?.accepted === true, body?.error || `HTTP ${response.status}`);
         } else usage(`Unknown command: ${command}`);
     }
     const failed = results.filter(ok => !ok).length;

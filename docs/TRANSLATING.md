@@ -52,7 +52,7 @@ The English text in the code is each message's id. `apps/server/src/i18n/<tag>.m
 export default Object.freeze({
     "Sign in to {name}": "Bei {name} anmelden",
     "{count} passkeys": { one: "{count} Passkey", other: "{count} Passkeys" },
-    "Administrators can <0>sign in here</0>.": "Administratoren können sich <0>hier anmelden</0>."
+    "{host}, <0>claimed, not verified</0>. Any program can use this name.": "{host}, <0>nur behauptet, nicht verifiziert</0>. Jedes Programm kann diesen Namen verwenden."
 });
 ```
 

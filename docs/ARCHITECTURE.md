@@ -24,7 +24,7 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 
 ## D1 schema
 
-Migrations `0001` through `0027` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0028` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|
@@ -44,7 +44,7 @@ Migrations `0001` through `0027` create or extend these tables. Workspace child 
 | `rate_limits` | Separate D1 budgets and Turnstile replay records. |
 | `agent_clients` | Public dynamic registrations and last use. |
 | `agent_metadata_cache` | Fresh HTTPS client ID documents, bounded by time and count. |
-| `agent_grants` | Person, agent, app, resource, scopes, consent and expiry. |
+| `agent_grants` | Person, agent, app, resource, approved scopes, consent and expiry, private label and approval browser and location. |
 | `agent_codes` | Hashed, single-use agent authorization code. |
 | `agent_assertions` | Single-use `private_key_jwt` assertion `jti` records. |
 | `agent_refresh_tokens` | Hashed current/spent refresh values and replacement links. |

@@ -23,9 +23,16 @@ The app owns `requireCurrentMembershipAndScope`. Imprim does not issue app API t
 1. Give the agent the app's MCP resource URL. The app's 401 challenge points to protected resource metadata; that metadata names Imprim. Imprim exposes `/.well-known/oauth-authorization-server` and OIDC discovery.
 2. The agent identifies itself with an HTTPS client ID metadata document, or calls `POST /register` if the app allows `dynamic`. The document must identify its own URL, name and redirect URIs. Dynamic registration returns a public ID without a secret. Registration alone grants no access.
 3. The agent requests `response_type=code`, `state`, PKCE S256, scopes and exactly one `resource` at `/authorize`. Agent authorization does not request an ID token. The person signs in through the owning app's enabled method.
-4. The consent page shows agent name and host (or unverified dynamic status), app, workspace/resource, scope descriptions and grant duration. Consent is explicit every time. It is browser-bound, same-origin and CSRF-protected.
+4. The consent page shows the agent, app, workspace, resource and grant duration. Choose at least one permission
+   to approve. When connecting through a redirect, the page also shows up to five live connections for the same agent,
+   app and resource. The newest is selected for replacement. Choose another one, or keep it and add a new connection.
+   Permissions from those connections that the app still allows are marked **Already allowed** and can be selected
+   too. Replacing a connection revokes its grant and queues the app's revocation event. Device-code consent offers
+   the requested permissions and creates a separate connection. Consent is browser-bound, same-origin and CSRF-protected.
 5. The agent exchanges the single-use code at `/token` with the exact client, resource, redirect URI and verifier. It saves the returned refresh token securely. Each refresh replaces it. Reusing a spent token revokes the whole grant; serialize refresh requests and persist the replacement atomically.
-6. At `/account/agents`, the person sees connected grants, scopes, created/last-used times and status. `POST /account/revoke` ends refresh immediately and queues a signed app notification when a back-channel URI is configured. Already issued access JWTs expire within 60 seconds.
+6. At `/account/agents`, the person can name each connection privately and see its scopes, status, connected and
+   last-used times, and the browser and location under **Approved on**. `POST /account/revoke` ends refresh immediately
+   and queues a signed app notification when a back-channel URI is configured. Already issued access JWTs expire within 60 seconds.
 
 For a headless agent, `POST /device_authorization` takes `client_id`, `resource` and `scope`. It returns a device secret, an eight-character user code, `/device` verification URLs, a ten-minute expiry and a five-second polling interval. The person enters the code on any browser, signs in and consents. The agent polls `/token` with the device grant and the same client/resource. `authorization_pending` means wait; `slow_down` increases the interval by five seconds; `access_denied` or `expired_token` ends it. Device polling uses its device secret, not PKCE.
 

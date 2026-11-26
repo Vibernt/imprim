@@ -86,6 +86,7 @@ async function route(request, env, ctx, url) {
         case 'POST /v1/account/apps': return accountAccessApi(request, env, ctx, 'apps');
         case 'POST /v1/account/devices': return accountAccessApi(request, env, ctx, 'devices');
         case 'GET /v1/account/agents': case 'POST /v1/account/agents/revoke': return accountAccessApi(request, env, ctx, 'agents');
+        case 'POST /v1/account/agents/label': return accountAccessApi(request, env, ctx, 'agent-label');
         case 'GET /v1/account/security': return accountSecurityApi(request, env, ctx, 'overview');
         case 'POST /v1/account/mfa/start': return accountSecurityApi(request, env, ctx, 'start');
         case 'POST /v1/account/mfa/confirm': return accountSecurityApi(request, env, ctx, 'confirm');
