@@ -3,6 +3,23 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-26
+
+No migration.
+
+- Every page that says to sign in or start again now links to it ([next steps](docs/PROTOCOL.md#next-steps-on-pages-that-stop)).
+  A sign-in that stops (an expired session on the join, consent or second-factor step; an app that asked for a fresh
+  or recent sign-in, or for another person) offers **Sign in again**, back to the same app's sign-in page, in the
+  browser that started it. Elsewhere the page links to the app's `initiate_login_uri`, or, with no app in view
+  (`/error`, `/signed-out`, the signed-out account page, the administrators' `/login`), to the realm's apps that have
+  one. Before, these pages said "Go back to the app and start again." with no link.
+- An app's email link is `/login?request_id=…#token=…`: an expired or used link shows the app's sign-in form again,
+  one step from a new link. Before, the page kept only a Sign in button that failed again.
+- A refused consent, second-factor or set-password form answers a page in the browser, not JSON.
+- A wrong or expired device code leads back to the code form. The hosted workspace choice with nothing to choose says
+  "Back to {app}" instead of "Not now".
+- Set `initiate_login_uri` on every app people sign in to: without it Imprim has no app address to offer.
+
 ## 2026-11-24.2
 
 No migration.

@@ -38,6 +38,8 @@ import { scheduled, queue } from './services/maintenance.mjs';
 import { loginPage, signInScriptFor } from './pages/sign-in.mjs';
 import { checkEmailPage, pendingSignupPage } from './pages/signup.mjs';
 import { page, localCss, errorPage, signedOutPage, withBrand, only } from './pages/layout.mjs';
+import { nextSteps, stepsBlock } from './pages/next-steps.mjs';
+import { pendingRequest } from './oidc/requests.mjs';
 import { result, linkButton } from './pages/ui.mjs';
 import { themeResponse } from './branding/theme.mjs';
 import { startLocale, t, tError, brandCopy } from './i18n/index.mjs';
@@ -115,7 +117,7 @@ async function route(request, env, ctx, url) {
         case 'GET /auth/github/callback': return githubCallback(request, env);
         case 'GET /v1/auth/google/start': return googleStart(request, env);
         case 'GET /login/google/callback': return googleCallback(request, env);
-        case 'GET /login': return loginPage(request, env);
+        case 'GET /login': return loginPage(request, env, url);
         case 'GET /check-email': return checkEmailPage(request, env, url.searchParams.get('request_id'));
         case 'GET /signup-pending': return pendingSignupPage(request, env, url.searchParams.get('request_id'));
         case 'GET /signed-in': {
@@ -123,7 +125,8 @@ async function route(request, env, ctx, url) {
             return page(t(env, 'Signed in'), result('circle-check', 'success', t(env, 'You’re signed in'), t(env, 'Go back to your app to continue.')) +
                 `<div class="fd-stack" data-gap="2-5">${only('admin', linkButton(t(env, 'Open the admin console'), '/admin', { variant: 'primary', size: 'lg', block: true }))}${linkButton(t(env, 'Your account'), '/account', { size: 'lg', block: true })}</div>`);
         }
-        case 'GET /signed-out': return page(t(env, 'Signed out'), result('log-out', 'neutral', t(env, 'You’re signed out'), brandCopy(env, env.REALM.branding || {}, 'signed_out') || t(env, 'Apps you used keep their own sessions until you sign out there.')));
+        case 'GET /signed-out': return page(t(env, 'Signed out'), result('log-out', 'neutral', t(env, 'You’re signed out'), brandCopy(env, env.REALM.branding || {}, 'signed_out') || t(env, 'Apps you used keep their own sessions until you sign out there.')) +
+            stepsBlock(await nextSteps(env)));
         case 'GET /assets/theme.css': return themeResponse(env, url);
         case 'GET /error': return errorPage(env, t(env, 'This sign-in request is missing or has expired.'));
         default:
@@ -142,8 +145,19 @@ export function limiterFor(method, path) {
 }
 // Browser endpoints whose errors a person reads (sign-in.js, passkey.js and the account forms show them).
 const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|workspace-join$|device$|logout$|login$|signed-in$)/;
+// Browser form posts whose refusals are pages (with Accept: text/html); scripts on these paths use fetch, which does not ask for HTML.
+const HTML_FORMS = new Set(['/authorize', '/workspace-join', '/agent/consent', '/mfa', '/account/password']);
+// The request_id of a GET query or of a form posted to HTML_FORMS, looked up only to offer "Sign in again" on the page.
+async function lookUpSignIn(env, request, url, form) {
+    try {
+        const id = request.method === 'GET' ? url.searchParams.get('request_id') : form ? (await form.formData()).get('request_id') : null;
+        if (typeof id === 'string' && id) await pendingRequest(env, request, id);
+    } catch { /* Not a live request of this browser: the page offers the app instead (pages/next-steps.mjs). */ }
+}
 export async function handleRequest(request, base, ctx) {
     const url = new URL(request.url);
+    // A copy of a posted form, read only if its refusal becomes a page.
+    const form = request.method === 'POST' && HTML_FORMS.has(url.pathname) && request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded') ? request.clone() : null;
     let env = base;
     try {
         // The host selects the realm before anything else; every module below reads the realm-scoped env.
@@ -170,8 +184,12 @@ export async function handleRequest(request, base, ctx) {
         const workspaceRequest = workspaceApiPath(request.method, url.pathname);
         const jsonRequest = workspaceRequest || (request.method === 'GET' && url.pathname === '/v1/users') ||
             /^\/(?:v1\/(?:me$|account\/|i18n\/)|admin\/api\/)/.test(url.pathname);
-        const html = !jsonRequest && (request.method === 'GET' || ['/authorize', '/workspace-join'].includes(url.pathname)) &&
+        // Forms people submit on Imprim's pages answer a page too: a JSON body in the browser is a dead end.
+        const html = !jsonRequest && (request.method === 'GET' || HTML_FORMS.has(url.pathname)) &&
             request.headers.get('accept')?.includes('text/html');
+        // The page offers the way back into a sign-in request the URL or the form names, when this browser started it
+        // (the handler may have stopped before it looked the request up).
+        if (html && !env.SIGN_IN?.id) await lookUpSignIn(env, request, url, form);
         // People read the message on an error page, or in the sign-in and account scripts, so it is translated there.
         // Protocol endpoints keep English: RFC 6749 limits error_description to ASCII, and developers read it.
         const message = known ? (html || PEOPLE_PATHS.test(url.pathname) ? tError(env, error) : error.message)
@@ -179,7 +197,7 @@ export async function handleRequest(request, base, ctx) {
         // A person who opens their account page while signed out gets a page that says how to sign in, whatever
         // the request's Accept header; API clients of the same paths use POST and still get JSON.
         const signedOut = code === 'login_required' && request.method === 'GET' && /^\/(account(\/|$)|mfa$)/.test(url.pathname);
-        const response = signedOut ? signedOutPage(env) : html ? errorPage(env, message, status) : json({ error: code, error_description: message }, status);
+        const response = signedOut ? await signedOutPage(env) : html ? await errorPage(env, message, status, { retry: env.RETRY }) : json({ error: code, error_description: message }, status);
         if (code === 'invalid_client' && status === 401) response.headers.set('www-authenticate', `Basic realm="${(env.REALM?.display_name || 'identity').replace(/[^\x20-\x7e]|["\\]/g, '')}"`);
         if (code === 'invalid_token') response.headers.set('www-authenticate', 'Bearer error="invalid_token"');
         if (url.pathname === '/auth/github/callback') response.headers.append('set-cookie', cookie(OAUTH_COOKIE, '', 0));

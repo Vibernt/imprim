@@ -30,8 +30,8 @@ apps can opt in to membership and base roles managed by Imprim. Users imported w
 | `POST /v1/auth/passkey/options`, `/v1/auth/passkey/verify` | Passkey sign-in ceremony (below). |
 | `GET`/`POST /mfa` | Second-factor challenge for a pending authorization, agent consent or the console. The page asks for the 6-digit authenticator code in one-time-code boxes; `?recovery=1` shows a field for a recovery code instead. The POST accepts either in `code`. |
 | `GET`/`POST /workspace-join` | [Hosted workspace choice](WORKSPACES.md#adding-a-product-to-an-existing-workspace) for a pending interactive app authorization. Requires its browser and signed-in account. The form posts `request_id`, `workspace_id`, `action` and CSRF from the issuer's Origin. |
-| `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. |
-| `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; the signed-in page requires a current identity session. |
+| `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. With `request_id` of a sign-in still open in this browser (an app's email link, or Sign in again on a page that stopped) it is that app's sign-in page again; any other `request_id` is ignored. Without one, it lists the realm's apps that have an `initiate_login_uri` ([next steps](#next-steps-on-pages-that-stop)). |
+| `GET /check-email`, `/signed-in`, `/signed-out`, `/error` | Minimal HTML; the signed-in page requires a current identity session. `/signed-out` and `/error` offer the [next step](#next-steps-on-pages-that-stop). |
 | `GET /account`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, security, sessions and apps, connected agents, and the password, factor and email-change pages (below). |
 | `POST /account/{profile,sessions,apps,devices,email,email/confirm,delete,password,mfa,revoke}` | Account changes; same Origin and CSRF. |
 | `POST /account/passkeys/{options,register,remove}` | Passkey registration and removal. |
@@ -151,7 +151,7 @@ must equal the issuer. Credentials are discoverable and need user verification (
   one exists). Removing one needs a fresh second factor. Each change is audited and emailed.
 
 **Account pages** (`/account`, `/account/security`, `/account/sessions`, `/account/agents`). A signed-out visit to `/account…` or `/mfa` gets a 401 page explaining that
-the account opens from an app's sign-in (administrators can use `/login`); POSTs to those paths answer JSON
+the account opens from an app's sign-in, with that sign-in's [next step](#next-steps-on-pages-that-stop) (administrators can use `/login`); POSTs to those paths answer JSON
 `login_required`. A signed-in person manages:
 - **Profile:** a display name, sent as `name` with the `profile` scope.
 - **Email:** changing it needs proof at both ends. That is an email-link sign-in within ten minutes for the current
@@ -218,8 +218,9 @@ trusted browsers, and emails a notice. Proof
 of the mailbox for an unverified account removes any password, with its provider links. A password is not mailbox
 proof, so `allowed_domains` does not admit by it.
 
-Email links live 15 minutes. The token appears only in `/login#token=…`, is removed from history by page script,
-and is sent only after a Sign in click. Link prefetch GETs cannot consume it. Verification checks Origin, browser
+Email links live 15 minutes. The token appears only in the fragment of `/login#token=…` (an app's link is
+`/login?request_id=…#token=…`, so the page around it is that app's sign-in page), is removed from history by page script,
+and is sent only after a Sign in click. A link that fails (expired, used, another browser) shows the sign-in form again. Link prefetch GETs cannot consume it. Verification checks Origin, browser
 binding, single use, current account state and current admission; invitation expiry/revocation applies at verification.
 `browser_response:true` makes verification return `{redirect}` plus session cookies instead of a 303, allowing the
 page to navigate without fetch following a cross-origin redirect.
@@ -318,6 +319,22 @@ the consumer acknowledges a late queue message without signing or delivery. `iat
 Receivers must retain replay `jti` values for at least 24 hours plus the token lifetime and permitted clock skew
 (120 seconds for logout tokens, 300 seconds for agent revocation tokens, plus the receiver's skew).
 See [Control plane](CONTROL_PLANE.md) for admin authentication, API, delivery and rotation contracts.
+
+### Next steps on pages that stop
+
+A page that says to sign in or start again links to it, from the first of these that applies:
+
+1. The page's own retry: a wrong or expired device code leads back to `/device`.
+2. The sign-in request the page belongs to (the `request_id` of the URL or of the posted form), when it is still open
+   and this browser started it: **Sign in again**, `/login?request_id=…`. Another browser never gets this link.
+3. That request's app, when an administrator set its `initiate_login_uri`: **Sign in to {app}**.
+4. With no request in view (`/error`, `/signed-out`, the signed-out account page, `/login` without a request): the
+   realm's apps that have an `initiate_login_uri`, by name, when there are at most five. Imprim never guesses an
+   app's address from its redirect URIs.
+
+Otherwise the page keeps its line ("Go back to the app and start again."). Refusals of the browser forms
+`/authorize`, `/workspace-join`, `/agent/consent`, `/mfa` and `/account/password` are such pages when the browser asks for
+HTML; a script on those paths (which does not send `Accept: text/html`) still gets JSON.
 
 JSON errors have `error` and `error_description`; browser GET errors may render HTML. OAuth errors include
 `invalid_request`, `invalid_client`, `invalid_grant`, `invalid_scope`, `unsupported_response_type`,

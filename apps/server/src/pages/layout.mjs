@@ -9,6 +9,7 @@ import { initialsOf } from '../auth/session.mjs';
 import { adminRole } from '../services/admission.mjs';
 import { escapeHtml, dotLogo, dotMark, icon, result } from './ui.mjs';
 import { fireLabelScript } from './fire-labels.mjs';
+import { nextSteps, stepsBlock } from './next-steps.mjs';
 import { t, tHtml, localeOf, htmlLang, brandCopy } from '../i18n/index.mjs';
 export { escapeHtml, icon };
 const marker = name => `<!--identity:${name}-->`;
@@ -57,13 +58,22 @@ ${poweredBy}</div></section>
 ${FOOTER}</div></main>`, options);
 }
 // A signed-out visit to the account or second-factor pages. Only administrators can start a sign-in here (/login);
-// everyone else signs in through an app, which leaves a session this page can use.
-export const signedOutPage = env => page(t(env, 'Sign in'), `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="neutral">${icon('lock')}</span>
+// everyone else signs in through an app, which leaves a session this page can use. The realm's apps with a sign-in
+// page are offered (pages/next-steps.mjs).
+export async function signedOutPage(env) {
+    const apps = stepsBlock(await nextSteps(env).catch(() => []));
+    return page(t(env, 'Sign in'), `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="neutral">${icon('lock')}</span>
 <h1 class="fd-h1">${escapeHtml(t(env, 'Sign in to see your account'))}</h1>
 <p class="fd-muted">${tHtml(env, 'Your {brand} account opens from the apps that use it. Sign in to one of them in this browser, then come back here.').replace('{brand}', BRAND)}</p></header>
-<p class="fd-screen-note"><span>${tHtml(env, 'Administrators can <0>sign in here</0>.', {}, [inner => `<a class="fd-link" href="/login">${inner}</a>`])}</span></p>`, { status: 401 });
-export const errorPage = (env, message, status = 400) => page(t(env, 'Sign-in stopped'), result('circle-alert', 'danger', t(env, 'Sign-in stopped'), message) +
-    `<p class="fd-screen-note">${escapeHtml(t(env, 'Go back to the app and start again.'))}</p>`, { status });
+${apps}<p class="fd-screen-note"><span>${tHtml(env, 'Administrators can <0>sign in here</0>.', {}, [inner => `<a class="fd-link" href="/login">${inner}</a>`])}</span></p>`, { status: 401 });
+}
+// A sign-in that stopped. The page offers the next step: the sign-in again, the app, or a retry of its own (options.retry).
+export async function errorPage(env, message, status = 400, options = {}) {
+    // A failure to look up the next step (the database itself, say) leaves the page as it was, never a second error.
+    const steps = stepsBlock(await nextSteps(env, options).catch(() => []));
+    return page(t(env, 'Sign-in stopped'), result('circle-alert', 'danger', t(env, 'Sign-in stopped'), message) +
+        (steps || `<p class="fd-screen-note">${escapeHtml(t(env, 'Go back to the app and start again.'))}</p>`), { status });
+}
 // Fills the markers for the request's realm and, if the page names one, its app: look, name, logo (with a dark variant)
 // or the brand's initial in dots, favicon, brand stylesheet and footer; then the signed-in person, and the parts only
 // administrators see. Everything inserted is escaped or an asset id.

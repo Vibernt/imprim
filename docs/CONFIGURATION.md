@@ -76,6 +76,9 @@ Realm `signup` is `off` by default. Set it to `approval` to hold verified reques
 to create workspaces immediately after email verification. Both enabled modes require realm `"workspaces": "on"`.
 In the app editor or seed configuration, set `self_signup` to `on` for a shared app with a product and email sign-in.
 Set `initiate_login_uri` to the app's sign-in entry point for approval emails. See [Self-serve sign-up](SIGNUP.md).
+The same URL is the next step on Imprim's pages that stop or end: an error page, `/signed-out`, the signed-out account page and
+the administrators' `/login` link to it ([next steps](PROTOCOL.md#next-steps-on-pages-that-stop)). Without it, those
+pages cannot send people back to the app.
 
 ## Runtime limits
 

@@ -7,6 +7,10 @@ import { cookies, cookie, BROWSER_COOKIE } from '../auth/session.mjs';
 import { randomToken } from '../lib/crypto.mjs';
 import { tokenShape } from '../lib/http.mjs';
 import { signupFields, signupHeading, signupButtons } from './signup.mjs';
+import { pendingRequest } from '../oidc/requests.mjs';
+import { liveSignupEnabled } from '../auth/signup-policy.mjs';
+import { AppError } from '../lib/errors.mjs';
+import { appLinksNote } from './next-steps.mjs';
 const challengeConfigured = env => Boolean(env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET);
 // One form serves email links and passwords: the button pressed chooses the action (see signInScript).
 function emailForm(env, requestId, { link, password, signup }) {
@@ -21,7 +25,7 @@ ${signup && password ? `<div data-sign-in-only>${passwordField}</div>` : passwor
 ${signup ? signupFields(env) : ''}${challengeConfigured(env) ? `<div class="cf-turnstile" data-sitekey="${escapeHtml(env.TURNSTILE_SITE_KEY)}" data-action="sign_in"></div>` : ''}
 ${signup ? `<div id="sign-in-actions" class="fd-stack" data-gap="4" data-sign-in-only>${signInButtons}</div>${signupButtons(env)}` : signInButtons}</form>`;
 }
-export function signInPage(env, requestId = '', responseCookies = [], client = null, { signup = false } = {}) {
+export function signInPage(env, requestId = '', responseCookies = [], client = null, { signup = false, appLinks = '' } = {}) {
     useLocale(env, { client });
     const branding = brandingFor(env, client);
     const methods = client ? signInSettings(client).methods : ['email'];
@@ -36,13 +40,26 @@ export function signInPage(env, requestId = '', responseCookies = [], client = n
     const heading = brandCopy(env, branding, 'sign_in_heading') || t(env, 'Sign in to {name}', { name: branding.name || env.REALM.display_name }), help = brandCopy(env, branding, 'sign_in_help');
     return page(t(env, 'Sign in'), `<header class="fd-screen-head" id="sign-in-head"><h1 class="fd-h1">${escapeHtml(heading)}</h1>${help ? `<p class="fd-muted">${escapeHtml(help)}</p>` : ''}</header>
 ${signup ? signupHeading(env) : ''}
-<section id="request" class="fd-stack" data-gap="3" data-request-id="${escapeHtml(requestId)}">${ordered.join('\n')}${client ? '' : `<p class="fd-screen-note">${escapeHtml(t(env, 'Administrators sign in by email.'))}</p>`}</section>
+<section id="request" class="fd-stack" data-gap="3" data-request-id="${escapeHtml(requestId)}">${ordered.join('\n')}${client ? '' : `<p class="fd-screen-note">${escapeHtml(t(env, 'Administrators sign in by email.'))}</p>${appLinks}`}</section>
 <section id="confirm" class="fd-stack" data-gap="4" hidden><header class="fd-screen-head"><p class="fd-muted">${escapeHtml(t(env, 'Finish signing in with the link you opened. Keep this browser.'))}</p></header>${button(t(env, 'Sign in'), { id: 'verify', type: 'button', variant: 'primary', size: 'lg', block: true })}</section>
 <p class="fd-small" id="message" role="status" aria-live="polite"></p>`, { client, cookies: responseCookies, script: methods.includes('passkey') ? [scriptPath(env, '/assets/sign-in.js'), scriptPath(env, '/assets/passkey.js')] : scriptPath(env, '/assets/sign-in.js'), turnstile: (email || password) && challengeConfigured(env) });
 }
-export function loginPage(request, env) {
+// /login is the administrators' sign-in. With the request_id of a sign-in still open in this browser (an email link, or
+// "Sign in again" on a page that stopped), it is that app's sign-in page again, as /authorize showed it; any other
+// request_id is ignored. Without one, it points people who meant to sign in to an app at the apps' own pages.
+export async function loginPage(request, env, url) {
     const existing = cookies(request)[BROWSER_COOKIE], browser = tokenShape(existing) ? existing : randomToken();
-    return signInPage(env, '', [cookie(BROWSER_COOKIE, browser, 1800)]);
+    const responseCookies = [cookie(BROWSER_COOKIE, browser, 1800)];
+    const id = url.searchParams.get('request_id');
+    if (id && tokenShape(existing)) {
+        try {
+            const { row, client } = await pendingRequest(env, request, id);
+            return signInPage(env, row.id, responseCookies, client, { signup: !row.agent_client_id && await liveSignupEnabled(env, client) });
+        } catch (error) {
+            if (!(error instanceof AppError) || error.status >= 500) throw error;
+        }
+    }
+    return signInPage(env, '', responseCookies, null, { appLinks: await appLinksNote(env).catch(() => '') });
 }
 const MESSAGES = [msg('Sign-in failed.'), msg('Enter your password, or choose to get an email link.'), msg('Request failed.')];
 export const signInScriptFor = locale => localizeScript(signInScript, locale, MESSAGES);
@@ -84,7 +101,11 @@ document.getElementById('verify').addEventListener('click',async()=>{
   const result=await fetch('/v1/auth/magic/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token, browser_response:true})});
   const body=await result.json();if(!result.ok)throw new Error(body.error_description||'Sign-in failed.');
   location.assign(body.redirect);
- }catch(error){message.textContent=error.message;button.disabled=false;}
+ }catch(error){
+  // An expired or used link: show the sign-in form again, so a new link is one step away.
+  message.textContent=error.message;button.disabled=false;
+  document.getElementById('confirm').hidden=true;document.getElementById('request').hidden=false;
+ }
 });
 emailForm?.addEventListener('submit',async(event)=>{
  event.preventDefault();const form=new FormData(event.target);const action=signupFields?.hidden===false?'signup':event.submitter?.value||'link';

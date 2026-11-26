@@ -17,8 +17,12 @@ export async function pendingRequest(env, request, id) {
     invariant(typeof id === 'string' && id.length <= 100, 'invalid_request', 'Authorization request required.');
     const row = await env.DB.prepare('SELECT * FROM auth_requests WHERE id=? AND expires_at>?').bind(id, Date.now()).first();
     const browser = cookies(request)[BROWSER_COOKIE];
+    // A page that stops later in this request offers the way back: the app (from another browser too) and, in the
+    // browser that started it, this sign-in itself (pages/next-steps.mjs).
+    if (row) env.SIGN_IN = { app: row.client_id };
     invariant(row && browser && await safeEqual(await sha256(browser), row.browser_hash), 'browser_binding', 'Sign-in must finish in the browser that started it.', 403);
     const client = await getClient(env, row.client_id);
+    env.SIGN_IN = { app: client.id, id: row.id };
     useLocale(env, { client, uiLocales: row.ui_locales });
     if (row.agent_client_id) await validateAgentRequest(env, row);
     else registeredUri(client, row.redirect_uri);
