@@ -3,20 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { agentWorld, resource, metadataId, error } from './support/agents.mjs';
 import { basic } from './support/world.mjs';
-import { thumbprint } from '../apps/server/src/machines/dpop.mjs';
-const b64 = value => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url');
-async function dpopKey() {
-    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-    const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', pair.publicKey);
-    const jwk = { kty, crv, x, y };
-    const proof = async ({ htm = 'POST', htu = 'https://id.example.com/token', iat = Math.floor(Date.now() / 1000), jti = crypto.randomUUID(), accessToken, header = {} } = {}) => {
-        const ath = accessToken ? Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(accessToken))).toString('base64url') : undefined;
-        const input = `${b64({ typ: 'dpop+jwt', alg: 'ES256', jwk, ...header })}.${b64({ htm, htu, iat, jti, ...(ath ? { ath } : {}) })}`;
-        const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, new TextEncoder().encode(input));
-        return `${input}.${Buffer.from(sig).toString('base64url')}`;
-    };
-    return { jwk, proof, jkt: await thumbprint(jwk) };
-}
+import { dpopKey } from './support/machine-keys.mjs';
 async function boundGrant(w, key) {
     const flow = await w.start(); const approved = await w.approve(flow);
     const code = new URL(approved.headers.get('location')).searchParams.get('code');

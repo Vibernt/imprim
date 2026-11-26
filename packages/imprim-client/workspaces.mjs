@@ -70,8 +70,20 @@ export function workspaceMethods(send, fail) {
         async releaseWorkspace(id, reason) {
             return send('DELETE', `${workspacePath(id)}/holds`, { reason });
         },
-        async registerWorkspaceResource(id, resource) {
-            return send('PUT', `${workspacePath(id)}/resources`, { resource });
+        async registerWorkspaceResource(id, resource, { name } = {}) {
+            return send('PUT', `${workspacePath(id)}/resources`, { resource, name });
+        },
+        async requestMachineClient(id, { name, jwks, scopes, resources } = {}) {
+            return send('POST', `${workspacePath(id)}/machine-clients`, { name, jwks, scopes, resources });
+        },
+        async machineClientRequest(id, requestId) {
+            return send('GET', `${workspacePath(id)}/machine-clients/requests/${segment(requestId)}`);
+        },
+        async machineClients(id) {
+            return send('GET', `${workspacePath(id)}/machine-clients`);
+        },
+        async disableMachineClient(id, clientId, { actorToken } = {}) {
+            return sendAsActor('DELETE', `${workspacePath(id)}/machine-clients/${segment(clientId)}`, actorToken);
         },
         async unregisterWorkspaceResource(id, resource) {
             return send('DELETE', `${workspacePath(id)}/resources`, { resource });

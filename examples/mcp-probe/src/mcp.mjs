@@ -1,4 +1,4 @@
-// One workspace's MCP endpoint (Streamable HTTP, JSON responses only). Every call is authenticated: verify the token
+// Workspace and product MCP endpoints (Streamable HTTP, JSON responses only). Every call is authenticated: verify the token
 // for this exact resource, refuse revoked grants and replayed DPoP proofs, then intersect scopes with the role.
 import { identity, resourceFor, metadataUrlFor } from './config.mjs';
 import { wwwAuthenticate } from '../../../packages/imprim-client/index.mjs';
@@ -30,11 +30,12 @@ export async function mcp(request, env, cfg, workspace, note) {
     note.auth = match ? match[1].toLowerCase() : header ? 'malformed' : 'none';
     if (!match) return challenge(cfg, workspace, header ? 'invalid_request' : undefined);
 
+    const identityClient = identity(env, cfg);
     let claims;
     try {
         // The audience is the route being served, never anything the caller sent.
         const dpop = match[1] === 'DPoP' ? { proof: request.headers.get('dpop') || '', method: 'POST', url: resource } : undefined;
-        claims = await identity(env, cfg).verifyAccessToken(match[2], { audience: resource, dpop });
+        claims = await identityClient.verifyAccessToken(match[2], { audience: resource, dpop });
         if (match[1] === 'DPoP' && !claims.cnf?.jkt) throw Object.assign(new Error('DPoP scheme with an unbound token.'), { code: 'invalid_token' });
     } catch (error) {
         note.reject = error?.code || 'invalid_token';
@@ -42,6 +43,11 @@ export async function mcp(request, env, cfg, workspace, note) {
     }
     note.client_id = claims.client_id;
     note.grant_id = claims.grant_id;
+    const product = workspace === undefined;
+    if (product && typeof claims.workspace_id !== 'string') {
+        note.reject = 'no_workspace';
+        return challenge(cfg, workspace, 'invalid_token');
+    }
 
     if (claims.dpop_jti) {
         const now = Date.now();
@@ -55,6 +61,19 @@ export async function mcp(request, env, cfg, workspace, note) {
 
     const allowed = claims.scope.split(' ').filter(scope => roleScopes(cfg).includes(scope));
     if (!allowed.includes(cfg.scope)) { note.reject = 'insufficient_scope'; return challenge(cfg, workspace, 'insufficient_scope', 403); }
+
+    const kind = claims.sub.startsWith('service:') ? 'machine' : 'person';
+    let membership;
+    if (product) {
+        // A real app always checks current membership and role. This probe can demonstrate token verification without app credentials.
+        membership = 'not checked';
+        if (env.APP_SECRET !== undefined) {
+            const sub = kind === 'machine' ? claims.accountable_sub : claims.sub;
+            const member = sub && (await identityClient.memberships(sub)).memberships.some(row => row.workspace_id === claims.workspace_id);
+            if (!member) { note.reject = 'not_member'; return challenge(cfg, workspace, 'insufficient_scope', 403); }
+            membership = 'checked';
+        }
+    }
 
     // No server-sent event stream: GET and DELETE are not offered (the Streamable HTTP transport allows 405).
     if (request.method !== 'POST') return new Response(null, { status: 405, headers: { ...CORS, allow: 'POST, OPTIONS' } });
@@ -85,7 +104,8 @@ export async function mcp(request, env, cfg, workspace, note) {
         case 'tools/call': {
             if (message.params?.name !== 'whoami') return rpcError(message.id, -32602, 'Unknown tool.');
             const facts = {
-                workspace, person: claims.sub, agent: claims.client_id, grant: claims.grant_id,
+                workspace: workspace ?? claims.workspace_id, person: claims.sub, agent: claims.client_id, grant: claims.grant_id,
+                workspace_id: claims.workspace_id, accountable_sub: claims.accountable_sub, kind, membership,
                 scope: claims.scope, allowed, audience: claims.aud,
                 issued_at: claims.iat, expires_at: claims.exp, grant_issued_at: claims.grant_issued_at ?? null,
                 dpop_bound: Boolean(claims.cnf?.jkt), act: claims.act ?? null

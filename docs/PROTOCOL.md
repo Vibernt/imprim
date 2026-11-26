@@ -360,13 +360,13 @@ rules apply to the separate public-agent registry and OAuth grants.
 | `GET /.well-known/oauth-authorization-server` | Same issuer/endpoints as OIDC discovery; advertises S256, device/registration endpoints, refresh/device grants and `client_id_metadata_document_supported:true`. |
 | `POST /register` | Public-only RFC 7591 JSON metadata; 201 registration response, no secret. Ten attempts/IP/hour plus existing API binding. |
 | `GET /authorize` | Metadata-URL or dynamic agent ID, S256, state and one resource; sign in through the owning app, then explicit consent. |
-| `GET /agent/consent` | Browser-bound request + signed-in session. Shows agent identity, app, workspace, resource and grant duration. Permission checkboxes start checked. Redirect flow offers up to five live connections for this person, realm, agent, app and resource, newest first and selected by default. Scopes from those connections that current policy allows follow the requested scopes, marked **Already allowed**. Device flow offers the requested scopes only. |
-| `POST /agent/consent` | Same Origin and session CSRF. Approval requires one or more distinct, currently offered `scope` values, sent as repeated form fields. `replace` can name an offered live connection in redirect flow. An empty or absent `replace` keeps existing connections. Approval, single-use claim and any replacement revocation, audit and outbox write are atomic. Invalid choices give `invalid_request` and the consent can be retried. Denial ignores the scope and replacement choices. |
+| `GET /agent/consent` | Browser-bound request + signed-in session. Shows agent identity, app, workspace, resource and grant duration. Permission checkboxes start checked. A workspace-choice resource shows up to 50 eligible workspaces by name. Redirect flow offers up to five live connections for this person, realm, agent, app and resource, newest first and selected by default. Scopes from those connections that current policy allows follow the requested scopes, marked **Already allowed**. Device flow offers the requested scopes only. |
+| `POST /agent/consent` | Same Origin and session CSRF. Approval requires one or more distinct, currently offered `scope` values as repeated form fields and, for a workspace-choice resource, one eligible `workspace_id`. `replace` can name an offered live connection in redirect flow and must match the workspace choice. An empty or absent `replace` keeps existing connections. Approval, single-use claim and any replacement revocation, audit and outbox write are atomic. Invalid choices give `invalid_request` and the consent can be retried. Denial ignores the workspace, scope and replacement choices. |
 | `POST /device_authorization` | Form-encoded public client/resource/scopes; device secret, human code, verification URLs, ten-minute expiry, five-second interval. |
 | `GET /device` | Code-entry form; matching live code starts app sign-in, then the same consent page. GET never grants access. |
 | `POST /token` | Code + S256 verifier, refresh token, or device code. Every exchange requires the exact client and resource. The response and access JWT include the granted `scope`, or the narrower set selected on refresh. |
 | `GET /account/agents` | Current person's grants, including creation/last-use times and revoked/expired status. |
-| `GET /v1/account/agents` | The current person's paginated grants. Each includes nullable `label` (a private connection name), `approved_device` and `approved_location` (the browser used to approve and its coarse location). |
+| `GET /v1/account/agents` | The current person's paginated grants. Each includes nullable `label` (a private connection name), `approved_device` and `approved_location` (the browser used to approve and its coarse location), `workspace_id`, `workspace_name` and `resource_name`. |
 | `POST /v1/account/agents/label` | Same Origin, session and CSRF header. JSON `{ grant_id, label }` names any of the person's grants in this realm, including expired or revoked grants. The label is trimmed, with 1–60 characters and no control characters. An empty label clears it. Returns `{}`, 404 `not_found` for missing or unowned grants, or 400 `invalid_request` for an invalid label. |
 | `POST /account/revoke` | Same Origin + CSRF + grant ownership; durable revocation and back-channel outbox. |
 
@@ -377,7 +377,14 @@ segments or a trailing slash, so one route has exactly one audience (prefixes ma
 rejected, including duplicate parameters. The stored resource cannot change during code exchange or refresh. The
 workspace label is the decoded `/w/<workspace>` segment where present, otherwise the resource path is displayed.
 For registered resources in an active shared workspace, consent requires workspace membership and shows the
-workspace name. Apps check current authorization on every call. [Shared workspaces](WORKSPACES.md#agents)
+workspace name. A registered resource's display name, if set, appears above its URL.
+
+A resource in the owning app's `agent_workspace_resources` is a workspace-choice resource on both authorization
+endpoints. Consent lists only active workspaces in this realm that use the app's product and that the person
+belongs to. A sole choice is preselected; zero choices give `access_denied`. The approval batch rechecks the choice
+against the current list. The redirect flow shows previous connections with their workspace names. Replacement and
+previously allowed scopes are limited to the workspace selected at approval. Apps check current authorization on
+every call. [Shared workspaces](WORKSPACES.md#agents)
 
 Agent redirect registration permits exact HTTPS or HTTP loopback on `127.0.0.1`, `[::1]`, and `localhost`. Only the
 loopback port may vary at authorization; token redemption requires the exact requested URI. Codes are 256-bit random,
@@ -419,6 +426,8 @@ and token use update their last-use time. Grants and audit history survive.
 
 Access JWTs use the existing sealed ES256 ring, `typ=at+jwt`, with `iss`, scalar `aud=resource`, unchanged human `sub`,
 agent `client_id`, nonempty `grant_id` (the grant to deny on revocation), space-separated `scope`, random `jti`, integer `iat` and `exp`.
+Access tokens issued through code redemption, device redemption or refresh include `workspace_id` when the grant
+has a workspace choice. The audience remains the requested resource URL.
 `agent_assurance` is what the consent page could say about the agent: `key` (it proves a key its host published),
 `redirect` (codes reach only an HTTPS address its host published), `claimed` (a loopback or device flow) or `none`
 (it registered itself). It is information for the app, never a permission; grants made before 2026-11-17 carry none.
@@ -446,10 +455,14 @@ An agent code used twice revokes the grant it created. Wrong client or resource 
 A correctly bound spent refresh token revokes the grant even if current app policy is off. Code/device redemption
 and refresh transactions also fence changes to the validated app policy and the person's active status. No network
 calls occur inside D1 batches. Failed signing or metadata dependencies never return invented tokens.
+Workspace-scoped refresh requires the workspace to be active, to use the app's current product and to include
+the person as a member. Losing access ends the grant with `invalid_grant` and a durable revocation event whose
+outbox reason is `workspace_access_ended`.
 
 Audit events include `agent_grant`, `agent_token`, `agent_revoke`, `agent_replaced`, `agent_grant_label`,
 `agent_refresh_reuse` and `agent_code_replay`. The grant records its approved `scope`, `requested_scope` when any
-requested permission was omitted, and `replaced` when another grant was revoked. Label changes audit the grant ID.
+requested permission was omitted, `workspace_id` when a workspace was chosen, and `replaced` when another grant
+was revoked. Label changes audit the grant ID.
 A refresh only updates `last_used`; it writes no audit row. Neither raw credentials nor provider secrets enter audit records. Revocation,
 its audit event and a durable outbox event are one transaction. The outbox row is written even when the app has no
 `backchannel_uri`, so the loss is reported as `missing_uri`. The request queues only its own new event, after the
@@ -467,16 +480,28 @@ token and does not end all of the person's app sessions. Human back-channel logo
 
 ### Machines, introspection, revocation and the app grant API
 
-**Service clients** (`client_credentials`). A realm admin registers a service client (`POST /admin/api/services`) for
-one app. It has a named owner, 1–5 public keys (P-256 or RSA-2048+), scopes from that app's catalogue, and resource
-prefixes under the app's own. It authenticates only with `private_key_jwt`: a single-use assertion signed by one of
-its keys, and never a shared secret. `POST /token grant_type=client_credentials&client_id=&resource=&scope=` returns a
-60-second `at+jwt` with `sub` and `grant_id` both `service:<id>`. Apps recognise machine callers by that prefix and
-authorise them as they choose. Disabling or deleting a service client ends its access within a minute.
+**Service clients** (`client_credentials`) authenticate with `private_key_jwt`, a single-use assertion signed by
+one of 1–5 public P-256 or RSA-2048+ keys. `POST /token grant_type=client_credentials&client_id=&resource=&scope=`
+returns a 60-second `at+jwt`. Both kinds use `service:<id>` as `sub` and `grant_id`. The app authorizes the machine
+within the approved scopes.
 
-**Introspection** (RFC 7662, `POST /introspect`, `client_secret_basic`). An app learns whether an access token for
-one of *its own* resources is live: signed by the realm, unexpired, its grant unrevoked and its person active, or
-its service client active. Any other token gets `{"active":false}`, with no reason.
+- **Realm-admin clients.** A realm admin registers the client at `POST /admin/api/services`. Resources match the
+  configured prefixes. The service client must be active.
+- **Workspace clients.** A shared app requests one for a single workspace using the
+  [App API](WORKSPACES.md#machine-clients). An owner or admin signs in to Imprim to review the request at
+  `GET /machine-client?request_id=…`, then approves or denies with a same-origin, CSRF-protected
+  `POST /machine-client`. Imprim applies the app's agent consent MFA rule. The token's audience must exactly
+  match one approved resource and still be registered to the workspace or available for workspace choice.
+  The token carries `workspace_id` and `accountable_sub`, the approver's existing Imprim subject.
+  The client must be active and unexpired, the workspace active and still using the app's product, and the
+  accountable person active, unmerged, and still an owner or admin of that workspace.
+
+**Introspection** (RFC 7662, `POST /introspect`, `client_secret_basic`). An app learns whether a signed, unexpired
+access token for one of its own resources is still live. For machines Imprim checks the service-client conditions
+above. For agents the grant must be unrevoked and the person active. For a workspace-scoped agent grant, the
+workspace must still be active, use the grant app's product and include the person. An active response includes
+`workspace_id` and `accountable_sub` when present. Other tokens get `{"active":false}`. Without introspection,
+an already issued machine token can be used until its 60-second expiry.
 
 **Revocation** (RFC 7009, `POST /revoke`) always answers 200. An agent revokes its own grant with its refresh or
 access token and its `client_id`. A key-bound agent also signs an assertion, and a DPoP-bound grant needs a proof
@@ -485,7 +510,9 @@ grants on its own resources. Anything else is ignored without saying why. Revoki
 whole grant.
 
 **App grant API.** `GET /v1/grants?resource=<workspace resource>` lists the live agent grants on that resource, newest
-first: person `sub`, agent, `agent_assurance`, scope, created, last used. `sub=` narrows it to one person. A page holds
+first: person `sub`, agent, `agent_assurance`, scope, created, last used and `workspace_id` (null without a choice).
+`sub=` narrows it to one person. `workspace_id=` narrows it to a workspace using the app's product in this realm,
+or returns `404 not_found` if the workspace is outside that boundary. A page holds
 `limit` grants (1 to 200, default 200); `next_cursor` in the response is passed back as `cursor=` for the next page and
 is `null` on the last. A malformed `limit`, `cursor` or `sub` is `invalid_request`. `POST /v1/grants/revoke {grant_id}` revokes one, for example when a
 member leaves the workspace; the agent's refresh is refused at once and the revocation event follows. Both use the
@@ -507,7 +534,8 @@ decision.
   A's own resource (`subject_token`, type `access_token`), with `resource` naming app B's resource.
 - **Opt-in:** B lists A in `token_exchange_from` with the most scopes A may obtain.
 - **Result:** a 60-second token for B with the same person (`sub`), agent (`client_id`) and `grant_id`, so
-  revoking the grant ends the chain. `act` records each app (`{"sub":"app:A","client_id":"A"}`, nested for longer
+  revoking the grant ends the chain. When the subject token has `workspace_id`, the result carries it unchanged.
+  `act` records each app (`{"sub":"app:A","client_id":"A"}`, nested for longer
   chains, at most four).
 - **Scopes:** B's allowance for A is independent of the scopes the person consented to on A. B decides what it trusts
   A to do on the person's behalf there.

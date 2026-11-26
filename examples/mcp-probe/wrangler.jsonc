@@ -15,6 +15,7 @@
     "ISSUER": "https://id-staging.example.com",
     "CLIENT_ID": "probe",
     "WORKSPACES": "team-one,team-two",
+    "PRODUCT_RESOURCE": "off",
     "SCOPE": "probe.read"
   },
   // Replace database_id with the id `wrangler d1 create imprim-probe` prints.

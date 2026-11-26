@@ -10,7 +10,7 @@ const out = process.argv[2] || 'email-preview', branding = process.argv[3] ? JSO
 const env = { ISSUER: 'https://id.example.com', EMAIL_FROM: 'signin@example.com', REALM: { id: 'preview', display_name: branding.name || 'Acme', branding },
     DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) } };
 const vars = { device: 'Chrome on macOS', place: 'Berlin, DE', time: Date.UTC(2026, 10, 17, 9, 30), reason: 'Lost phone, identity checked by video call',
-    agent: 'Claude Code', app: 'Notes', workspace: 'team-one', scopes: 'read write', name: 'Work laptop', email: 'dana@example.com', old: 'dana@old.example', new: 'dana@example.com',
+    agent: 'Claude Code', machine: 'Editorial bot', app: 'Notes', workspace: 'team-one', scopes: 'read write', name: 'Work laptop', email: 'dana@example.com', old: 'dana@old.example', new: 'dana@example.com',
     inviter: 'lee@example.com', products: 'notes, projects' };
 const links = { link: 'https://id.example.com/login#token=EXAMPLE', agents_url: 'https://id.example.com/account/agents', invitation_url: 'https://app.example.com/sign-in' };
 await mkdir(out, { recursive: true });

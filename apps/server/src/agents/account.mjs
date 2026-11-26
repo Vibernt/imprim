@@ -43,15 +43,20 @@ export async function readConnectedAgents(env, session, before = '') {
     invariant(before === '' || /^\d{1,16}:[0-9a-f-]{36}$/.test(before), 'invalid_request', 'This page link is broken. Open your account page again.');
     const [created, id] = before ? before.split(':') : [Number.MAX_SAFE_INTEGER, ''];
     const { results: rows } = await env.DB.prepare(`SELECT g.id,g.client_name,g.registration_method,g.client_id,g.app_id,
-        g.resource,g.scope,g.last_used,g.created,g.revoked_at,g.expires_at,g.label,g.approved_device,g.approved_location,c.branding
+        g.resource,g.scope,g.last_used,g.created,g.revoked_at,g.expires_at,g.label,g.approved_device,g.approved_location,c.branding,
+        g.workspace_id,w.name AS workspace_name,
+        (SELECT wr.name FROM workspace_resources wr JOIN workspaces registered ON registered.id=wr.workspace_id
+            WHERE wr.resource=g.resource AND wr.client_id=g.app_id AND registered.realm_id=c.realm_id) AS resource_name
         FROM agent_grants g JOIN clients c ON c.id=g.app_id
+        LEFT JOIN workspaces w ON w.id=g.workspace_id AND w.realm_id=c.realm_id
         WHERE g.user_id=? AND c.realm_id=? AND (g.created<? OR (g.created=? AND g.id<?)) ORDER BY g.created DESC,g.id DESC LIMIT ?`)
         .bind(session.user_id, realmId(env), Number(created), Number(created), id || '\uffff', PAGE + 1).all();
     const page = rows.slice(0, PAGE), last = page.at(-1), now = Date.now();
     return {
         agents: page.map(g => ({ id: g.id, name: g.client_name, app: JSON.parse(g.branding).name || g.app_id,
             host: g.registration_method === 'dynamic' ? null : new URL(g.client_id).host,
-            workspace: workspace(g.resource), resource: g.resource, scopes: String(g.scope).split(' ').filter(Boolean),
+            workspace: workspace(g.resource), workspace_id: g.workspace_id, workspace_name: g.workspace_name,
+            resource: g.resource, resource_name: g.resource_name, scopes: String(g.scope).split(' ').filter(Boolean),
             label: g.label, approved_device: g.approved_device, approved_location: g.approved_location,
             last_used: g.last_used, created: g.created, status: g.revoked_at ? 'revoked' : g.expires_at <= now ? 'expired' : 'active' })),
         next: rows.length > PAGE ? `${last.created}:${last.id}` : null

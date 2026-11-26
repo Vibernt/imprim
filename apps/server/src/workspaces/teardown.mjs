@@ -17,17 +17,36 @@ export function accessEndStatements(env, workspaceId, userId) {
               WHERE NOT ${reachesProductSql('ending.realm_id', 'ending_product.product', '?', 'w.id<>ending.id')}`,
         args: [workspaceId, realm, userId, userId]
     };
-    const liveGrant = `user_id=? AND revoked_at IS NULL AND expires_at>? AND resource IN (
-        SELECT wr.resource FROM workspace_resources wr JOIN (${membership}) ending ON ending.id=wr.workspace_id)`;
-    const grantArgs = [userId, now, workspaceId, realm, userId];
+    const sameWorkspace = `EXISTS(SELECT 1 FROM ending WHERE ending.id=agent_grants.workspace_id
+        AND EXISTS(SELECT 1 FROM clients c WHERE c.id=agent_grants.app_id AND c.realm_id=ending.realm_id))`;
+    const registered = `workspace_id IS NULL AND resource IN (
+        SELECT wr.resource FROM workspace_resources wr JOIN ending ON ending.id=wr.workspace_id)`;
     return [
         ...logoutStatements(env, userId, null, null, lostClients),
         env.DB.prepare(`DELETE FROM client_admissions WHERE user_id=? AND source='workspace' AND client_id IN (${lostClients.sql})`)
             .bind(userId, ...lostClients.args),
-        env.DB.prepare(`INSERT INTO agent_revocation_outbox(id,grant_id,app_id,user_id,resource,uri,created)
-            SELECT lower(hex(randomblob(16))),g.id,g.app_id,g.user_id,g.resource,coalesce(
-                (SELECT c.backchannel_uri FROM clients c WHERE c.id=g.app_id),''
-            ),? FROM agent_grants g WHERE ${liveGrant}`).bind(now, ...grantArgs),
-        env.DB.prepare(`UPDATE agent_grants SET revoked_at=? WHERE ${liveGrant}`).bind(now, ...grantArgs)
+        ...endWorkspaceGrants(env, now, `WITH ending AS (${membership})`, [workspaceId, realm, userId],
+            `user_id=? AND (${sameWorkspace} OR ${registered})`, [userId])
+    ];
+}
+
+export function productAccessEndStatements(env, workspaceId, products, now) {
+    if (!products.length) return [];
+    return endWorkspaceGrants(env, now, '', [], `(workspace_id=? OR (workspace_id IS NULL AND EXISTS(
+        SELECT 1 FROM workspace_resources wr WHERE wr.workspace_id=? AND wr.resource=agent_grants.resource AND wr.client_id=agent_grants.app_id)))
+        AND app_id IN (
+        SELECT c.id FROM clients c JOIN workspace_products p ON p.product=c.product
+        WHERE c.realm_id=? AND c.workspaces='shared' AND p.workspace_id=?
+        AND p.product IN (SELECT value FROM json_each(?)))`, [workspaceId, workspaceId, realmId(env), workspaceId, JSON.stringify(products)]);
+}
+
+function endWorkspaceGrants(env, now, cte, cteArgs, match, args) {
+    const live = `revoked_at IS NULL AND expires_at>? AND (${match})`;
+    return [
+        env.DB.prepare(`${cte} INSERT INTO agent_revocation_outbox(id,grant_id,app_id,user_id,resource,uri,created,reason)
+            SELECT lower(hex(randomblob(16))),id,app_id,user_id,resource,coalesce(
+                (SELECT c.backchannel_uri FROM clients c WHERE c.id=agent_grants.app_id),''
+            ),?,'workspace_access_ended' FROM agent_grants WHERE ${live}`).bind(...cteArgs, now, now, ...args),
+        env.DB.prepare(`${cte} UPDATE agent_grants SET revoked_at=? WHERE ${live}`).bind(...cteArgs, now, now, ...args)
     ];
 }

@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
+import { machineClientSmoke } from './smoke-machine-clients.mjs';
 import { accountSmoke } from './smoke-account.mjs';
 import { smokeServer } from './smoke-server.mjs';
 import { adminCoreSmoke } from './smoke-admin-core.mjs';
+import { workspaceConsentSmoke } from './smoke-workspace-consent.mjs';
 import { forgetRealms } from '../../server/src/realms/realm.mjs';
 
 const browser = await chromium.launch();
@@ -87,6 +89,8 @@ test('Profile writes through the Worker, uses its catalogue, and confirms email 
 });
 
 accountSmoke(open);
+workspaceConsentSmoke(browser);
+machineClientSmoke(browser, open);
 
 for (const role of ['realm', 'platform']) test(`${role} navigation is gated by the roster role`, async t => {
     const { page, server } = await open(t, { role });

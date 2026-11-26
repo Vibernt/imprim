@@ -42,7 +42,8 @@ test('a realm admin can manage a team through the workspace JSON API', async t =
 
     const member = await ensureUser(w.env, 'existing@example.com');
     db.prepare("INSERT INTO workspace_members VALUES(?,?,'member',0,0)").run(id, member.id);
-    db.prepare("INSERT INTO workspace_resources VALUES(?,?,'app',0)").run('https://app.example/teams/example', id);
+    db.prepare("INSERT INTO workspace_resources(resource,workspace_id,client_id,created) VALUES(?,?,'app',0)")
+        .run('https://app.example/teams/example', id);
     const { workspace: detail } = await (await w.get(path)).json();
     assert.equal(detail.name, 'Team <example>');
     assert.deepEqual(detail.members.map(member => [member.email, member.role, member.manageable]), [

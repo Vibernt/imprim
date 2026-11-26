@@ -30,7 +30,8 @@ export async function checkPolicy(env, values, session) {
     const agent = await resolveAgent(env, values.client_id);
     // Network I/O has finished: reread owner settings before making a decision.
     const current = await getClient(env, app.id);
-    invariant(JSON.stringify(agentSettings(current)) === JSON.stringify(settings), 'access_denied', 'App policy changed. Start again.', 403);
+    invariant(current.workspaces === app.workspaces && current.product === app.product &&
+        JSON.stringify(agentSettings(current)) === JSON.stringify(settings), 'access_denied', 'App policy changed. Start again.', 403);
     if (session) requireMethod(current, session.method, session.google_hd, true);
     return { app: current, agent, settings, method };
 }
@@ -42,11 +43,16 @@ const workspaceMember = `EXISTS(SELECT 1 FROM workspace_members m WHERE m.worksp
 export function requireWorkspaceMember(allowed) {
     invariant(allowed, 'access_denied', 'Join this workspace before connecting an agent.', 403);
 }
-export async function consentWorkspaceName(env, app, resource, userId) {
-    const registered = await env.DB.prepare(`SELECT name,${workspaceMember} AS member FROM (${registeredWorkspace}) registered`)
-        .bind(userId, resource, app.id, realmId(env)).first();
-    requireWorkspaceMember(!registered || registered.member === 1);
-    return registered?.name ?? null;
+export async function consentResourceDetails(env, app, resource, userId) {
+    const realm = realmId(env);
+    const details = await env.DB.prepare(`WITH registered AS (${registeredWorkspace})
+        SELECT (SELECT name FROM registered) AS workspaceName,
+            NOT EXISTS(SELECT 1 FROM registered WHERE NOT ${workspaceMember}) AS allowed,
+            (SELECT wr.name FROM workspace_resources wr JOIN workspaces w ON w.id=wr.workspace_id
+             WHERE wr.resource=? AND wr.client_id=? AND w.realm_id=?) AS resourceName`)
+        .bind(resource, app.id, realm, userId, resource, app.id, realm).first();
+    requireWorkspaceMember(details.allowed === 1);
+    return details;
 }
 // Consent must still be eligible when the request is consumed and the grant inserted.
 export const workspaceConsentGuard = (env, app, resource, userId) => ({

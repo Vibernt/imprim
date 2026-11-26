@@ -1,17 +1,21 @@
 // SQL predicates fence policy/user changes between network validation and atomic credential issuance.
 import { settingNames } from './settings.mjs';
-const fields = [...settingNames, 'sign_in_methods', 'google_hosted_domains', 'signup_policy', 'allowed_domains', 'mfa', 'mfa_trusted_device_days', 'agent_consent_mfa', 'agent_dpop'];
+import { scopedWorkspaceLiveSql, unscopedResourceLiveSql } from './workspace-choice.mjs';
+const fields = [...settingNames, 'workspaces', 'product', 'sign_in_methods', 'google_hosted_domains', 'signup_policy', 'allowed_domains', 'mfa', 'mfa_trusted_device_days', 'agent_consent_mfa', 'agent_dpop'];
 export function policyGuard(app, resource) {
-    return { sql: `EXISTS(SELECT 1 FROM clients policy WHERE policy.id=? AND ${fields.map(key => `policy.${key}=?`).join(' AND ')})
+    return { sql: `EXISTS(SELECT 1 FROM clients policy WHERE policy.id=? AND ${fields.map(key => `policy.${key} IS ?`).join(' AND ')})
         AND NOT EXISTS(SELECT 1 FROM clients competing,json_each(competing.agent_resource_prefixes) prefix
-            WHERE competing.id<>? AND (prefix.value=? OR
+            WHERE competing.id<>? AND competing.realm_id=? AND (prefix.value=? OR
                 substr(?,1,length(prefix.value)+CASE WHEN substr(prefix.value,-1)='/' THEN 0 ELSE 1 END)=
                 prefix.value||CASE WHEN substr(prefix.value,-1)='/' THEN '' ELSE '/' END))`,
-        args: [app.id, ...fields.map(key => app[key]), app.id, resource, resource] };
+        args: [app.id, ...fields.map(key => app[key]), app.id, app.realm_id, resource, resource] };
 }
 export function liveGrantGuard(grant, app, now) {
     const policy = policyGuard(app, grant.resource);
+    const workspaceLive = grant.workspace_id === null ? unscopedResourceLiveSql('live', 'owner') : scopedWorkspaceLiveSql('live', 'owner');
     return { sql: `EXISTS(SELECT 1 FROM agent_grants live JOIN users person ON person.id=live.user_id
-        WHERE live.id=? AND live.revoked_at IS NULL AND live.expires_at>? AND person.status='active' AND person.merged_into IS NULL) AND ?>? AND ${policy.sql}`,
-        args: [grant.id, now, grant.expires_at, now, ...policy.args] };
+        JOIN clients owner ON owner.id=live.app_id
+        WHERE live.id=? AND live.revoked_at IS NULL AND live.expires_at>? AND person.status='active' AND person.merged_into IS NULL
+        AND live.workspace_id IS ? AND (${workspaceLive})) AND ?>? AND ${policy.sql}`,
+        args: [grant.id, now, grant.workspace_id, grant.expires_at, now, ...policy.args] };
 }

@@ -57,6 +57,7 @@ and never writes D1. JSON columns are shown decoded.
 | `agent_allowlist` | `[]` | Optional client ID URLs or hosts. It narrows; it does not authenticate. |
 | `agent_scope_catalogue` | `{}` | Scope descriptions; required when agent access is on. |
 | `agent_resource_prefixes` | `[]` | Canonical HTTPS resource ownership; required when agent access is on. |
+| `agent_workspace_resources` | `[]` | Up to five distinct, exact canonical resource URLs under this app's prefixes. Requires `workspaces: shared`, a `product` and `agent_access: on`. A URL reserved here cannot be registered to an individual workspace. |
 | `agent_max_grant_days` | `90` | Caps consent in whole days. |
 | `agent_dpop` | `optional` | `required` refuses agent tokens that are not DPoP-bound. |
 | `token_exchange_from` | `{}` | Other client ids that may exchange tokens into this app, each with the scopes it may obtain. |

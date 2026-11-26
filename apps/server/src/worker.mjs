@@ -6,6 +6,7 @@ import { accountAccessApi } from './api/account-access.mjs';
 import { accountSecurityApi } from './api/account-security.mjs';
 import { admin } from './admin/routes.mjs';
 import { registerAgent } from './agents/registration.mjs';
+import { machineApproval } from './machines/approval.mjs';
 import { consent } from './agents/consent.mjs';
 import { deviceAuthorization, devicePage } from './agents/device.mjs';
 import { account } from './agents/account.mjs';
@@ -74,6 +75,7 @@ async function route(request, env, ctx, url) {
         case 'POST /register': return registerAgent(request, env);
         case 'POST /device_authorization': return deviceAuthorization(request, env);
         case 'GET /device': return devicePage(request, env);
+        case 'GET /machine-client': case 'POST /machine-client': return machineApproval(request, env);
         case 'GET /agent/consent': case 'POST /agent/consent': return consent(request, env);
         case 'GET /workspace-join': case 'POST /workspace-join': return workspaceJoin(request, env);
         case 'POST /account/revoke': return account(request, env, ctx);
@@ -86,6 +88,8 @@ async function route(request, env, ctx, url) {
         case 'POST /v1/account/apps': return accountAccessApi(request, env, ctx, 'apps');
         case 'POST /v1/account/devices': return accountAccessApi(request, env, ctx, 'devices');
         case 'GET /v1/account/agents': case 'POST /v1/account/agents/revoke': return accountAccessApi(request, env, ctx, 'agents');
+        case 'POST /v1/account/machine-clients/disable': return accountAccessApi(request, env, ctx, 'machine-disable');
+        case 'POST /v1/account/machine-clients/renew': return accountAccessApi(request, env, ctx, 'machine-renew');
         case 'POST /v1/account/agents/label': return accountAccessApi(request, env, ctx, 'agent-label');
         case 'GET /v1/account/security': return accountSecurityApi(request, env, ctx, 'overview');
         case 'POST /v1/account/mfa/start': return accountSecurityApi(request, env, ctx, 'start');
@@ -146,9 +150,9 @@ export function limiterFor(method, path) {
     return path.startsWith('/v1/auth/') || path.startsWith('/login/provider/') || ['/auth/github/callback', '/login/google/callback'].includes(path) ? 'AUTH_LIMITER' : 'API_LIMITER';
 }
 // Browser endpoints whose errors a person reads (sign-in.js, passkey.js and the account forms show them).
-const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|workspace-join$|device$|logout$|login$|signed-in$)/;
+const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|machine-client$|workspace-join$|device$|logout$|login$|signed-in$)/;
 // Browser form posts whose refusals are pages (with Accept: text/html); scripts on these paths use fetch, which does not ask for HTML.
-const HTML_FORMS = new Set(['/authorize', '/workspace-join', '/agent/consent', '/mfa', '/account/password']);
+const HTML_FORMS = new Set(['/authorize', '/workspace-join', '/agent/consent', '/machine-client', '/mfa', '/account/password']);
 // The request_id of a GET query or of a form posted to HTML_FORMS, looked up only to offer "Sign in again" on the page.
 async function lookUpSignIn(env, request, url, form) {
     try {
@@ -190,8 +194,8 @@ export async function handleRequest(request, base, ctx) {
         const html = !jsonRequest && (request.method === 'GET' || HTML_FORMS.has(url.pathname)) &&
             request.headers.get('accept')?.includes('text/html');
         // The page offers the way back into a sign-in request the URL or the form names, when this browser started it
-        // (the handler may have stopped before it looked the request up).
-        if (html && !env.SIGN_IN?.id) await lookUpSignIn(env, request, url, form);
+        // (the handler may have stopped before it looked the request up or chosen to offer only the app).
+        if (html && !env.SIGN_IN) await lookUpSignIn(env, request, url, form);
         // People read the message on an error page, or in the sign-in and account scripts, so it is translated there.
         // Protocol endpoints keep English: RFC 6749 limits error_description to ASCII, and developers read it.
         const message = known ? (html || PEOPLE_PATHS.test(url.pathname) ? tError(env, error) : error.message)

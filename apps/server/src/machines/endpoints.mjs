@@ -5,13 +5,17 @@ import { json, readBody, tokenShape, uniqueParams } from '../lib/http.mjs';
 import { from64, b64url, sha256 } from '../lib/crypto.mjs';
 import { authenticatedClient } from '../oidc/token.mjs';
 import { jwksDocument } from '../oidc/keys.mjs';
-import { ownerOf, } from '../agents/policy.mjs';
+import { ownerOf } from '../agents/policy.mjs';
 import { resolveAgent } from '../agents/registration.mjs';
 import { authenticateAgent } from '../agents/client-auth.mjs';
 import { revokeGrant, queueRevocation } from '../agents/revocation.mjs';
 import { resourceUrl } from '../agents/uris.mjs';
 import { limitAddress } from '../auth/rate-limit.mjs';
 import { realmId } from '../realms/realm.mjs';
+import { scopedWorkspaceLiveSql, unscopedResourceLiveSql } from '../agents/workspace-choice.mjs';
+import { revokeEndedWorkspaceGrant } from '../agents/workspace-revocation.mjs';
+import { workspaceClientSql } from '../workspaces/access.mjs';
+import { liveService, liveWorkspaceMachineResource } from './workspace-clients.mjs';
 import { verifyDpop } from './dpop.mjs';
 // Verifies one of this realm's access tokens (at+jwt, ES256) without trusting anything the token says about keys.
 export async function localAccessToken(env, token) {
@@ -29,23 +33,38 @@ export async function localAccessToken(env, token) {
     } catch { return null; }
     const now = Math.floor(Date.now() / 1000);
     if (claims?.iss !== env.ISSUER || typeof claims.aud !== 'string' || !Number.isInteger(claims.exp) || claims.exp <= now) return null;
+    if (claims.workspace_id !== undefined && typeof claims.workspace_id !== 'string') return null;
+    if (claims.accountable_sub !== undefined && typeof claims.accountable_sub !== 'string') return null;
     return claims;
 }
 export async function stillLive(env, claims) {
     if (typeof claims.grant_id !== 'string') return false;
     if (claims.grant_id.startsWith('service:')) {
-        return Boolean(await env.DB.prepare("SELECT 1 FROM service_clients WHERE id=? AND realm_id=? AND status='active'").bind(claims.grant_id.slice(8), realmId(env)).first());
+        const service = await liveService(env, claims.grant_id.slice(8));
+        if (!service) return false;
+        if (service.source === 'admin') return claims.workspace_id === undefined && claims.accountable_sub === undefined;
+        return claims.workspace_id === service.workspace_id && claims.accountable_sub === service.accountable_user_id &&
+            Boolean(await liveWorkspaceMachineResource(env, service, claims.aud));
     }
-    return Boolean(await env.DB.prepare(`SELECT 1 FROM agent_grants g JOIN users u ON u.id=g.user_id WHERE g.id=? AND g.revoked_at IS NULL AND g.expires_at>?
-        AND u.status='active' AND u.merged_into IS NULL AND u.realm_id=?`).bind(claims.grant_id, Date.now(), realmId(env)).first());
+    const now = Date.now(), workspaceId = claims.workspace_id ?? null;
+    const workspaceLive = workspaceId === null ? unscopedResourceLiveSql('g', 'owner') : scopedWorkspaceLiveSql('g', 'owner');
+    const live = await env.DB.prepare(`SELECT (${workspaceLive}) AS workspace_live
+        FROM agent_grants g JOIN users u ON u.id=g.user_id JOIN clients owner ON owner.id=g.app_id
+        WHERE g.id=? AND g.revoked_at IS NULL AND g.expires_at>? AND u.status='active' AND u.merged_into IS NULL
+        AND u.realm_id=? AND g.workspace_id IS ?`).bind(claims.grant_id, now, realmId(env), workspaceId).first();
+    if (live && !live.workspace_live && workspaceId !== null)
+        await revokeEndedWorkspaceGrant(env, claims.grant_id, claims.sub, workspaceId, now);
+    return live?.workspace_live === 1;
 }
 const owns = async (env, client, resource) => { try { return (await ownerOf(env, resource)).id === client.id; } catch { return false; } };
 export async function introspect(request, env) {
     const body = await readBody(request, 'form'), client = await authenticatedClient(request, env, body, true);
     const claims = await localAccessToken(env, body.token);
     if (!claims || !await owns(env, client, claims.aud) || !await stillLive(env, claims)) return json({ active: false });
-    const { iss, sub, aud, scope, client_id, grant_id, exp, iat, act, cnf, grant_issued_at, agent_assurance } = claims;
+    const { iss, sub, aud, scope, client_id, grant_id, exp, iat, act, cnf, grant_issued_at, agent_assurance, workspace_id, accountable_sub } = claims;
     return json({ active: true, token_type: cnf ? 'DPoP' : 'Bearer', iss, sub, aud, scope, client_id, grant_id, exp, iat,
+        ...(workspace_id === undefined ? {} : { workspace_id }),
+        ...(accountable_sub === undefined ? {} : { accountable_sub }),
         ...(grant_issued_at ? { grant_issued_at } : {}), ...(agent_assurance ? { agent_assurance } : {}), ...(act ? { act } : {}), ...(cnf ? { cnf } : {}) });
 }
 // RFC 7009: always 200. An agent revokes its own grant (by refresh or access token); an app revokes grants on its
@@ -77,7 +96,7 @@ export async function revoke(request, env, ctx) {
     queueRevocation(env, ctx, await revokeGrant(env, grant.id, grant.user_id, app ? 'app_revoke' : 'agent_self_revoke'));
     return new Response(null, { status: 200 });
 }
-// GET /v1/grants?resource=…[&sub=…][&limit=…][&cursor=…]: the live agent grants on one of this app's resources, newest
+// GET /v1/grants?resource=…[&workspace_id=…][&sub=…][&limit=…][&cursor=…]: the live agent grants on one of this app's resources, newest
 // first, a page at a time (a workspace admin's view). next_cursor is null on the last page.
 // POST /v1/grants/revoke {grant_id}: revoke one, for example when a member leaves the workspace.
 export const GRANTS_PAGE_MAX = 200;
@@ -97,14 +116,17 @@ export async function appGrants(request, env, ctx) {
         invariant(query.limit === undefined || /^[1-9]\d{0,2}$/.test(query.limit) && Number(query.limit) <= GRANTS_PAGE_MAX, 'invalid_request', 'limit is 1 to {max}.', 400, { max: GRANTS_PAGE_MAX });
         invariant(query.sub === undefined || (query.sub.length > 0 && query.sub.length <= 200), 'invalid_request', 'Invalid sub.');
         const limit = Number(query.limit ?? GRANTS_PAGE_MAX), after = query.cursor === undefined ? null : readCursor(query.cursor);
-        const { results } = await env.DB.prepare(`SELECT id,user_id,client_id,client_name,registration_method,assurance,scope,created,last_used,expires_at FROM agent_grants
+        const list = env.DB.prepare(`SELECT id,user_id,client_id,client_name,registration_method,assurance,scope,created,last_used,expires_at,workspace_id FROM agent_grants
             WHERE app_id=? AND resource=? AND revoked_at IS NULL AND expires_at>? AND (? IS NULL OR user_id=?)
+            AND (? IS NULL OR workspace_id=?)
             AND (? IS NULL OR created<? OR (created=? AND id<?)) ORDER BY created DESC, id DESC LIMIT ?`)
-            .bind(client.id, query.resource, Date.now(), query.sub ?? null, query.sub ?? null, after?.[0] ?? null, after?.[0] ?? null, after?.[0] ?? null, after?.[1] ?? null, limit + 1).all();
+            .bind(client.id, query.resource, Date.now(), query.sub ?? null, query.sub ?? null, query.workspace_id ?? null,
+                query.workspace_id ?? null, after?.[0] ?? null, after?.[0] ?? null, after?.[0] ?? null, after?.[1] ?? null, limit + 1);
+        const { results } = await grantsPage(env, client, query.workspace_id, list);
         const page = results.slice(0, limit);
         return json({ grants: page.map(g => ({ grant_id: g.id, sub: g.user_id, agent: g.client_id, agent_name: g.client_name,
             agent_verified: g.registration_method === 'metadata_document', ...(g.assurance ? { agent_assurance: g.assurance } : {}),
-            scope: g.scope, created: g.created, last_used: g.last_used, expires_at: g.expires_at })),
+            scope: g.scope, created: g.created, last_used: g.last_used, expires_at: g.expires_at, workspace_id: g.workspace_id })),
             next_cursor: results.length > limit ? cursorOf(page.at(-1)) : null });
     }
     const body = await readBody(request, 'form'), client = await authenticatedClient(request, env, body, true);
@@ -114,4 +136,17 @@ export async function appGrants(request, env, ctx) {
     const event = await revokeGrant(env, grant.id, grant.user_id, 'app_revoke');
     queueRevocation(env, ctx, event);
     return json({ grant_id: grant.id, revoked: true });
+}
+
+async function grantsPage(env, client, workspaceId, list) {
+    if (workspaceId === undefined) return list.all();
+    const [workspace, page] = await env.DB.batch([
+        env.DB.prepare(`SELECT 1 FROM workspaces w JOIN clients c ON c.realm_id=w.realm_id
+            WHERE w.id=? AND c.id=? AND c.realm_id=? AND ${workspaceClientSql('c')}
+            AND EXISTS(SELECT 1 FROM workspace_products p WHERE p.workspace_id=w.id AND p.product=c.product)`)
+            .bind(workspaceId, client.id, realmId(env)),
+        list
+    ]);
+    invariant(workspace.results.length === 1, 'not_found', 'Workspace not found.', 404);
+    return page;
 }

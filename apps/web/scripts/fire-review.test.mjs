@@ -3,6 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { smokeServer } from './smoke-server.mjs';
+import { approvalPath, seedMachineWorkspace, seededRequest } from '../../../tests/support/workspace-machines.mjs';
+import { forgetRealms } from '../../server/src/realms/realm.mjs';
 import { seedSignupRequest } from './signup-fixture.mjs';
 
 test('fire review: every Lit screen at 1440 and 375, light and dark', { timeout: 600000 }, async t => {
@@ -14,10 +16,17 @@ test('fire review: every Lit screen at 1440 and 375, light and dark', { timeout:
     db.prepare("INSERT OR IGNORE INTO workspace_products(workspace_id,product,created) VALUES('ws_review','notes',?)").run(now);
     seedSignupRequest(db);
     const user = db.prepare('SELECT id FROM users ORDER BY created LIMIT 1').get();
+    seedMachineWorkspace(db, user.id);
+    forgetRealms(server.env);
+    const { request_id } = await seededRequest(server);
+    db.prepare(`INSERT INTO service_clients(id,realm_id,app_id,name,owner_email,jwks,scopes,resource_prefixes,source,
+        workspace_id,accountable_user_id,expires_at,created,updated)
+        VALUES('ws-11111111111111111111','default','app','Editorial bot','admin@app.example','{"keys":[]}','["read"]',
+        '["https://app.example/mcp"]','workspace','ws_test',?,?,?,?)`).run(user.id, now + 86400000, now, now);
     const client = db.prepare('SELECT id FROM clients ORDER BY id LIMIT 1').get();
     const routes = [
         ['/account', 'account'], ['/account/security', 'account-security'], ['/account/sessions', 'account-sessions'],
-        ['/account/agents', 'account-agents'], ['/admin/clients', 'clients'], ['/admin/clients/new', 'client-new'],
+        ['/account/agents', 'account-agents'], [approvalPath(request_id), 'machine-approval'], ['/admin/clients', 'clients'], ['/admin/clients/new', 'client-new'],
         ['/admin/clients/' + client.id, 'client-edit'], ['/admin/services', 'services'], ['/admin/users', 'users'],
         ['/admin/users/' + user.id, 'user-detail'], ['/admin/audit', 'audit'], ['/admin/signups', 'signups'], ['/admin/workspaces', 'workspaces'],
         ['/admin/workspaces/ws_review', 'workspace-detail'], ['/admin/branding', 'branding'], ['/admin/settings', 'settings'],

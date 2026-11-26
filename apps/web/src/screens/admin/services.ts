@@ -2,7 +2,7 @@ import { html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { focusQuiet, overlays } from 'fire-design';
 import { AdminScreen, corePage } from './core-screen';
-import { card, confirmPhrase, mono, segment, status, table } from './core-view';
+import { card, confirmPhrase, mono, segment, status, table, when } from './core-view';
 import { listCount } from './list-view';
 import { newService, serviceForm, serviceInput, type Service } from './service-form';
 
@@ -52,7 +52,9 @@ class ServicesScreen extends AdminScreen<{ services: Service[] }> {
   };
 
   private deleteService(service: Service) {
-    void this.write(endpoint + '/' + segment(service.id) + '/delete', {}, 'Service client deleted', () => {
+    const workspace = service.source === 'workspace';
+    void this.write(endpoint + '/' + segment(service.id) + (workspace ? '' : '/delete'),
+      workspace ? { status: 'disabled' } : {}, workspace ? 'Service client disabled' : 'Service client deleted', () => {
       this.close();
       return this.reload();
     });
@@ -60,25 +62,30 @@ class ServicesScreen extends AdminScreen<{ services: Service[] }> {
 
   private listing(services: Service[]) {
     const locked = Boolean(this.editing || this.deleting) || this.pending;
+    const disabling = this.deleting?.source === 'workspace';
     return html`
       <div class="fd-stack" data-gap="6">
         ${listCount(services.length, 'service client', 'service clients')}
-        ${table('Service clients', ['Name', 'Client ID', 'App', 'Scopes', 'Owner', 'Status', 'Actions'],
+        ${table('Service clients', ['Name', 'Client ID', 'App', 'Scopes', 'Owner', 'Workspace', 'Accountable person', 'Expires', 'Status', 'Actions'],
           services.map(service => [service.name, mono(service.id), mono(service.app_id), service.scopes.join(' '),
-            service.owner_email, status(service.status), html`
+            service.owner_email, service.workspace_name ?? '', service.accountable_email ?? '', service.expires_at ? when(service.expires_at) : '',
+            status(service.status === 'active' && service.expires_at && service.expires_at <= Date.now() ? 'expired' : service.status), html`
               <div class="fd-row" data-gap="2">
-                <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
-                  aria-label=${'Edit ' + service.id} @click=${() => this.review(service, 'edit')}>Edit</button>
-                <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
-                  aria-label=${'Delete ' + service.id} @click=${() => this.review(service, 'delete')}>Delete</button>
+                ${service.source === 'workspace' ? service.status === 'active' ? html`
+                  <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
+                    aria-label=${'Disable ' + service.id} @click=${() => this.review(service, 'delete')}>Disable</button>` : nothing : html`
+                  <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
+                    aria-label=${'Edit ' + service.id} @click=${() => this.review(service, 'edit')}>Edit</button>
+                  <button class="fd-btn" type="button" data-variant="ghost" data-size="sm" ?disabled=${locked}
+                    aria-label=${'Delete ' + service.id} @click=${() => this.review(service, 'delete')}>Delete</button>`}
               </div>`,
           ]), ['No service clients yet', 'Create one to let a service authenticate with its public key.'])}
         ${this.editing ? keyed(this.editing, html`<section class="fd-stack" data-gap="3">
           <h2 class="fd-title" id="service-editor-title">${this.editing.id ? 'Edit service client' : 'Create service client'}</h2>
           ${serviceForm(this.editing, this.pending, this.save, this.close)}
         </section>`) : nothing}
-        ${this.deleting ? card('Delete service client?', confirmPhrase({
-          id: 'confirm-service-delete', phrase: this.deleting.id, label: 'Type the service client ID', action: 'Delete service client',
+        ${this.deleting ? card(disabling ? 'Disable service client?' : 'Delete service client?', confirmPhrase({
+          id: 'confirm-service-delete', phrase: this.deleting.id, label: 'Type the service client ID', action: disabling ? 'Disable service client' : 'Delete service client',
           pending: this.pending, cancel: this.close, submit: () => this.deleteService(this.deleting!),
         }), 'The service will no longer be able to sign in with this client.') : nothing}
       </div>`;

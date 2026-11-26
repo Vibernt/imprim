@@ -9,8 +9,10 @@ OAuth 2.1 authorization server that runs on Cloudflare Workers with D1. The Work
   (`acr_values`, `max_age`) and MFA for admins and for approving agents. An account page covers sessions, apps,
   agents, email change and deletion.
 - **Agents connect for a person, never as one.** A person gives their agent (Claude Code, Cursor, Codex, a CLI) an
-  app's MCP address. The agent discovers Imprim, the person approves one workspace and named scopes, and the agent
-  gets 60-second, audience-bound tokens that the person can revoke at any time.
+  app's MCP address. The agent discovers Imprim, the person approves one workspace and ticks the permissions they
+  want to give, and the agent gets 60-second, audience-bound tokens that the person can revoke at any time. An app can
+  publish one address for its whole product and let the person pick the workspace while approving. People name their
+  connections, see where each was approved, and replace an old connection instead of piling up new ones.
 - **Apps keep authorisation.** Imprim proves who someone is and what they consented to. Your app owns its sessions
   and checks permissions on every request.
 - **Shared and personal workspaces.** Products can opt in to share team memberships, base roles and invitations
@@ -21,7 +23,9 @@ OAuth 2.1 authorization server that runs on Cloudflare Workers with D1. The Work
   email sender, admins and branding. Branding is a look (palette, tone, type set and other tweaks) plus a name,
   copy, links and logos, and each app can override it.
 - **Machines too.** Service clients (`client_credentials` with `private_key_jwt`), introspection, revocation,
-  DPoP-bound tokens, token exchange between apps, and signed user lifecycle events.
+  DPoP-bound tokens, token exchange between apps, and signed user lifecycle events. Unattended workers can belong to a
+  workspace: the app asks, a workspace owner or admin approves on Imprim's page and stays accountable, and the
+  worker's tokens name the workspace and that person. [Machine clients](docs/WORKSPACES.md#machine-clients)
 - **Your people's language.** Pages and emails in English, Spanish, French, German and Portuguese (Brazil), chosen
   by the app's `ui_locales`, the person's choice or the browser. Every email has a branded HTML part, light and dark,
   beside its plain text.
@@ -122,7 +126,7 @@ npm run check
 | `apps/server/src/` | The Worker: routes, sign-in, OIDC, agents, realms, admin console, pages, languages (`i18n/`), email, maintenance |
 | `apps/server/public/` | Static assets: generated Fire assets (`fire/`), the built app (`ui/`) and `_headers` |
 | `apps/web/` | The Lit account and admin app |
-| `apps/server/migrations/` | D1 schema, `0001` to `0028` |
+| `apps/server/migrations/` | D1 schema, `0001` to `0030` |
 | `packages/imprim-client/` | Zero-dependency client for apps and MCP servers |
 | `examples/mcp-probe/` | A complete MCP server that accepts agents through Imprim, and a scripted agent that tests it |
 | `scripts/` | Offline SQL generators for realms, clients and user imports; checks (including translations); email preview; client build |
@@ -139,7 +143,8 @@ Lit for the account and admin app, fonts under the SIL Open Font License and [Lu
 
 Imprim runs in production for Vibernt's apps and passes the OpenID conformance suite (above). In live use, Claude
 Code connects to an app's MCP server with a person's approval, refreshes its 60-second token, and a revocation from the
-account page reaches the app within seconds. What each release changed is in the [Changelog](CHANGELOG.md); what has
+account page reaches the app within seconds. On staging, the [MCP probe](examples/mcp-probe) has checked the device
+flow and a desktop agent's loopback sign-in end to end with a real browser approval. What each release changed is in the [Changelog](CHANGELOG.md); what has
 not yet been verified live is in [Security](docs/SECURITY.md#not-yet-verified-live); what comes next is in the
 [Roadmap](docs/ROADMAP.md).
 

@@ -4,7 +4,7 @@ An agent acts for a person, within one app resource. Imprim proves the person an
 
 ## App developer: publish a resource
 
-Register an app client first using [Clients](CLIENTS.md). Set `agent_access` to `on`, a nonempty `agent_scope_catalogue`, and a canonical HTTPS `agent_resource_prefixes` entry. Keep prefixes unambiguous across apps. A resource can be a workspace MCP URL such as `https://app.example/w/team-one/mcp`. Imprim checks its registered owner; it does not check that the person belongs to that workspace.
+Register an app client first using [Clients](CLIENTS.md). Set `agent_access` to `on`, a nonempty `agent_scope_catalogue`, and a canonical HTTPS `agent_resource_prefixes` entry. Keep prefixes unambiguous across apps. A resource can be a workspace MCP URL such as `https://app.example/w/team-one/mcp`. Imprim checks the app owner and, for a resource registered to an active shared workspace, the person's membership at consent.
 
 Serve protected resource metadata at the resource's advertised metadata URL. On an unauthenticated MCP request, return 401 with `WWW-Authenticate: Bearer resource_metadata="..."`. The client package provides `protectedResourceMetadata({resource,scopes})` and `wwwAuthenticate({resourceMetadataUrl,error?})`. Metadata names the issuer in `authorization_servers` and the app's supported scopes. Derive the expected audience from the trusted resource route. Call `verifyAccessToken(token,{audience:resource})`, then intersect token scopes with the person's current membership and role. Never derive the expected audience from the token or a caller-controlled parameter.
 
@@ -17,6 +17,22 @@ await requireCurrentMembershipAndScope(claims.sub, resource, claims.scope);
 ```
 
 The app owns `requireCurrentMembershipAndScope`. Imprim does not issue app API tokens. An access JWT is valid for at most 60 seconds, with no positive expiration leeway; revocation delivery also notifies the app. A queued agent revocation event is distinct from OIDC human logout; see [Protocol](PROTOCOL.md).
+
+## One resource for all workspaces
+
+For a shared-workspace app with a product and agent access enabled, reserve a product-wide resource such as
+`https://app.example/mcp` in `agent_workspace_resources`. Keep it under the app's resource prefixes and serve
+protected resource metadata for that exact URL. A workspace-choice URL cannot also be registered to an individual
+workspace.
+
+The person chooses one of their active workspaces that uses the product, including in the device flow. A redirect
+flow can replace a connection for the workspace they choose. The resource stays the token's audience and
+`workspace_id` identifies the chosen workspace. Use client 0.12.0 to read that claim and check the person's current
+role in the workspace on every call. To connect a second workspace, the person approves another grant.
+See [shared workspaces](WORKSPACES.md#agents) and the [client example](../packages/imprim-client/README.md#one-resource-for-every-workspace).
+
+For an unattended worker that acts for one workspace under an owner or admin's accountability, see
+[Machine clients](WORKSPACES.md#machine-clients).
 
 ## Person and agent: connect
 
@@ -49,6 +65,7 @@ Suppose an app has `agent_resource_prefixes: ["https://app.example/w/"]` and `ag
 | `agent_allowlist` | Empty means unrestricted; exact HTTPS client ID URLs or hosts can restrict metadata agents. A nonempty list excludes dynamic agents. It does not authenticate: only agents that publish keys (`private_key_jwt`) are authenticated. |
 | `agent_scope_catalogue` | Scope-to-description map; enabled apps need a nonempty map. |
 | `agent_resource_prefixes` | Canonical HTTPS resource ownership; enabled apps need a prefix. |
+| `agent_workspace_resources` | Up to five exact product-wide URLs where the person chooses a shared workspace. |
 | `agent_max_grant_days` | Defaults to 90; caps the person's grant. |
 
 Policies are rechecked before consent, code/device redemption and refresh. A grant does not extend if the app later raises its cap. The app must still intersect every scope with local role policy. See [Configuration](CONFIGURATION.md) for registration defaults and validation.

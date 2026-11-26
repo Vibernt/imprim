@@ -11,7 +11,7 @@ const WEB = fileURLToPath(new URL('../apps/web/src/', import.meta.url));
 const SRC = fileURLToPath(new URL('../apps/server/src/', import.meta.url));
 // Errors from these modules reach developers, operators or the admin console, never a person's page or script: they
 // stay English (protocol error_description is ASCII by RFC 6749; the admin console is English).
-export const ENGLISH_ONLY = [/^admin\//, /^machines\//, /^branding\//, /^realms\//, /^i18n\//,
+export const ENGLISH_ONLY = [/^admin\//, /^machines\/(?!(?:account|approval(?:-write)?)\.mjs$)/, /^branding\//, /^realms\//, /^i18n\//,
     /^oidc\/(token|keys|jwt|discovery|backchannel|app-sessions|logout-hint)\.mjs$/,
     /^agents\/(token|registration|revocation|grants|client-auth|settings)\.mjs$/,
     /^services\/(invitations|outbox|outbox-destination|outbox-expiry|maintenance|retention|user-events|audit|notify)\.mjs$/,

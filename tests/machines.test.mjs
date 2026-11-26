@@ -4,19 +4,7 @@ import assert from 'node:assert/strict';
 import { world, basic, turnstile } from './support/world.mjs';
 import { agentWorld, resource, metadataId, error } from './support/agents.mjs';
 import { adminLogin } from './support/admin.mjs';
-const b64 = value => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url');
-async function keyPair(kid = 'm1') {
-    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-    const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
-    return { ...pair, jwk: { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, kid } };
-}
-async function assertion(pair, clientId, claims = {}) {
-    const now = Math.floor(Date.now() / 1000);
-    const input = `${b64({ alg: 'ES256', kid: pair.jwk.kid })}.${b64({ iss: clientId, sub: clientId, aud: 'https://id.example.com/token', exp: now + 120, jti: crypto.randomUUID(), ...claims })}`;
-    const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, pair.privateKey, new TextEncoder().encode(input));
-    return `${input}.${Buffer.from(sig).toString('base64url')}`;
-}
-const ASSERTION = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+import { ASSERTION, assertion, keyPair } from './support/machine-keys.mjs';
 const form = (w, path, body, headers = {}) => w.call(path, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers }, body: new URLSearchParams(body) });
 async function machineWorld(t) {
     const w = await agentWorld(t);

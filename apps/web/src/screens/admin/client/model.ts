@@ -32,6 +32,7 @@ export interface ClientFields {
   agent_allowlist: string[];
   agent_scope_catalogue: Record<string, string>;
   agent_resource_prefixes: string[];
+  agent_workspace_resources: string[];
   agent_max_grant_days: number;
 }
 
@@ -52,7 +53,7 @@ export const SWITCHES = {
   agent_dpop: ['required', 'optional'], classic_oidc: ['on', 'off'], personal_workspaces: ['on', 'off'], workspace_admin: ['on', 'off'],
   self_signup: ['on', 'off'], join_workspaces: ['on', 'off'],
 } as const;
-const lists = ['redirect_uris', 'post_logout_uris', 'allowed_domains', 'google_hosted_domains', 'agent_allowlist', 'agent_resource_prefixes'] as const;
+const lists = ['redirect_uris', 'post_logout_uris', 'allowed_domains', 'google_hosted_domains', 'agent_allowlist', 'agent_resource_prefixes', 'agent_workspace_resources'] as const;
 
 export const exchangePairs = (value: ClientFields) => Object.fromEntries(
   Object.entries(value.token_exchange_from).map(([id, scopes]) => [id, scopes.join(' ')]),

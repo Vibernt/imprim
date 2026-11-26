@@ -56,6 +56,7 @@ function clients(open) {
         await toast(page, 'Change could not be saved');
         assert.equal(await page.locator('#f-id').inputValue(), 'smoke-client');
         await tag(page, 'f-agent_resource_prefixes', 'https://notes.example/w/');
+        await tag(page, 'f-agent_workspace_resources', 'https://notes.example/w/mcp');
         await page.getByText('Override branding', { exact: true }).click();
         const brand = '<script>Smoke Notes</script>';
         await page.locator('#f-branding').fill(JSON.stringify({ name: brand }));
@@ -69,6 +70,7 @@ function clients(open) {
         assert.deepEqual(JSON.parse(saved.redirect_uris), ['https://notes.example/cb']);
         assert.deepEqual(JSON.parse(saved.sign_in_methods), ['email', 'passkey']);
         assert.deepEqual(JSON.parse(saved.agent_scope_catalogue), { 'a=b': 'Read notes' });
+        assert.deepEqual(JSON.parse(saved.agent_workspace_resources), ['https://notes.example/w/mcp']);
         assert.deepEqual([saved.workspaces, saved.product, saved.personal_workspaces, saved.initiate_login_uri],
             ['shared', 'notes', 'on', 'https://notes.example/login']);
         await button(page, 'Done').click();
@@ -79,6 +81,9 @@ function clients(open) {
         assert.equal(await page.locator('#f-personal_workspaces').isChecked(), true);
         assert.equal(await pairs.getByRole('textbox', { name: 'Scope 1', exact: true }).inputValue(), 'a=b');
 
+        const workspaceResources = page.locator('[data-im-control="agent_workspace_resources"]');
+        await workspaceResources.getByText('https://notes.example/w/mcp', { exact: true }).waitFor();
+        await workspaceResources.locator('.fd-token-remove').click();
         await page.locator('#f-agent_access').uncheck();
         await button(page, 'Save client').click();
         await toast(page, 'Client saved');

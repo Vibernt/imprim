@@ -4,6 +4,7 @@ import { b64url, from64 } from '../lib/crypto.mjs';
 import { limitAddress } from '../auth/rate-limit.mjs';
 import { authenticatedClient } from '../oidc/token.mjs';
 import { GRANTS_PAGE_MAX } from '../machines/endpoints.mjs';
+import { machineApiPath, workspaceMachineApi } from './machine-api.mjs';
 import { verifyActor } from './actor.mjs';
 import { sendWorkspaceInvitation } from './email.mjs';
 import {
@@ -86,6 +87,8 @@ export async function workspaceApi(request, env, ctx, url) {
         return json({ workspaces: await joinableWorkspaces(env, client, actor) });
     }
 
+    const machinePath = machineApiPath.exec(path);
+    if (machinePath) return workspaceMachineApi(request, env, client, machinePath, body);
     const match = workspacePath.exec(path);
     invariant(match, 'not_found', 'Endpoint not found.', 404);
     const [, id, section = '', target] = match;
@@ -96,7 +99,7 @@ export async function workspaceApi(request, env, ctx, url) {
         case 'GET invitations': return json({ invitations: await workspaceInvitations(env, client, id) });
         case 'PUT holds': return json(await putWorkspaceHold(env, client, id, body.reason));
         case 'DELETE holds': return json(await deleteWorkspaceHold(env, client, id));
-        case 'PUT resources': return json(await putWorkspaceResource(env, client, id, body.resource));
+        case 'PUT resources': return json(await putWorkspaceResource(env, client, id, body.resource, body.name));
         case 'DELETE resources': return json(await deleteWorkspaceResource(env, client, id, body.resource));
     }
     return actorWrite(env, ctx, client, id, route, target, body);

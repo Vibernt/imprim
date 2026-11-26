@@ -159,11 +159,13 @@ export function createClient({ issuer, clientId, clientSecret, redirectUri, reso
             }), 'user');
         },
         // The live agent grants on one of this app's resources, a page at a time: { grants, next_cursor }.
-        async listGrants({ resource, sub, limit, cursor } = {}) {
+        async listGrants({ resource, workspace_id, sub, limit, cursor } = {}) {
             if (typeof resource !== 'string' || !resource.startsWith('https://')) fail('configuration', 'resource is an HTTPS URL.');
             if ((sub !== undefined && typeof sub !== 'string') || (cursor !== undefined && cursor !== null && typeof cursor !== 'string') ||
+                (workspace_id !== undefined && (typeof workspace_id !== 'string' || !workspace_id)) ||
                 (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 200))) fail('configuration', 'Invalid grant list options.');
             const query = new URLSearchParams({ resource });
+            if (workspace_id !== undefined) query.set('workspace_id', workspace_id);
             if (sub !== undefined) query.set('sub', sub);
             if (limit !== undefined) query.set('limit', String(limit));
             if (cursor) query.set('cursor', cursor);

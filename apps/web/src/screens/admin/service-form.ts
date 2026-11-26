@@ -10,6 +10,11 @@ export interface Service {
   scopes: string[];
   resource_prefixes: string[];
   status: 'active' | 'disabled';
+  source?: 'admin' | 'workspace';
+  workspace_name?: string | null;
+  accountable_email?: string | null;
+  accountable_sub?: string | null;
+  expires_at?: number | null;
 }
 
 export const newService: Service = {

@@ -11,7 +11,9 @@ import { FORMS_MODULE } from '../pages/forms.mjs';
 import { notify } from '../services/notify.mjs';
 import { t, scriptPath } from '../i18n/index.mjs';
 // Where a finished second factor may send the person when there is no authorization request.
-export const safeNext = value => typeof value === 'string' && /^\/(admin|account)(\/[A-Za-z0-9/_.-]*)?(\?[A-Za-z0-9=&%_.-]*)?$/.test(value) ? value : '/account';
+export const safeNext = value => typeof value === 'string' && (
+    /^\/(admin|account)(\/[A-Za-z0-9/_.-]*)?(\?[A-Za-z0-9=&%_.-]*)?$/.test(value) ||
+    /^\/machine-client\?request_id=[0-9a-f]{32}$/.test(value)) ? value : '/account';
 // The page wears the app's brand (client) when the step is part of an app's sign-in.
 // The authenticator code goes in one-time-code boxes; a recovery code (longer, with letters) has its own field, reached
 // by a link, so each field takes exactly one kind of code. The POST accepts either.

@@ -39,10 +39,10 @@ async function trustedDevice(env, request, client, session, row, agent) {
     return result.meta.changes === 1;
 }
 // null when the second factor is satisfied; otherwise where to send the person.
-export async function mfaGate(env, request, { client, session, row, agent = false }) {
+export async function mfaGate(env, request, { client, session, row, agent = false, next }) {
     const need = await mfaNeed(env, { client, session, row, agent });
     if (need === 'none' || await trustedDevice(env, request, client, session, row, agent)) return null;
-    const query = new URLSearchParams({ request_id: row.id });
+    const query = new URLSearchParams(row ? { request_id: row.id } : { next });
     return need === 'enrol' ? `/account/mfa?${query}` : `/mfa?${query}`;
 }
 // Marks the session as having passed a second factor now.

@@ -1,21 +1,25 @@
 import { html, nothing, type PropertyDeclarations } from 'lit';
+import { keyed } from 'lit/directives/keyed.js';
 import { api } from '../../lib/api';
 import { t } from '../../lib/i18n';
 import { card, setting } from '../page-layout';
 import { AccountScreen, post, success } from './account-screen';
 import { day, when, empty } from './access-view';
+import { confirmDisableMachine, machineClients, type MachineClient } from './machine-clients';
 import { agentLabelForm } from './agent-label-form';
 
 interface Agent {
   id: string; name: string; app: string; host: string | null; workspace: string; resource: string; scopes: string[];
+  workspace_id: string | null; workspace_name: string | null; resource_name: string | null;
   label: string | null; approved_device: string | null; approved_location: string | null;
   last_used: number | null; created: number; status: 'revoked' | 'expired' | 'active';
 }
-interface Agents { agents: Agent[]; next: string | null }
+interface Agents { agents: Agent[]; next: string | null; machine_clients: MachineClient[] }
 
 class ScreenAgents extends AccountScreen<Agents> {
-  static override properties: PropertyDeclarations = { editing: { state: true } };
+  static override properties: PropertyDeclarations = { editing: { state: true }, disabling: { state: true } };
   declare private editing: string | undefined;
+  declare private disabling: MachineClient | undefined;
   private queryString = '';
 
   set query(query: URLSearchParams) {
@@ -23,6 +27,7 @@ class ScreenAgents extends AccountScreen<Agents> {
     if (before === this.queryString) return;
     this.queryString = before;
     this.editing = undefined;
+    this.disabling = undefined;
     if (this.isConnected) void this.load();
   }
 
@@ -74,7 +79,8 @@ class ScreenAgents extends AccountScreen<Agents> {
         html`<div class="fd-stack" data-gap="1">
           ${agent.label ? html`<div class="fd-kv-value" data-plain>${agent.name}</div>` : nothing}
           <div class="fd-kv-value">${agent.host ? html`<code class="fd-code">${agent.host}</code>` : html`<span class="fd-badge" data-tone="warning">${t('Unverified')}</span>`}</div>
-          <div class="fd-kv-value" data-plain>${t('App')} · ${agent.app} · ${t('Workspace: {workspace}', { workspace: agent.workspace })}</div>
+          <div class="fd-kv-value" data-plain>${t('App')} · ${agent.app} · ${t('Workspace: {workspace}', { workspace: agent.workspace_name ?? agent.workspace })}</div>
+          ${agent.resource_name ? html`<div class="fd-kv-value" data-plain>${agent.resource_name}</div>` : nothing}
           <div class="fd-kv-value"><code class="fd-code">${agent.resource}</code></div>
           <div class="fd-row" data-wrap data-gap="1"><span>${t('Scopes')}</span>
             ${agent.scopes.map(scope => html`<code class="fd-code fd-kv-value">${scope}</code>`)}
@@ -92,16 +98,35 @@ class ScreenAgents extends AccountScreen<Agents> {
     `;
   }
 
+  private reviewMachine = async (client?: MachineClient) => {
+    const focus = client ? '#confirm-machine' : this.disabling ? '#disable-' + this.disabling.client_id : '';
+    this.disabling = client;
+    await this.updateComplete;
+    if (focus) this.querySelector<HTMLElement>(focus)?.focus();
+  };
+
+  private changeMachine = (client: MachineClient, action: 'renew' | 'disable') => this.mutate(async () => {
+    await post('machine-clients/' + action, { client_id: client.client_id });
+    if (!this.isConnected) return;
+    if (action === 'disable') this.disabling = undefined;
+    success(action === 'renew' ? t('Machine renewed') : t('Machine disabled'));
+    await this.load(false);
+  });
+
   protected override render() {
-    return this.page(t('Connected agents'), t('Agents act for you in an app. Revoke one to end its access.'), ({ agents, next }) =>
-      card(t('Agents'), agents.length ? html`
+    return this.page(t('Connected agents'), t('Agents act for you in an app. Revoke one to end its access.'), ({ agents, next, machine_clients }) => html`
+      ${card(t('Agents'), agents.length ? html`
         <div role="group" aria-label=${t('Connected agents')}>
           ${agents.map(agent => this.connection(agent))}
         </div>
         ${next ? html`<div class="fd-row" data-justify="center">
           <a class="fd-btn" data-variant="ghost" href=${`/account/agents?before=${encodeURIComponent(next)}`}>${t('Older agents')}</a>
         </div>` : nothing}`
-      : empty(t('No agents connected'), t('Agents you approve to act in an app appear here.'))));
+      : empty(t('No agents connected'), t('Agents you approve to act in an app appear here.')))}
+      ${machineClients(machine_clients, this.pending, client => this.changeMachine(client, 'renew'), this.reviewMachine)}
+      ${this.disabling ? keyed(this.disabling.client_id, confirmDisableMachine(this.disabling, this.pending,
+        () => this.changeMachine(this.disabling!, 'disable'), () => this.reviewMachine())) : nothing}`);
+
   }
 }
 customElements.define('screen-agents', ScreenAgents);

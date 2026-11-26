@@ -22,6 +22,8 @@ export function validateAccessClaims(header, claims, audience, issuer, fail, clo
     const now = Math.floor(Date.now() / 1000);
     if (header.typ !== 'at+jwt' || claims.iss !== issuer || claims.aud !== audience ||
         !['sub','client_id','grant_id','jti','scope'].every(name => typeof claims[name] === 'string' && claims[name].length > 0) ||
+        (claims.workspace_id !== undefined && typeof claims.workspace_id !== 'string') ||
+        (claims.accountable_sub !== undefined && typeof claims.accountable_sub !== 'string') ||
         !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp) || claims.exp <= now || claims.iat > now + clockSkewSeconds ||
         claims.exp <= claims.iat || claims.exp - claims.iat > 60 ||
         (claims.nbf !== undefined && (!Number.isInteger(claims.nbf) || claims.nbf > now + clockSkewSeconds)) ||

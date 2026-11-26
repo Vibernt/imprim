@@ -53,9 +53,10 @@ and Settings. Platform admins can also manage realms, rosters and signing keys (
 | POST `users/:id/reset-mfa` | `{reason:"..."}`; needs a fresh admin second factor ([Protocol](PROTOCOL.md#sign-in-and-sessions)) |
 | GET `audit?actor=id&target=id&before=row-id` | `{audit,next}`; newest first, 50 a page |
 | GET `audit/export?after=row-id` | NDJSON, oldest first, 1,000 a page; `x-next-after` while more remain |
-| GET `services` | `{services:[...]}` |
+| GET `services` | `{services:[...]}`; workspace clients include `workspace_id`, `workspace_name`, `accountable_sub`, `accountable_email` and `expires_at`. |
 | POST `services`, `services/:id` | `{id, app_id, name, owner_email, jwks, scopes, resource_prefixes, status}` ([Protocol](PROTOCOL.md#machines-introspection-revocation-and-the-app-grant-api)) |
-| POST `services/:id/delete` | `{}` |
+| POST `services/:id` for a workspace client | `{status:"disabled"}`; the approver manages renewal. |
+| POST `services/:id/delete` | `{}`; realm-admin service clients only. |
 | GET `workspaces?status=active&before=id` | `{enabled,workspaces,next}`, 50 rows per page, or `{enabled:false}` when shared workspaces are off |
 | GET `workspaces/:id` | `{enabled,workspace}` with members, invitations, registered resources, holds and recent audit |
 | GET `workspaces/:id/close` | Closure review. A hold or closed workspace returns 409 |

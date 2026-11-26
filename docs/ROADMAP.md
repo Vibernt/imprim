@@ -33,7 +33,10 @@ staging on 2026-11-17 with no failures; what remains is submitting them to self-
 ([OpenID certification](CERTIFICATION.md)). Dynamic OP would need open registration for web apps.
 
 Verified live on 2026-11-17: Claude Code against a real MCP resource in production, from consent through refresh to
-revocation delivered to the app. Still to verify live: Cursor and Codex; device flow from a CLI; Workers egress and
+revocation delivered to the app. Verified live on 2026-11-26, on staging with the [MCP probe](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe)
+and a person approving in a real browser: the device flow from a CLI (24 checks, including refresh, reuse detection and the
+revocation event reaching the app in 7 seconds) and a desktop agent's loopback sign-in (RFC 8252). Still to verify
+live: Cursor and Codex; Workers egress and
 DNS-rebinding behaviour; Safari and Chrome cookie flows; retry and deduplication by a real app; the Fire interface on
 a deployed Worker ([Security](SECURITY.md#not-yet-verified-live)). The
 [MCP probe](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe) is the target for the agent and device

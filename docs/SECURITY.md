@@ -73,9 +73,12 @@ reference for these notes, was checked as follows:
   the account and two-factor pages, and the console's Branding page with Tweaks and logo upload have not been tried
   there by a person yet.
 
-The [MCP probe](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe) is built for the agent checks below:
-a test MCP server to deploy beside staging, and a scripted agent. Its checks pass against the test harness; it has not
-been deployed yet.
+The [MCP probe](https://github.com/Vibernt/imprim/tree/main/examples/mcp-probe), a test MCP server and a scripted
+agent, runs beside Vibernt's staging since 2026-11-26. That day a person approved its agent in a real browser: the
+device flow passed all 24 checks (single-use code, 60-second audience-bound tokens, the workspace boundary, refresh, a
+retry after a lost response, reuse detection revoking the grant, and the revocation event reaching the app 7 seconds
+later), and the loopback sign-in returned to a one-time listener on `127.0.0.1` with its state, and redeemed the code
+once for the exact redirect URI.
 
 Node tests use a real SQLite adapter and controlled provider, mail, rate and queue responses. They do not prove:
 

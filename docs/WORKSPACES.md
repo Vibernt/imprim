@@ -1,6 +1,6 @@
 # Shared workspaces
 
-Status: built (migrations `0024` and `0027`, client `0.11.0`). This page is the specification; the code matches it.
+Status: built (migrations `0024`, `0027` and `0029`, client `0.12.0`). This page is the specification; the code matches it.
 
 By default each app keeps its own workspaces, memberships and roles, and Imprim only admits people per app. A realm
 can instead hold **shared workspaces** for a family of products. Imprim then keeps each workspace's members, base
@@ -114,7 +114,11 @@ in its realm by adding its own product. Bodies are JSON. Errors use the existing
 | `DELETE /v1/workspaces/{id}/members/{sub}` | actor admin+, or the member themself | `{ actor_token }`; refused if it would leave no owner |
 | `POST /v1/workspaces/{id}/close` | actor owner, or an eligible app acting under the unjoined or realm-admin rules below | `{ actor_token, confirm?, release_own_hold? }`; if supplied, `confirm` must exactly match the current workspace name. Returns `409 workspace_held` with the reasons while any hold exists. With `release_own_hold: true`, the calling app's own hold does not block and is deleted in the same write, only if the close commits; other apps' holds still block. |
 | `PUT` / `DELETE /v1/workspaces/{id}/holds` | app | `{ reason }`; one hold per app per workspace |
-| `PUT` / `DELETE /v1/workspaces/{id}/resources` | app | `{ resource }`; the resource must sit under the app's own `agent_resource_prefixes`. Re-registering the same resource to the same workspace by the same app returns `200` with the current workspace snapshot and changes nothing. A registration held by another workspace or app returns `409`. |
+| `PUT` / `DELETE /v1/workspaces/{id}/resources` | app | `{ resource }`; the resource must sit under the app's own `agent_resource_prefixes`. PUT also takes `name`, trimmed to 1–80 characters without control characters. An omitted or null name keeps the current name and an empty string clears it. PUT returns `200` with the workspace snapshot. An unchanged registration leaves the version unchanged. A name change is audited as `workspace_resource_named`. A registration held by another workspace or app, or a workspace-choice URL, returns `409`. |
+| `POST /v1/workspaces/{id}/machine-clients` | participating app with agent access | `{ name, jwks, scopes, resources }` → `201 { request_id, approval_url, expires_at }`. |
+| `GET /v1/workspaces/{id}/machine-clients/requests/{request_id}` | requesting app | `{ request_id, status, service_client_id?, expires_at }`; an unanswered request past its deadline reads as `expired`. |
+| `GET /v1/workspaces/{id}/machine-clients` | participating app | `{ machine_clients: [{ client_id, name, scopes, resources, accountable_sub, created, expires_at, last_used, status }] }` for that app. Status is `active`, `expired` or `disabled`. |
+| `DELETE /v1/workspaces/{id}/machine-clients/{client_id}` | workspace owner, admin or accountable person | `{ actor_token }` → `{ client_id, disabled: true }`; the app can disable only its own workspace clients. |
 
 An app with `workspace_admin='on'` and a valid `actor_token` can send or resend an `owner` invitation, revoke an
 invitation, or close an active team workspace that uses its product and has zero members. Any hold still blocks
@@ -172,8 +176,15 @@ admission; only the grants for the workspace they left are revoked.
 ## Agents
 
 At agent consent, when the resource is registered in `workspace_resources` for an active workspace, the person must
-be a member of it (`access_denied` otherwise) and the consent page shows the workspace's name. The app still checks
-the role on every call.
+be a member of it (`access_denied` otherwise) and the consent page shows the workspace's name. An optional resource
+name appears above its URL on consent and in Connected agents.
+
+Alternatively, a shared-workspace app can reserve up to five exact product-wide URLs under its own resource
+prefixes in `agent_workspace_resources`, for example `https://app.example/mcp`. Each person chooses an active
+workspace they belong to that uses the product. The grant and its access tokens carry the selected `workspace_id`,
+and the token audience stays the resource URL. Removing the person, removing the product from the workspace, or
+closing the workspace revokes the affected grants with a durable revocation event. The app checks the person's
+current role in the selected workspace on every call. [Agent access](AGENT_ACCESS.md#one-resource-for-all-workspaces)
 
 ## Events
 
@@ -212,12 +223,39 @@ One invitation email, `workspace_invitation`, in every language Imprim ships, wi
 the workspace name, the products it uses, and a button to the inviting app's `initiate_login_uri` (or, if unset, the
 issuer's `/login`).
 
-## Client `0.11.0`
+## Machine clients
+
+A shared app with `agent_access` enabled can request an unattended machine identity for an active workspace
+that uses its product. Keep the private keys with the machine. The request carries a name of 1–100 characters,
+a JWKS of 1–5 public P-256 or RSA-2048+ keys with distinct key IDs, at least one distinct catalogue scope and
+1–5 distinct exact resource URLs. Each resource must be registered to the workspace by this app or listed in
+the app's `agent_workspace_resources`.
+
+Send the approver to the returned Imprim `approval_url`. A signed-in owner or admin can approve or deny the
+request within 24 hours. Imprim shows the scopes, resources, key thumbprints and expiry, and applies the app's
+agent consent MFA rule. A workspace can have up to 10 unexpired pending requests and 20 enabled, unexpired machine
+clients across apps. A request at either limit returns `409 limit_reached`. Poll the request status for the
+service client ID after approval.
+
+The approver is the accountable person. Their existing Imprim subject is the `accountable_sub` claim, alongside
+`workspace_id`. The machine authenticates as `service:<id>` using `private_key_jwt` and requests one exact resource
+at a time. Use `workspace_id` to constrain access to the expected workspace and apply app policy to the service
+identity and approved scopes.
+
+Imprim checks on issuance and introspection that the client is enabled and unexpired, the workspace is active
+and still uses the app's product, and the accountable person is active, unmerged, and still an owner or admin.
+It checks that the audience is still registered to the workspace or available for workspace choice. Access
+tokens last 60 seconds. The accountable person can renew a live client for the app's current
+`agent_max_grant_days` or disable it from Account › Agents. The realm admin console can also disable it.
+[Machine tokens](PROTOCOL.md#machines-introspection-revocation-and-the-app-grant-api).
+
+## Client `0.12.0`
 
 Client `0.8.0` added these calls; `0.8.1` lets `handleCallback(url, values, { idToken: true })` return
 `{ claims, idToken }` for `actor_token`. Client `0.8.2` refuses redirects so the client works inside Cloudflare Workers.
 Client `0.8.3` types `created_via`. Client `0.9.0` adds `joinableWorkspaces`; `0.9.1` sends an omitted `add` or `remove` as an empty list; `0.10.0` adds
-`user(sub)`. The current client, `0.11.0`, adds `closeWorkspace(id, { releaseOwnHold: true })`.
+`user(sub)`. Client `0.11.0` adds `closeWorkspace(id, { releaseOwnHold: true })`. Client `0.12.0` reads the
+workspace claim in access tokens and supports `registerWorkspaceResource(id, resource, { name })` and [machine clients](#machine-clients).
 
 `memberships(sub)`, `joinableWorkspaces({ actorToken })`, `workspace(id)`, `workspaceMembers(id, { limit, cursor })`,
 `createWorkspace`, `renameWorkspace`, `setWorkspaceProducts`, `inviteToWorkspace`, `workspaceInvitations`,

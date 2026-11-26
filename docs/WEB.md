@@ -7,7 +7,7 @@ Status: built. This page is the specification for Fire 0.12.4 and the Lit accoun
 - **The Worker stays dependency-free.** It imports nothing from npm at run time. It serves the protocol, the APIs, the
   screens that handle credentials, and the built interface as static files.
 - **Server-rendered, unchanged in kind:** sign-in, check email, signed in and signed out, sign-in stopped, magic-link
-  confirm, the second-factor challenge, workspace join, device-code entry and result, agent consent, logout confirm and result, the
+  confirm, the second-factor challenge, workspace join, device-code entry and result, agent consent, workspace machine approval and result, logout confirm and result, the
   signed-out account page, every OIDC endpoint and every email. These handle credentials, post forms that work
   without JavaScript, carry a per-page `form-action`, take the brand per request and run mid-protocol.
 - **Built with Lit and Vite:** the account area (`/account/*`) and the admin console (`/admin/*`). They form one
@@ -69,6 +69,8 @@ Status: built. This page is the specification for Fire 0.12.4 and the Lit accoun
   The device and location describe the browser used to approve. `POST /v1/account/agents/label` takes JSON
   `{ grant_id, label }` to name a connection privately. An empty name clears it. Expired and revoked connections
   can also be named. The same session, Origin and CSRF checks apply.
+- `GET /v1/account/agents` also returns `machine_clients` for the accountable person. Session-protected POSTs to
+  `/v1/account/machine-clients/renew` and `/v1/account/machine-clients/disable` take `{ client_id }`.
 - Session cookie as today. Every `POST`, `PUT`, `PATCH` and `DELETE` needs the CSRF header `x-csrf-token` equal to the
   `__Host-vi_csrf` cookie, and a same-origin `Origin`. Errors are `{ error, error_description }`. The client maps
   401 `login_required` to `/login?next=`, 403 `mfa_required` to the second-factor screen, and 403 `reauth_required`

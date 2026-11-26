@@ -4,11 +4,11 @@ import { assertDelivered, invariant } from '../lib/errors.mjs';
 import { signAgentJwt } from './grants.mjs';
 import { expireEvent } from '../services/outbox-expiry.mjs';
 import { realmEnvForClient } from '../realms/realm.mjs';
-export function revocationStatements(env, id, userId, reason, now, replacementId = null) {
+export function revocationStatements(env, id, userId, reason, now, replacementId = null, guard = null) {
     const eventId = crypto.randomUUID();
     const where = `agent_grants.id=? AND agent_grants.user_id=? AND agent_grants.revoked_at IS NULL${replacementId
-        ? ' AND agent_grants.expires_at>? AND EXISTS(SELECT 1 FROM agent_grants WHERE id=?)' : ''}`;
-    const args = replacementId ? [id, userId, now, replacementId] : [id, userId];
+        ? ' AND agent_grants.expires_at>? AND EXISTS(SELECT 1 FROM agent_grants WHERE id=?)' : ''}${guard ? ` AND (${guard.sql})` : ''}`;
+    const args = [id, userId, ...(replacementId ? [now, replacementId] : []), ...(guard?.args ?? [])];
     // Durable outbox and revocation are one transaction. Queue outages cannot restore access. The row is written even
     // when the app has no back-channel URI yet, so the loss shows up as missing_uri instead of vanishing (S17).
     const statements = [

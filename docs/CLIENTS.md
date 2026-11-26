@@ -211,6 +211,7 @@ agent access off. Add these settings to the client:
 | `agent_allowlist` | `[]` means unrestricted. Otherwise exact canonical HTTPS client-ID URLs or lowercase hosts (matched on the full host, so another port never matches); no wildcards or suffix matching. A nonempty list excludes dynamic clients. **The allowlist narrows which client IDs may ask; it does not authenticate them.** Any local program can claim an allowlisted ID whose document lists loopback redirects. Prefer agents that publish keys (`private_key_jwt`), and exact URL entries over hosts. Do not allowlist hosts that serve user content. |
 | `agent_scope_catalogue` | `{}`; map scope names to human-readable descriptions. Enabled apps need at least one. No implicit `openid` or `offline_access` scope is added. |
 | `agent_resource_prefixes` | `[]`; canonical HTTPS URLs without queries/fragments. Match same origin and complete path boundaries. Enabled apps need at least one. Ambiguous ownership fails. |
+| `agent_workspace_resources` | `[]`; up to five exact resource URLs under the app's prefixes. Requires a shared-workspace product and agent access. People pick a workspace at consent. |
 | `agent_max_grant_days` | `90`; positive whole days. A reduced cap also restricts existing grants; increasing it never extends their originally consented expiry. |
 
 Policies are read at authorization, sign-in continuation, consent, code/device redemption and refresh. Atomic issuance
@@ -341,6 +342,7 @@ What each version changed:
 | 0.3.0 | Wire change: agent revocation events are `secevent+jwt`. `iss` is required on the authorization response. Error text handling, JWKS refresh after 10 minutes, a failed discovery is not cached. Details below. |
 | 0.4.0 | Step-up: `startLogin({ acrValues, maxAge })`; ID tokens carry `acr`. |
 | 0.5.0 | `verifyAccessToken` checks a DPoP proof for a bound token (`dpop`, `requireDpop`) and returns `dpop_jti`. |
+| 0.12.0 | `verifyAccessToken` returns a string `workspace_id` when present. `listGrants` accepts a `workspace_id` filter, and `registerWorkspaceResource` accepts `{ name }`. Workspace machine clients add `requestMachineClient`, `machineClientRequest`, `machineClients` and `disableMachineClient`. Access-token verification returns `accountable_sub` when present. |
 | 0.11.0 | `startLogin({ profile: true })` adds the `profile` scope, so the ID token carries `name`. `closeWorkspace(id, { releaseOwnHold: true })` releases the app's own hold only if the close succeeds. |
 | 0.10.0 | Confidential clients can call `user(sub)` to read the current profile of a person the app currently admits. |
 | 0.9.1 | `setWorkspaceProducts` sends an omitted `add` or `remove` as an empty list. Nothing else changes. |
@@ -363,7 +365,7 @@ user events all default to off. Shared workspaces require opt-in on the realm an
 | Discover workspaces to add the app's product to | `joinableWorkspaces({ actorToken })` (0.9.0) |
 | Manage workspaces | `createWorkspace(options)`, `renameWorkspace(id, options)`, `setWorkspaceProducts(id, options)`, `closeWorkspace(id, options)` |
 | Manage people | `inviteToWorkspace(id, options)`, `revokeWorkspaceInvitation(id, invitationId, options)`, `setMemberRole(id, sub, options)`, `removeMember(id, sub, options)` |
-| Manage app holds and resources | `holdWorkspace(id, reason)`, `releaseWorkspace(id, reason?)`, `registerWorkspaceResource(id, resource)`, `unregisterWorkspaceResource(id, resource)` |
+| Manage app holds and resources | `holdWorkspace(id, reason)`, `releaseWorkspace(id, reason?)`, `registerWorkspaceResource(id, resource, { name }?)`, `unregisterWorkspaceResource(id, resource)` |
 
 Pass `actorToken` in the options for actions on a person's behalf. The client sends it as `actor_token` in the
 JSON body and uses HTTP Basic app credentials for every request. For `kind: 'workspace'`, `verifyBackchannel`

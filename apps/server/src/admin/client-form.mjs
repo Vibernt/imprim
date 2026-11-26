@@ -3,7 +3,7 @@
 // choice. A value that starts with [ or { is read as JSON, which is what Fire's controls post when they carry
 // data-format="json" (docs/fire/GUIDE.md section 5, "Forms").
 import { invariant } from '../lib/errors.mjs';
-const LISTS = ['redirect_uris', 'post_logout_uris', 'allowed_domains', 'google_hosted_domains', 'agent_allowlist', 'agent_resource_prefixes'];
+const LISTS = ['redirect_uris', 'post_logout_uris', 'allowed_domains', 'google_hosted_domains', 'agent_allowlist', 'agent_resource_prefixes', 'agent_workspace_resources'];
 // Groups of checkboxes, each box named `group.choice`. The order of the boxes is the order saved.
 const GROUPS = ['sign_in_methods', 'agent_registration_methods'];
 const NUMBERS = ['dev', 'agent_max_grant_days', 'version', 'mfa_trusted_device_days', 'agent_token_rate'];

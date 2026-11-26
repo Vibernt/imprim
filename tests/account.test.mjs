@@ -31,7 +31,7 @@ test('the account offers profile, security, sessions, apps and agents, and a nam
     assert.equal(access.sessions[0].current, true);
     assert.deepEqual(access.apps.map(app => app.client_id), ['app']);
     assert.deepEqual(access.browsers, []);
-    assert.deepEqual(await read('agents'), { agents: [], next: null });
+    assert.deepEqual(await read('agents'), { agents: [], next: null, machine_clients: [] });
     assert.deepEqual(await (await w.call('/v1/me', { headers: { cookie: jar } })).json().then(({ email, admin }) => ({ email, admin })),
         { email: 'person@example.com', admin: null });
     assert.equal((await form(w, '/account/profile', { csrf: csrfOf(jar), display_name: '  Ada ‮Lovelace  ' }, jar)).status, 200);

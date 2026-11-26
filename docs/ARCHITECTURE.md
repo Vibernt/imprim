@@ -24,7 +24,7 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 
 ## D1 schema
 
-Migrations `0001` through `0028` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0030` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|
@@ -44,7 +44,7 @@ Migrations `0001` through `0028` create or extend these tables. Workspace child 
 | `rate_limits` | Separate D1 budgets and Turnstile replay records. |
 | `agent_clients` | Public dynamic registrations and last use. |
 | `agent_metadata_cache` | Fresh HTTPS client ID documents, bounded by time and count. |
-| `agent_grants` | Person, agent, app, resource, approved scopes, consent and expiry, private label and approval browser and location. |
+| `agent_grants` | Person, agent, app, resource, optional chosen workspace, approved scopes, consent and expiry, private label and approval browser and location. |
 | `agent_codes` | Hashed, single-use agent authorization code. |
 | `agent_assertions` | Single-use `private_key_jwt` assertion `jti` records. |
 | `agent_refresh_tokens` | Hashed current/spent refresh values and replacement links. |
@@ -58,7 +58,8 @@ Migrations `0001` through `0028` create or extend these tables. Workspace child 
 | `mfa_factors`, `recovery_codes`, `trusted_devices` | TOTP secrets (sealed), hashed recovery codes, per-app remembered browsers. |
 | `webauthn_credentials`, `webauthn_challenges` | Passkey public keys and sign counters; single-use ceremony challenges. |
 | `seen_devices`, `email_changes` | New-device notices and pending, link-confirmed email changes. |
-| `service_clients` | Machine identities: public JWKS, scopes and resource prefixes under one app. |
+| `service_clients` | Machine identities with public JWKS and scopes. Realm-admin clients use resource prefixes. Workspace clients use exact resources and carry an accountable user and expiry. |
+| `machine_client_requests` | App requests for workspace machines and their one-time approval decisions. |
 | `dpop_proofs` | DPoP proof `jti` replay records. |
 | `user_event_outbox` | Signed user lifecycle events pending delivery to apps that opted in. |
 | `brand_assets` | Realm-scoped, content-addressed logos and marks. |

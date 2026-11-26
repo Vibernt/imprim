@@ -13,6 +13,8 @@ import { pollDevice } from './device.mjs';
 import { matchRedirect } from './uris.mjs';
 import { resolveAgent } from './registration.mjs';
 import { limitAgentGrant } from '../auth/rate-limit.mjs';
+import { revokeEndedWorkspaceGrant, workspaceEndRevocation } from './workspace-revocation.mjs';
+import { scopedWorkspaceLiveSql } from './workspace-choice.mjs';
 // A lost refresh response can be retried for this long without killing the grant (see refresh()).
 export const REFRESH_GRACE_MS = 10000;
 // A running agent refreshes about 1,440 times a day; this bounds a holder that loops (S5).
@@ -76,15 +78,25 @@ function narrowed(grant, requested) {
 async function refresh(env, body, ctx, jkt = null) {
     invariant(tokenShape(body.refresh_token), 'invalid_grant', 'Refresh token required.');
     const hash = await sha256(body.refresh_token), now = Date.now();
-    const token = await env.DB.prepare(`SELECT t.*,g.client_id,g.user_id,g.resource FROM agent_refresh_tokens t JOIN agent_grants g ON g.id=t.grant_id WHERE t.hash=?`).bind(hash).first();
+    const token = await env.DB.prepare(`SELECT t.*,g.client_id,g.user_id,g.resource,g.workspace_id,
+        (g.workspace_id IS NULL OR (${scopedWorkspaceLiveSql('g', 'owner')})) AS workspace_live
+        FROM agent_refresh_tokens t JOIN agent_grants g ON g.id=t.grant_id JOIN clients owner ON owner.id=g.app_id
+        WHERE t.hash=? AND owner.realm_id=?`).bind(hash, env.REALM.id).first();
     invariant(token && token.client_id === body.client_id && token.resource === body.resource, 'invalid_grant', 'Refresh client or resource mismatch.');
+    if (token.workspace_live !== 1) {
+        await revokeEndedWorkspaceGrant(env, token.grant_id, token.user_id, token.workspace_id, now);
+        invariant(false, 'invalid_grant', 'Workspace access ended.');
+    }
     // Grace: a retry of a token spent moments ago, whose replacement was never used, rotates the replacement instead.
     // A thief racing the owner then leaves the owner holding a spent replacement, which trips reuse detection.
     let spending = token;
     if (token.spent_at !== null) {
         const successor = token.spent_at > now - REFRESH_GRACE_MS && token.replacement_hash && token.grace_spent === 0
             ? await env.DB.prepare('SELECT * FROM agent_refresh_tokens WHERE hash=? AND spent_at IS NULL').bind(token.replacement_hash).first() : null;
-        if (!successor) return reuse(env, ctx, token, body);
+        if (!successor) {
+            await provesAgent(env, token.client_id, body);
+            return reuse(env, ctx, token);
+        }
         spending = { ...token, ...successor, grace: 1 };
     }
     const { grant, agent, app } = await grantContext(env, token.grant_id);
@@ -98,24 +110,29 @@ async function refresh(env, body, ctx, jkt = null) {
     const material = await tokenMaterial(env, grant, scope, bound);
     // Qualified: an unqualified user_id inside the client_admissions subquery would resolve to that table's own column.
     const guard = liveGrantGuard(grant, app, now), admission = admissionGuard('agent_grants.user_id', app.id);
+    const workspaceEnd = grant.workspace_id === null ? null : workspaceEndRevocation(env, grant.id, grant.user_id, grant.workspace_id, now);
     const result = await env.DB.batch([
         env.DB.prepare(`UPDATE agent_refresh_tokens SET spent_at=?,replacement_hash=?,grace_spent=? WHERE hash=? AND spent_at IS NULL
             AND EXISTS(SELECT 1 FROM agent_grants WHERE id=grant_id AND revoked_at IS NULL AND expires_at>? AND ${admission.sql}) AND ${guard.sql}`)
             .bind(now, material.hash, spending.grace ? 1 : 0, spending.hash, now, ...admission.args, ...guard.args),
         env.DB.prepare(`INSERT INTO agent_refresh_tokens(hash,grant_id,created) SELECT ?,grant_id,? FROM agent_refresh_tokens WHERE hash=? AND replacement_hash=?`)
             .bind(material.hash, now, spending.hash, material.hash),
-        ...(bound ? [bindStatement(env, grant, bound, material.hash)] : [])
+        ...(bound ? [bindStatement(env, grant, bound, material.hash)] : []),
+        ...(workspaceEnd?.statements ?? [])
     ]);
+    if (workspaceEnd && result.at(-1).meta.changes === 1) {
+        queueRevocation(env, ctx, workspaceEnd.eventId);
+        invariant(false, 'invalid_grant', 'Workspace access ended.');
+    }
     if (result[0].meta.changes !== 1) {
         const current = await env.DB.prepare('SELECT spent_at FROM agent_refresh_tokens WHERE hash=?').bind(spending.hash).first();
-        if (current?.spent_at !== null && current?.spent_at !== undefined) return reuse(env, ctx, token, body);
+        if (current?.spent_at !== null && current?.spent_at !== undefined) return reuse(env, ctx, token);
         invariant(false, 'invalid_grant', 'Grant revoked.');
     }
     await env.DB.batch(usageStatements(env, grant, 'agent_refresh'));
     return json(material.response);
 }
-async function reuse(env, ctx, token, body) {
-    await provesAgent(env, token.client_id, body);
+async function reuse(env, ctx, token) {
     queueRevocation(env, ctx, await revokeGrant(env, token.grant_id, token.user_id, 'agent_refresh_reuse'));
     invariant(false, 'invalid_grant', 'Refresh token reuse revoked the whole grant.');
 }

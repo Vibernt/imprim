@@ -6,7 +6,7 @@ import { agentSettings } from '../agents/settings.mjs';
 import { adminWriteGuard } from '../admin/auth.mjs';
 import { liveActorSession } from './actor.mjs';
 import { workspaceEventStatements } from './events.mjs';
-import { accessEndStatements } from './teardown.mjs';
+import { accessEndStatements, productAccessEndStatements } from './teardown.mjs';
 import { joinableTeamWorkspaces, productList, usingProduct, withProducts } from './queries.mjs';
 
 const PRODUCT = /^[a-z][a-z0-9-]{1,39}$/;
@@ -260,7 +260,8 @@ export function setWorkspaceProducts(env, client, actor, id, body, signIn = null
     // Capture recipients after adding and before deleting. The event payload projects the final product list.
     return guardedWrite(env, { client, actor, id, now, checks, joinGuard,
         effects: [addProducts(env, id, add, now)],
-        afterEvent: [env.DB.prepare('DELETE FROM workspace_products WHERE workspace_id=? AND product IN (SELECT value FROM json_each(?))')
+        afterEvent: [...productAccessEndStatements(env, id, remove, now),
+            env.DB.prepare('DELETE FROM workspace_products WHERE workspace_id=? AND product IN (SELECT value FROM json_each(?))')
             .bind(id, JSON.stringify(remove))],
         event: 'workspace-products-changed', eventOptions: { removeProducts: remove }, detail: { add, remove } });
 }
@@ -381,16 +382,29 @@ function resourcePrefixCheck(client, resource) {
         [client.id, client.agent_resource_prefixes], 'App resource prefixes changed.');
 }
 
-export function putWorkspaceResource(env, client, id, resource) {
+export function putWorkspaceResource(env, client, id, resource, name) {
+    const supplied = name != null;
+    if (supplied) invariant(typeof name === 'string' && !/\p{Cc}/u.test(name) &&
+        (name === '' || (name.trim() && [...name.trim()].length <= 80)),
+    'invalid_request', 'Enter a resource name of 1 to 80 characters without control characters, or use an empty string to clear it.');
+    const nextName = supplied ? name.trim() || null : null;
     const checks = [resourcePrefixCheck(client, resource),
         conflict('NOT EXISTS(SELECT 1 FROM workspace_resources WHERE resource=? AND (workspace_id<>? OR client_id<>?))',
-            [resource, id, client.id], 'resource_registered', 'Resource is already registered.')];
+            [resource, id, client.id], 'resource_registered', 'Resource is already registered.'),
+        conflict(`NOT EXISTS(SELECT 1 FROM clients c,json_each(c.agent_workspace_resources) choice WHERE choice.value=?)`,
+            [resource], 'resource_registered', 'Resource is already configured for workspace choice.')];
     const now = Date.now();
-    const writeIf = { sql: 'NOT EXISTS(SELECT 1 FROM workspace_resources WHERE resource=?)', args: [resource] };
-    // Insert last so the version, outbox and audit all use the same registration condition.
-    const finalEffect = env.DB.prepare(`INSERT INTO workspace_resources(resource,workspace_id,client_id,created)
-        SELECT ?,?,?,? WHERE ${writeIf.sql}`).bind(resource, id, client.id, now, ...writeIf.args);
-    return guardedWrite(env, { client, id, now, checks, writeIf, finalEffect, event: 'workspace-updated',
+    const changedName = '(SELECT name FROM workspace_resources WHERE resource=?) IS NOT ?';
+    const writeIf = { sql: `NOT EXISTS(SELECT 1 FROM workspace_resources WHERE resource=?) OR (?=1 AND ${changedName})`,
+        args: [resource, Number(supplied), resource, nextName] };
+    const nameAudit = env.DB.prepare(`INSERT INTO audit(event,actor,target,detail,created,realm_id)
+        SELECT 'workspace_resource_named',?,?,?,?,? WHERE ?=1 AND ${changedName}`)
+        .bind(client.id, id, JSON.stringify({ workspace_id: id, resource }), now, realmId(env), Number(supplied), resource, nextName);
+    // Write last so the version, outbox and both audit entries read the same old registration.
+    const finalEffect = env.DB.prepare(`INSERT INTO workspace_resources(resource,workspace_id,client_id,created,name)
+        SELECT ?,?,?,?,? WHERE ${writeIf.sql}
+        ON CONFLICT(resource) DO UPDATE SET name=excluded.name`).bind(resource, id, client.id, now, nextName, ...writeIf.args);
+    return guardedWrite(env, { client, id, now, checks, writeIf, afterEvent: [nameAudit], finalEffect, event: 'workspace-updated',
         audit: 'workspace-resource-put', detail: { resource } });
 }
 

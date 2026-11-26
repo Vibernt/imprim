@@ -53,6 +53,8 @@ export function clientSections(value: ClientFields, isNew: boolean, providers: R
       pairs({ id: 'f-agent_scope_catalogue', label: 'Scopes', name: 'agent_scope_catalogue', values: value.agent_scope_catalogue, keyLabel: 'Scope', valueLabel: 'What people see at consent',
           keyPlaceholder: 'notes:read', valuePlaceholder: 'Read your notes', addLabel: 'Add scope' }),
       list({ id: 'f-agent_resource_prefixes', label: 'Resources', name: 'agent_resource_prefixes', values: value.agent_resource_prefixes, pattern: '^https://', placeholder: 'https://notes.example/w/', hint: 'Agents may ask for URLs that start with one of these.' }),
+      list({ id: 'f-agent_workspace_resources', label: 'Workspace-choice resources', name: 'agent_workspace_resources', values: value.agent_workspace_resources, pattern: '^https://',
+          placeholder: 'https://app.example/mcp', hint: 'Up to 5 exact URLs under the resource prefixes. People choose a shared workspace at approval.' }),
       list({ id: 'f-agent_allowlist', label: 'Allowed agents', name: 'agent_allowlist', values: value.agent_allowlist, placeholder: 'agent.example.com', hint: 'An agent’s host or its full client URL. Leave empty to allow any agent.' }),
       amount({ id: 'f-agent_max_grant_days', label: 'Longest grant', name: 'agent_max_grant_days', value: value.agent_max_grant_days, unit: 'days', min: 1, hint: 'People approve again after this long.' }),
       amount({ id: 'f-agent_token_rate', label: 'Token requests per agent', name: 'agent_token_rate', value: value.agent_token_rate ?? 3000, unit: 'a minute', min: 10, max: 100000, hint: 'For each agent, such as ChatGPT or Claude, across everyone who uses it here. Each connection also has its own limit of 60 a minute.' }),

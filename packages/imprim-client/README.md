@@ -1,4 +1,4 @@
-# imprim-client 0.11.0
+# imprim-client 0.12.0
 
 Zero-dependency OIDC relying-party and resource-server client for any app of any realm. Versions up to 0.2.0 were
 named `@vibernt/identity-client`. To move an app from that version, follow
@@ -117,9 +117,10 @@ After verifying a `user-updated` event, use a confidential client to fetch the p
 
 For a confidential client, the calls a workspace admin screen needs:
 
-- `client.listGrants({ resource, sub?, limit?, cursor? })` returns `{ grants, next_cursor }`: one page (up to 200) of
+- `client.listGrants({ resource, workspace_id?, sub?, limit?, cursor? })` returns `{ grants, next_cursor }`: one page (up to 200) of
   the live agent grants on one of the app's resources, newest first. Pass `next_cursor` back as `cursor`; it is `null`
-  on the last page. `sub` narrows the list to one person.
+  on the last page. `sub` narrows the list to one person. `workspace_id` narrows it to one workspace using the app's
+  product. Each grant includes `workspace_id`, which is null for grants without a workspace choice.
 - `client.revokeGrant(grantId)` revokes one; the agent's refresh stops and a revocation event follows.
 - `client.introspect(token, { tokenTypeHint? })` returns `{ active: false }`, or the live token's claims, including
   `agent_assurance` (`key`, `redirect`, `claimed` or `none`).
@@ -145,9 +146,28 @@ for actions on a person's behalf.
 | `removeMember` | `id, sub, { actorToken }` |
 | `closeWorkspace` | `id, { actorToken, confirm?, releaseOwnHold? }`. `releaseOwnHold: true` (0.11.0) lets the app's own hold stop blocking and removes it only if the close succeeds; other apps' holds still block. |
 | `holdWorkspace`, `releaseWorkspace` | `id, reason` (optional for release) |
-| `registerWorkspaceResource`, `unregisterWorkspaceResource` | `id, resource` |
+| `registerWorkspaceResource` | `id, resource, { name }?`. The optional name is trimmed and must be 1–80 characters without control characters. Omit it or pass null to keep the current name. Pass an empty string to clear it. |
+| `unregisterWorkspaceResource` | `id, resource` |
 
 Pass a page's `next_cursor` as `cursor` to fetch the next members page. See the [workspace specification](../../docs/WORKSPACES.md).
+
+## Machine clients for a workspace
+
+A confidential shared app with agent access can request an unattended service identity. Send the returned
+`approval_url` to a workspace owner or admin. The request expires after 24 hours. The approved client uses
+`private_key_jwt` at the issuer's token endpoint and can request one of its approved resource URLs exactly.
+
+| Method | Arguments and result |
+|---|---|
+| `requestMachineClient` | `workspaceId, { name, jwks, scopes, resources }` → `{ request_id, approval_url, expires_at }`. Send public keys only. |
+| `machineClientRequest` | `workspaceId, requestId` → `{ request_id, status, service_client_id?, expires_at }`. |
+| `machineClients` | `workspaceId` → `{ machine_clients }` for this app and workspace. |
+| `disableMachineClient` | `workspaceId, clientId, { actorToken }` → `{ client_id, disabled: true }`. The app's ID token must identify a current owner or admin, or the accountable person. |
+
+For a workspace machine token, `verifyAccessToken` returns `workspace_id` and `accountable_sub` as strings, while
+`sub` stays `service:<id>`. Verify the exact audience, use the workspace claim to scope access, and authorize the
+service identity with its approved scopes. Use `introspect` when you need current liveness before the 60-second
+token expires. [Workspace API and lifecycle](../../docs/WORKSPACES.md#machine-clients).
 
 ## Agent access and adoption
 
@@ -160,6 +180,24 @@ logout delivery; access-token expiry does not end them.
 
 Resource servers also use `client.protectedResourceMetadata({ resource, scopes })` and
 `client.wwwAuthenticate({ resourceMetadataUrl, error? })`; `wwwAuthenticate` is a named export.
+
+### One resource for every workspace
+
+For a shared-workspace product, reserve `https://app.example/mcp` in the app's `agent_workspace_resources`.
+Serve its metadata and use the token's `workspace_id` to look up the person's current role on every call.
+
+```js
+const resource = 'https://app.example/mcp';
+const metadata = client.protectedResourceMetadata({ resource, scopes: ['read'] });
+
+async function authorizeRequest(token) {
+  const claims = await client.verifyAccessToken(token, { audience: resource });
+  if (!claims.workspace_id) throw new Error('Workspace choice required');
+  // Application code checks the current role and intersects its permissions with the approved scopes.
+  await requireCurrentRoleAndScopes(claims.sub, claims.workspace_id, claims.scope);
+  return claims.workspace_id;
+}
+```
 
 **DPoP-bound tokens (0.5.0).** An agent may bind its tokens to a key. Such a token carries `cnf.jkt`, arrives as
 `Authorization: DPoP <token>` and comes with a `DPoP` header holding a proof for this request. Pass the proof:

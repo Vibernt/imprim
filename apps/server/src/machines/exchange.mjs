@@ -32,6 +32,7 @@ export async function exchangeToken(env, client, body) {
     invariant(exp > now, 'invalid_grant', 'The subject token has expired.');
     const act = { sub: `app:${client.id}`, client_id: client.id, ...(subject.act ? { act: subject.act } : {}) };
     const token = await signAgentJwt(env, { iss: env.ISSUER, aud: body.resource, sub: subject.sub, client_id: subject.client_id, grant_id: subject.grant_id,
+        ...(subject.workspace_id === undefined ? {} : { workspace_id: subject.workspace_id }),
         ...(subject.grant_issued_at ? { grant_issued_at: subject.grant_issued_at } : {}), scope: asked.join(' '), act, jti: crypto.randomUUID(), iat: now, exp });
     return json({ access_token: token, issued_token_type: ACCESS_TOKEN_TYPE, token_type: 'Bearer', expires_in: exp - now, scope: asked.join(' ') });
 }

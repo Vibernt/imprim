@@ -6,7 +6,7 @@ export interface ClientOptions { issuer: string; clientId: string; clientSecret?
 export interface LoginValues { state: string; nonce: string; codeVerifier: string; }
 export interface LoginStart extends LoginValues { url: string; }
 // cnf.jkt is present on a DPoP-bound token; dpop_jti is the verified proof's id, for the app to deduplicate (0.5.0).
-export interface AccessClaims extends Claims { aud: string; client_id: string; grant_id: string; scope: string; jti: string; cnf?: { jkt: string }; dpop_jti?: string; }
+export interface AccessClaims extends Claims { aud: string; client_id: string; grant_id: string; scope: string; jti: string; workspace_id?: string; accountable_sub?: string; cnf?: { jkt: string }; dpop_jti?: string; }
 // The request's DPoP proof: its header value, and the method and URL the request was made with (0.5.0).
 export interface DpopProof { proof: string; method: string; url: string; }
 export interface ResourceMetadataOptions { resource: string; scopes: string[]; }
@@ -40,6 +40,15 @@ export interface WorkspaceMembership extends WorkspaceSummary { role: WorkspaceR
 export interface WorkspaceMember { sub: string; email: string; role: WorkspaceRole; }
 export interface WorkspaceInvitationReceipt { invitation_id: string; expires_at: number; }
 export interface WorkspaceInvitation extends WorkspaceInvitationReceipt { email: string; role: WorkspaceRole; }
+export interface MachineClientOptions { name: string; jwks: { keys: (JsonWebKey & { kid: string })[] }; scopes: string[]; resources: string[]; }
+export interface MachineClientRequestReceipt { request_id: string; approval_url: string; expires_at: number; }
+export interface MachineClientRequestStatus {
+    request_id: string; status: 'pending' | 'approved' | 'denied' | 'expired'; service_client_id?: string; expires_at: number;
+}
+export interface WorkspaceMachineClient {
+    client_id: string; name: string; scopes: string[]; resources: string[]; accountable_sub: string;
+    created: number; expires_at: number; last_used: number | null; status: 'active' | 'expired' | 'disabled';
+}
 export interface WorkspaceActor { actorToken: string; }
 export type CreateWorkspaceOptions = WorkspaceActor & (
     { kind?: 'team'; name: string; products: string[]; firstOwnerEmail: string } | { kind: 'personal'; name: string }
@@ -67,7 +76,7 @@ export interface IdentityClient {
     logoutUrl(options?: { idTokenHint?: string; postLogoutRedirectUri?: string; state?: string }): Promise<string>;
     inviteEmail(email: string): Promise<{ accepted: boolean; expires_at: number }>;
     user(sub: string): Promise<{ sub: string; email: string; email_verified: boolean; name: string | null }>;
-    listGrants(options: { resource: string; sub?: string; limit?: number; cursor?: string | null }): Promise<{ grants: AgentGrant[]; next_cursor: string | null }>;
+    listGrants(options: { resource: string; workspace_id?: string; sub?: string; limit?: number; cursor?: string | null }): Promise<{ grants: AgentGrant[]; next_cursor: string | null }>;
     revokeGrant(grantId: string): Promise<{ grant_id: string; revoked: true }>;
     introspect(token: string, options?: { tokenTypeHint?: 'access_token' | 'refresh_token' }): Promise<Introspection>;
     memberships(sub: string): Promise<{ memberships: WorkspaceMembership[] }>;
@@ -85,16 +94,20 @@ export interface IdentityClient {
     closeWorkspace(id: string, options: WorkspaceActor & { confirm?: string; releaseOwnHold?: boolean }): Promise<unknown>;
     holdWorkspace(id: string, reason: string): Promise<unknown>;
     releaseWorkspace(id: string, reason?: string): Promise<unknown>;
-    registerWorkspaceResource(id: string, resource: string): Promise<unknown>;
+    registerWorkspaceResource(id: string, resource: string, options?: { name?: string | null }): Promise<WorkspaceDetails>;
+    requestMachineClient(workspaceId: string, options: MachineClientOptions): Promise<MachineClientRequestReceipt>;
+    machineClientRequest(workspaceId: string, requestId: string): Promise<MachineClientRequestStatus>;
+    machineClients(workspaceId: string): Promise<{ machine_clients: WorkspaceMachineClient[] }>;
+    disableMachineClient(workspaceId: string, clientId: string, options: WorkspaceActor): Promise<{ client_id: string; disabled: true }>;
     unregisterWorkspaceResource(id: string, resource: string): Promise<unknown>;
 }
 export type AgentAssurance = 'key' | 'redirect' | 'claimed' | 'none';
 export interface AgentGrant {
     grant_id: string; sub: string; agent: string; agent_name: string; agent_verified: boolean; agent_assurance?: AgentAssurance;
-    scope: string; created: number; last_used: number | null; expires_at: number;
+    scope: string; created: number; last_used: number | null; expires_at: number; workspace_id: string | null;
 }
 export type Introspection = { active: false } | {
     active: true; token_type: 'Bearer' | 'DPoP'; iss: string; sub: string; aud: string; scope: string; client_id: string; grant_id: string;
-    exp: number; iat: number; grant_issued_at?: number; agent_assurance?: AgentAssurance; act?: { sub: string }; cnf?: { jkt: string };
+    exp: number; iat: number; grant_issued_at?: number; agent_assurance?: AgentAssurance; workspace_id?: string; accountable_sub?: string; act?: { sub: string }; cnf?: { jkt: string };
 };
 export function createClient(options: ClientOptions): IdentityClient;

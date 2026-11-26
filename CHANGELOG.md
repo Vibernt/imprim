@@ -3,6 +3,21 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-26.2
+
+Migrations: `0029_agent_workspace_choice.sql` and `0030_workspace_machine_clients.sql`. Client 0.12.0.
+
+- A shared-workspace app can publish one agent resource URL for its product. The person chooses a workspace at
+  consent, and the grant and its access tokens carry `workspace_id`. Losing access to that workspace revokes the
+  grant. Apps can filter their grant list by workspace.
+- Registered workspace resources can have a readable name. Consent and Connected agents show the name and the URL.
+- Shared apps can request an unattended machine identity for one workspace. An owner or admin reviews the resources,
+  scopes and public keys on Imprim and stays accountable for the machine. Workspace machine tokens include
+  `workspace_id` and `accountable_sub`. Account › Agents lets the approver renew or disable it.
+- MCP probe: an optional product-wide `/mcp` endpoint with the workspace chosen at consent (and, with `APP_SECRET`,
+  a current-membership check), `name` to register a resource with a readable name, and `machine` to request, approve
+  and use a workspace machine client. `setup.mjs --product` makes a shared-workspace probe client.
+
 ## 2026-11-26.1
 
 Migration: `0028_agent_grant_labels.sql` (grant labels, where each grant was approved, the revocation reason).

@@ -45,6 +45,8 @@ export const EMAILS = Object.freeze({
         msg('A recovery code was used to sign in. You have one fewer left; generate a new set at /account/mfa if you are running low.')),
     agent_connected: notice(msg('an agent was connected'), msg('An agent was connected'),
         msg('"{agent}" can now act for you in {app} ({workspace}) with: {scopes}. Review or revoke it at {agents_url}.')),
+    machine_client_approved: notice(msg('a machine was approved'), msg('A machine was approved'),
+        msg('"{machine}" can now act in {app} for {workspace} with these scopes: {scopes}. Review or disable it at {agents_url}.')),
     passkey_added: notice(msg('a passkey was added'), msg('A passkey was added'), msg('A passkey ("{name}") was added to your account.')),
     passkey_removed: notice(msg('a passkey was removed'), msg('A passkey was removed'), msg('The passkey "{name}" was removed from your account.')),
     factor_added: notice(msg('a second factor was added'), msg('A second factor was added'),

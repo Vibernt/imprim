@@ -46,6 +46,8 @@ function validateWorkspaceSettings({ product = null, workspaces = 'app', persona
 // Shared with scripts/seed-client.mjs. The redirect URLs have already been validated.
 export function validatePolicySettings(config, agent) {
     validateWorkspaceSettings(config);
+    invariant(!agent.agent_workspace_resources.length || (config.workspaces === 'shared' && config.product && agent.agent_access === 'on'),
+        'invalid_request', 'Workspace-choice resources require shared workspaces, a product and agent access.');
     invariant(['off','optional','required'].includes(config.mfa ?? 'off') && ['off','required'].includes(config.agent_consent_mfa ?? 'off') &&
         Number.isInteger(config.mfa_trusted_device_days ?? 0) && (config.mfa_trusted_device_days ?? 0) >= 0 && (config.mfa_trusted_device_days ?? 0) <= 90,
         'invalid_request', 'mfa is off, optional or required; agent_consent_mfa is off or required; mfa_trusted_device_days is 0 to 90.');
@@ -133,6 +135,8 @@ export async function saveClient(env, actor, id, input) {
             ...(disabling ? revokeAppGrants(env, id) : []),
             auditStatement(env, actor, old ? 'admin_client_update' : 'admin_client_create', value.id, { fields: Object.keys(input).filter(k => k !== 'id'), ...(disabling ? { revoked_agent_grants: true } : {}) })]);
     } catch (error) {
+        if (String(error.message).includes('agent_workspace_resource_registered'))
+            invariant(false, 'invalid_request', 'A workspace-choice resource is already registered to a workspace.');
         if (String(error.message).includes('admin_assertions')) invariant(false, 'conflict', 'Client changed; reload before editing.', 409);
         if (String(error.message).includes('UNIQUE constraint')) invariant(false, 'conflict', 'Client already exists.', 409);
         throw error;
