@@ -78,7 +78,12 @@ agent, runs beside Vibernt's staging since 2026-11-26. That day a person approve
 device flow passed all 24 checks (single-use code, 60-second audience-bound tokens, the workspace boundary, refresh, a
 retry after a lost response, reuse detection revoking the grant, and the revocation event reaching the app 7 seconds
 later), and the loopback sign-in returned to a one-time listener on `127.0.0.1` with its state, and redeemed the code
-once for the exact redirect URI.
+once for the exact redirect URI. After release 2026.11.26.2 the same day, again with a person approving: the
+product-wide `/mcp` resource with the workspace chosen at consent passed 31 checks (the token carries the chosen
+workspace and is refused at a per-workspace resource, plus refresh, reuse detection, revocation in 7 seconds and a
+refused code replay); a resource registered with a readable name passed 8; and a workspace machine client, approved
+by a workspace owner on `/machine-client`, got `private_key_jwt` tokens naming the workspace and the accountable
+person, was refused a token for another resource, and introspected active (14 checks).
 
 Node tests use a real SQLite adapter and controlled provider, mail, rate and queue responses. They do not prove:
 

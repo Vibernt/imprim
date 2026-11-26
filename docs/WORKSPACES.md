@@ -1,6 +1,6 @@
 # Shared workspaces
 
-Status: built (migrations `0024`, `0027` and `0029`, client `0.12.0`). This page is the specification; the code matches it.
+Status: built (migrations `0024`, `0027`, `0029` and `0030`, client `0.12.0`). This page is the specification; the code matches it.
 
 By default each app keeps its own workspaces, memberships and roles, and Imprim only admits people per app. A realm
 can instead hold **shared workspaces** for a family of products. Imprim then keeps each workspace's members, base

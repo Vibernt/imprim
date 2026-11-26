@@ -121,8 +121,22 @@ percent-encoding). The token's audience is that exact string.
 
 Agents usually ask for every scope in your metadata's `scopes_supported`. Claude Code does unless its `.mcp.json`
 pins the server's scopes, for example `"oauth": { "scopes": "read-only" }`, and the consent page shows the person
-exactly what was asked for. List your least powerful scope first and describe each one plainly in the catalogue, and
-check the person's role on every call whatever the token says.
+exactly what was asked for, each with a checkbox, so the person can leave some out. List your least powerful scope
+first and describe each one plainly in the catalogue, and check the person's role on every call whatever the token
+says: `claims.scope` holds only what the person approved.
+
+**One address for every workspace.** A shared-workspace app can publish a single resource such as
+`https://app.example.com/mcp` instead of one per workspace: a realm admin lists it in `agent_workspace_resources`.
+The person then picks one of their workspaces on the consent page, and every token carries it as
+`claims.workspace_id`. Check the person's membership and role in that workspace on every call. Per-workspace
+resources can also get a readable name for the consent page (`registerWorkspaceResource(workspaceId, resource, { name })`).
+[One resource for all workspaces](AGENT_ACCESS.md#one-resource-for-all-workspaces)
+
+**Unattended workers.** For a job that runs without a person (an upload worker, a scheduled sync), request a
+workspace machine client: your app sends its public keys, scopes and resources, a workspace owner or admin approves
+on Imprim, and the worker gets 60-second tokens with `private_key_jwt`. Its tokens carry `workspace_id` and
+`accountable_sub`, the person who approved it; it stops when it expires or that person leaves the workspace or stops
+being an owner or admin. [Machine clients](WORKSPACES.md#machine-clients)
 
 ## 5. Build an agent that connects
 

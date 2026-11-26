@@ -3,6 +3,15 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-26.3
+
+No migration. Documentation only.
+
+- Integrating: one resource for every workspace, readable resource names, and workspace machine clients for
+  unattended workers; consent lets people leave scopes out.
+- Security: the live checks of release 2026.11.26.2 on staging (workspace choice, resource names, machine clients).
+- Shared workspaces: the status line names migration `0030`.
+
 ## 2026-11-26.2
 
 Migrations: `0029_agent_workspace_choice.sql` and `0030_workspace_machine_clients.sql`. Client 0.12.0.
