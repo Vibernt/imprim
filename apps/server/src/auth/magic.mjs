@@ -66,7 +66,9 @@ async function deliverMagic(env, request, email, browser, pending, challengeMode
     const token = randomToken(), hash = await sha256(token);
     await env.DB.prepare('INSERT INTO magic_links(hash,email,request_id,browser_hash,expires_at,realm_id,purpose,workspace_name) VALUES(?,?,?,?,?,?,?,?)')
         .bind(hash, email, pending?.row.id || null, await sha256(browser), Date.now() + 900000, realmId(env), purpose, purpose === 'signup' ? name : null).run();
-    const link = `${env.ISSUER}/login#token=${token}`;
+    // The request id (not a secret: it works only in the browser that started it) brings back the app's sign-in page
+    // around the link, so an expired or used link leaves the person one step from a new one (pages/sign-in.mjs).
+    const link = `${env.ISSUER}/login${pending ? `?request_id=${encodeURIComponent(pending.row.id)}` : ''}#token=${token}`;
     try {
         // The app's brand, in the language of the sign-in page that asked (its ui_locales, the browser's, the brand's).
         await sendEmail(env, { kind: linkKinds[purpose], to: email, branding: brandingFor(env, pending?.client), links: { link } });

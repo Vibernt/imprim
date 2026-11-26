@@ -63,6 +63,8 @@ test('ownership and workspace status are rechecked even when the acting owner is
     const empty = await (await w.call(flow.path, { headers: { cookie: flow.cookie } })).text();
     assert.match(empty, /No workspaces are available/);
     assert.doesNotMatch(empty, /name="workspace_id"|value="join"/);
+    // With nothing to choose, the one button says where it goes.
+    assert.match(empty, /value="decline"[^>]*><span>Back to /);
     const next = await w.offer(secondOwner);
     w.db.exec("UPDATE workspaces SET status='closed' WHERE id='team'");
     assert.ok([404, 409].includes((await w.answer(next)).status));

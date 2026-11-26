@@ -59,7 +59,7 @@ test('a session from one realm is not accepted by another, and the same email is
     await Promise.all(pending);
     const mail = w.mails.at(-1);
     assert.equal(mail.from, 'signin@acme.test');
-    assert.match(mail.text, /https:\/\/id\.acme\.test\/login#token=/);
+    assert.match(mail.text, /https:\/\/id\.acme\.test\/login\?request_id=[A-Za-z0-9_-]+#token=/);
     const token = mail.text.match(/#token=([A-Za-z0-9_-]+)/)[1];
     // The Acme link cannot be redeemed on the Vibernt host.
     const wrongHost = await w.post('/v1/auth/magic/verify', { token }, jar);

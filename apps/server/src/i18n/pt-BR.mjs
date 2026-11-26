@@ -705,4 +705,8 @@ export default Object.freeze({
     "Show password": "Mostrar senha",
     "Passkey added": "Chave de acesso adicionada",
     "Passkey removed": "Chave de acesso removida",
+    "Sign in again": "Entrar novamente",
+    "Signing in to an app? Start from the app:": "Quer entrar em um app? Comece pelo app:",
+    "Enter the code again": "Digitar o código novamente",
+    "Back to {app}": "Voltar para {app}",
 });

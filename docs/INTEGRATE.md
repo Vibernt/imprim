@@ -24,7 +24,8 @@ A confidential client gets its secret once, at creation. Store it as a secret in
 
 1. Ask the realm admin to set the realm's `workspaces` to `on`, and the app's `workspaces` to `shared` with a
    `product` such as `notes`. Apps for the same product use the same product name.
-2. Register the app's back-channel URL and set `initiate_login_uri` to its sign-in page for invitation emails.
+2. Register the app's back-channel URL and set `initiate_login_uri` to its sign-in page for invitation emails
+   and for the [next step](PROTOCOL.md#next-steps-on-pages-that-stop) on Imprim's pages that stop.
    Enable `personal_workspaces` for personal workspace creation and `workspace_admin` when the app needs team
    creation or product management.
 3. Use client 0.11.0 on the server to read memberships and manage workspaces. For actions on a person's behalf,
