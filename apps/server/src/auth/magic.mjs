@@ -1,6 +1,6 @@
 // Email links: neutral async delivery, hash-only tokens, explicit verification and shared session issuance.
 import { readBody, json, tokenShape, redirect } from '../lib/http.mjs';
-import { randomToken, sha256, safeEqual } from '../lib/crypto.mjs';
+import { sha256, safeEqual } from '../lib/crypto.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { cookies, BROWSER_COOKIE, assertOrigin, issueSession } from './session.mjs';
 import { requireTurnstile } from './turnstile.mjs';
@@ -11,15 +11,13 @@ import { requireMethod } from '../oidc/sign-in-methods.mjs';
 import { audit } from '../services/audit.mjs';
 import { claimMailbox } from '../services/access.mjs';
 import { realmId } from '../realms/realm.mjs';
-import { brandingFor } from '../branding/tokens.mjs';
-import { sendEmail } from '../services/email/send.mjs';
-import { liveSignupEnabled, liveSignupMode, requireSignup, signupOff, signupWorkspaceName } from './signup-policy.mjs';
+import { deliverMagicLink } from './magic-delivery.mjs';
+import { requireLiveSignup, signupWorkspaceName } from './signup-policy.mjs';
 import { completeOpenSignup } from '../workspaces/signup.mjs';
-import { recordSignupRequest } from '../workspaces/signup-requests.mjs';
-import { notifySignupAdmins } from '../workspaces/signup-email.mjs';
+import { completeAdmittedProviderSignup } from '../workspaces/signup-account.mjs';
+import { submitSignupApproval } from '../workspaces/signup-requests.mjs';
 import { checkEmailCookie } from './check-email-state.mjs';
 import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
-const linkKinds = { sign_in: 'sign_in_link', password: 'password_link', signup: 'signup_link' };
 
 export async function requestMagic(request, env, ctx) {
     assertOrigin(request, env);
@@ -29,10 +27,7 @@ export async function requestMagic(request, env, ctx) {
     const pending = body.request_id ? await pendingRequest(env, request, body.request_id) : null;
     // 'password' links prove the mailbox before setting or resetting a password, for apps that offer passwords.
     const purpose = body.purpose === 'signup' || body.purpose === 'password' ? body.purpose : 'sign_in';
-    if (purpose === 'signup') {
-        requireSignup(env, pending);
-        invariant(await liveSignupEnabled(env, pending.client), 'access_denied', signupOff, 403);
-    }
+    if (purpose === 'signup') await requireLiveSignup(env, pending);
     if (purpose === 'password') invariant(pending, 'invalid_request', 'Password setup starts from an app.');
     if (pending) requireMethod(pending.client, purpose === 'password' ? 'password' : 'email');
     const name = purpose === 'signup' ? signupWorkspaceName(body.workspace_name) : null;
@@ -65,19 +60,9 @@ async function deliverMagic(env, request, email, browser, pending, challengeMode
             AND (status<>'active' OR merged_into IS NOT NULL)`).bind(realmId(env), email).first();
         if (unavailable) return;
     }
-    const token = randomToken(), hash = await sha256(token);
-    await env.DB.prepare('INSERT INTO magic_links(hash,email,request_id,browser_hash,expires_at,realm_id,purpose,workspace_name) VALUES(?,?,?,?,?,?,?,?)')
-        .bind(hash, email, pending?.row.id || null, await sha256(browser), Date.now() + 900000, realmId(env), purpose, purpose === 'signup' ? name : null).run();
-    // The request id (not a secret: it works only in the browser that started it) brings back the app's sign-in page
-    // around the link, so an expired or used link leaves the person one step from a new one (pages/sign-in.mjs).
-    const link = `${env.ISSUER}/login${pending ? `?request_id=${encodeURIComponent(pending.row.id)}` : ''}#token=${token}`;
-    try {
-        // The app's brand, in the language of the sign-in page that asked (its ui_locales, the browser's, the brand's).
-        await sendEmail(env, { kind: linkKinds[purpose], to: email, branding: brandingFor(env, pending?.client), links: { link } });
-    } catch (error) {
-        await env.DB.prepare('DELETE FROM magic_links WHERE hash=?').bind(hash).run();
-        throw error;
-    }
+    await deliverMagicLink(env, pending, await sha256(browser), {
+        email, purpose, workspace_name: purpose === 'signup' ? name : null
+    });
 }
 export async function verifyMagic(request, env, ctx) {
     assertOrigin(request, env);
@@ -89,18 +74,21 @@ export async function verifyMagic(request, env, ctx) {
     invariant(row && await safeEqual(row.browser_hash, await sha256(browser)), 'invalid_grant', 'Link is expired, used, or belongs to another browser.', 401);
     const pending = row.request_id ? await pendingRequest(env, request, row.request_id) : null;
     if (pending) requireMethod(pending.client, row.purpose === 'password' ? 'password' : 'email');
+    let user;
     if (row.purpose === 'signup') {
-        requireSignup(env, pending);
-        const mode = await liveSignupMode(env, pending.client);
-        invariant(mode !== 'off', 'access_denied', signupOff, 403);
-        if (mode === 'approval') {
-            const saved = await recordSignupRequest(env, pending, row);
-            if (saved) ctx.waitUntil(notifySignupAdmins(env, pending.client, saved));
-            const location = `${env.ISSUER}/signup-pending?request_id=${encodeURIComponent(pending.row.id)}`;
+        const mode = await requireLiveSignup(env, pending);
+        if (row.provider) requireMethod(pending.client, row.provider);
+        if (row.provider && await admitted(env, pending.client, row.email)) {
+            user = await completeAdmittedProviderSignup(env, pending, row, mode);
+        } else if (mode === 'approval') {
+            const location = await submitSignupApproval(env, ctx, pending, row);
             return browser_response ? json({ redirect: location }) : redirect(location);
+        } else {
+            user = await completeOpenSignup(env, pending, row);
         }
+    } else {
+        user = await verifiedUser(env, pending, row);
     }
-    const user = row.purpose === 'signup' ? await completeOpenSignup(env, pending, row) : await verifiedUser(env, pending, row);
     const signed = await issueSession(env, user, 'email', null, !pending);
     await audit(env, 'sign_in', user.id, { method: 'email' });
     // A 'password' link is mailbox proof: record the admission now, so a domain-admitted newcomer stays admitted when

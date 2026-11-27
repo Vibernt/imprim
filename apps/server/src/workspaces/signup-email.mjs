@@ -1,3 +1,5 @@
+import { signupProviderNames } from '../auth/signup-policy.mjs';
+import { translate } from '../i18n/index.mjs';
 import { brandingFor } from '../branding/tokens.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { realmId } from '../realms/realm.mjs';
@@ -16,6 +18,7 @@ export async function notifySignupAdmins(env, client, request) {
         const resultsByAdmin = await Promise.allSettled(results.map(async ({ email: to }) => send(env, {
             kind: 'signup_admin_request', to, locale: 'en',
             vars: { email: request.email, app: JSON.parse(client.branding || '{}').name ?? client.id,
+                method: request.provider ? signupProviderNames[request.provider] : translate('en', 'Email'),
                 client: client.id, product: request.product, workspace: request.workspace_name },
             links: { requests_url: `${env.ISSUER}/admin/signups` }
         })));

@@ -25,12 +25,12 @@ export const cookie = (name, value, maxAge, httpOnly = true) => `${name}=${value
 export function assertOrigin(request, env) {
     invariant(request.headers.get('origin') === env.ISSUER, 'origin', 'Same-origin request required.', 403);
 }
-export async function getSession(request, env) {
+export async function getSession(request, env, { touch = true } = {}) {
     const value = cookies(request)[SESSION_COOKIE];
     if (!value) return null;
     const session = await sessionByHash(env, await sha256(value));
     // Last seen, for the sessions list: at most one write per session every five minutes.
-    if (session && (!session.last_seen || session.last_seen < Date.now() - 300000))
+    if (touch && session && (!session.last_seen || session.last_seen < Date.now() - 300000))
         await env.DB.prepare('UPDATE sessions SET last_seen=? WHERE hash=?').bind(Date.now(), session.hash).run();
     // The page shell shows who is signed in (pages/layout.mjs).
     if (session && env.SEEN) env.SEEN.email = session.email;

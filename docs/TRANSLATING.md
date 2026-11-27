@@ -7,7 +7,7 @@ pull requests.
 
 ## What is translated
 
-- Every page a person sees: sign-in, check email, signed in and out, errors, second factor, set password, agent
+- Every page a person sees: sign-in, sign-up, no account, check email, signed in and out, errors, second factor, set password, agent
   consent, device code, workspace join and access, account switching, logout, and the account pages (Profile, Security, Sessions and apps, Agents, two-factor).
 - The errors those pages and their scripts show: HTML error pages, and the `error_description` of the browser
   endpoints (`/v1/auth/*`, `/account/*`, `/mfa`, `/agent/consent`, `/device`, `/workspace-access`, `/switch-account`, `/logout`, `/login`). The scripts

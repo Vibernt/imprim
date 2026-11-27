@@ -138,7 +138,7 @@ test('workspace name length counts Unicode characters after trimming, including 
     assert.deepEqual(db.prepare('SELECT name FROM workspaces ORDER BY name').all().map(row => row.name), [defaultName, unicode]);
 });
 
-test('GitHub provider proof cannot enroll an unadmitted address', async t => {
+test('GitHub provider proof on an ordinary GET offers sign-up without enrolling the address', async t => {
     const w = await signupWorld(t), flow = await begin(w), calls = [];
     t.mock.method(globalThis, 'fetch', async target => {
         const uri = String(target);
@@ -153,7 +153,8 @@ test('GitHub provider proof cannot enroll an unadmitted address', async t => {
     const state = new URL(start.headers.get('location')).searchParams.get('state');
     const response = await w.call('/auth/github/callback?' + new URLSearchParams({ state, code: 'github-code', purpose: 'signup' }),
         { headers: { cookie: flow.cookie + '; ' + cookieJar(start) } });
-    await refused(response, 403, 'access_denied');
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /No Notes account yet<\/h1><p class="fd-muted">person@example\.com has no Notes account\./);
     assert.equal(calls.length, 3);
     for (const table of ['users', 'workspaces', 'client_admissions', 'sessions']) assert.equal(count(w.db, table), 0);
 });

@@ -20,10 +20,12 @@ apps can opt in to membership and base roles managed by Imprim. Users imported w
 | `POST /v1/invitations` | JSON `{email}`, confidential client Basic authentication; upserts a 30-day invitation. |
 | `POST /v1/auth/magic/request` | JSON `{email, request_id, turnstile}` with optional `purpose` and sign-up `workspace_name`. Neutral `{accepted:true}` after browser and challenge checks. |
 | `POST /v1/auth/magic/verify` | JSON `{token}`; explicit same-origin POST, browser-bound single use, resumes authorization. |
-| `GET /v1/auth/github/start?request_id=…` | Browser-bound pending request, PKCE S256 GitHub OAuth start. |
-| `GET /auth/github/callback` | Consumes hashed OAuth state, checks browser, exchanges code, links numeric GitHub id. |
-| `GET /v1/auth/google/start?request_id=…` | Browser-bound pending request, Google OIDC code flow with S256, state and nonce. |
-| `GET /login/google/callback` | Consumes Google state, verifies RS256 ID token with cached Google JWKS, links Google sub. |
+| `GET /v1/auth/github/start?request_id=…` | Browser-bound pending request, PKCE S256 GitHub sign-in start. |
+| `POST /v1/auth/github/signup` | Same-origin form `request_id` and optional `workspace_name`. Starts GitHub sign-up for a browser-bound app request. |
+| `GET /auth/github/callback` | Consumes hashed OAuth state, checks browser, exchanges the code and continues the stored sign-in or sign-up purpose. |
+| `GET /v1/auth/google/start?request_id=…` | Browser-bound pending request, Google sign-in code flow with S256, state and nonce. |
+| `POST /v1/auth/google/signup` | Same-origin form `request_id` and optional `workspace_name`. Starts Google sign-up for a browser-bound app request. |
+| `GET /login/google/callback` | Consumes Google state, verifies RS256 ID token with cached Google JWKS, checks the hosted domain and continues the stored purpose. |
 | `GET /v1/auth/provider/<id>/start?request_id=…` | Registry provider (OIDC, Microsoft, Apple) start: PKCE S256, state and nonce. |
 | `GET`/`POST /login/provider/<id>/callback` | Registry provider callback; Apple's `form_post` is answered with a 303 to the same URL as a GET. |
 | `POST /v1/auth/password` | JSON `{request_id, email, password, turnstile}`; password sign-in (below). |
@@ -32,7 +34,7 @@ apps can opt in to membership and base roles managed by Imprim. Users imported w
 | `GET`/`POST /workspace-join` | [Hosted workspace choice](WORKSPACES.md#adding-a-product-to-an-existing-workspace) for a pending interactive app authorization. Requires its browser and signed-in account. The form posts `request_id`, `workspace_id`, `action` and CSRF from the issuer's Origin. |
 | `GET`/`POST /workspace-access` | Explains a refused shared-app sign-in when the signed-in member has a team that does not use the product and there was no hosted join offer. Requires the original browser and account. POST takes `request_id` and session CSRF from the issuer's Origin, consumes the request once and returns `access_denied`, `state` and `iss` to the registered callback. |
 | `POST /switch-account` | Takes `request_id` and session CSRF from the issuer's Origin. Checks the original browser, signs out the identity session with back-channel logout, and returns to `/login?request_id=…` with the authorization request still open. |
-| `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. With `request_id` of a sign-in still open in this browser (an app's email link, or Sign in again on a page that stopped) it is that app's sign-in page again; any other `request_id` is ignored. Without one, it links to the short public app list ([next steps](#next-steps-on-pages-that-stop)). |
+| `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. With `request_id` of a sign-in still open in this browser (an app's email link, or Sign in again on a page that stopped) it is that app's sign-in page again. `view=signup` opens the sign-up view when the request qualifies; any other `request_id` is ignored. Without one, it links to the short public app list ([next steps](#next-steps-on-pages-that-stop)). |
 | `GET /check-email`, `/signup-pending`, `/signed-in`, `/signed-out`, `/error` | Hosted confirmation and [next steps](#next-steps-on-pages-that-stop). `/signed-in` requires a current identity session. |
 | `GET /device`, `GET`/`POST /agent/consent` | The code entry, account check and approval pages for agents. A valid device code starts a browser-bound app request. A signed-in person can continue to consent or switch accounts. |
 | `GET /account`, `/account/apps`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, apps, security, sessions, connected agents, and the password, factor and email-change pages (below). |
@@ -243,6 +245,28 @@ guarded write and resumes authorization. An outstanding sign-up link that would 
 same person and product fails with `409 signup_limit`. In `approval` mode, verification records a request and
 redirects to the hosted status page without issuing session cookies or completing authorization. After approval,
 the person starts a fresh authorization from the app.
+
+Google and GitHub self-serve sign-up needs the same settings as email sign-up and the corresponding provider in
+the app's methods. The browser POSTs URL-encoded form data to the provider's sign-up endpoint. Imprim checks
+Origin, the authorization browser and current settings, then replies with a 303 to the provider. The callback
+consumes state once, bound to the browser and provider, and rechecks settings after the exchange. Google still
+checks `google_hosted_domains` when the app restricts it.
+
+A verified Gmail address or a verified Google address with an exact match between the email domain and the
+signed `hd` claim proves the mailbox. GitHub and other Google addresses require a 15-minute browser-bound
+Imprim sign-up link sent to the verified provider address. The OAuth round trip serves as the bot check for
+that email. The per-email and address delivery limits still apply. Open sign-up links the identity atomically
+with the workspace write and uses session method `google` for direct Google verification or `email` for a
+follow-up link. If current app policy admits the address after mailbox confirmation, the provider follow-up
+link completes ordinary email sign-in. Approval links an unclaimed identity when creating the workspace. If another account claimed
+it after the request was recorded, the approval audit records `provider_link_skipped: true`.
+
+The GET starts are for sign-in. An otherwise eligible provider callback refused solely for missing app access
+can render the branded no-account page when that provider offers sign-up. Its Create an account link opens
+`/login?request_id=…&view=signup`. The provider profile is discarded and a fresh round trip starts from the form.
+
+Schema `0034_provider_signup.sql` stores OAuth purpose and workspace name in `oauth_states` and optional Google
+or GitHub identity metadata on `magic_links` and `signup_requests`. Older OAuth states default to `sign_in`.
 
 Admission is per (user, client), recorded in `client_admissions`. A user is admitted to a client when they already
 reached it, or when that client's own policy admits them: `open` signup; a current invitation for the exact email;

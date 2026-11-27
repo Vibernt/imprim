@@ -9,6 +9,7 @@ import { registerPseudo, usePseudo, visibleText, assertTranslated, PSEUDO } from
 import { composeEmail } from '../apps/server/src/services/email/send.mjs';
 import { EMAILS } from '../apps/server/src/services/email/messages.mjs';
 import { LANGUAGE_NAMES } from '../apps/server/src/i18n/index.mjs';
+import { githubProfile, providerCallback, startProvider } from './support/provider-signup.mjs';
 import { mint, signupWorld, verify } from './support/signup.mjs';
 const DATA = ['Vibernt', 'Imprim', 'Example App', 'Example Agent', 'agent.example', resource, 'person@example.com', 'Test phone', PSEUDO, 'Chrome', 'Read workspace', 'read',
     ...Object.values(LANGUAGE_NAMES), 'GitHub', 'Google', 'BCDF-GHJK', 'Notes'];
@@ -62,12 +63,23 @@ test('the sign-up approval waiting page uses the catalogue for visible copy', as
     assert.equal(response.status, 200);
     await w.drain();
 });
+test('the no-account result and provider sign-up view use the catalogue', async t => {
+    const w = await signupWorld(t);
+    usePseudo(w);
+    githubProfile(t, w);
+    const flow = await startProvider(w, 'github', { signup: false });
+    const callback = await providerCallback(w, flow);
+    assert.equal(callback.status, 200);
+    assertTranslated(visibleText(await callback.text()), DATA, 'no-account result');
+    const { response } = await check(w, `/login?request_id=${flow.request_id}&view=signup`, { headers: { cookie: flow.cookie } });
+    assert.equal(response.status, 200);
+});
 test('every email kind, both parts', async t => {
     const w = await world(t);
     w.env.REALM.branding = { legal_name: 'Vibernt Ltd', support_email: 'help@vibernt.example', privacy_url: 'https://vibernt.example/privacy', terms_url: 'https://vibernt.example/terms' };
     for (const kind of Object.keys(EMAILS)) {
         const mail = await composeEmail(w.env, { kind, to: 'p@example.com', locale: PSEUDO,
-            vars: { device: 'Chrome on macOS', place: 'Berlin', time: Date.UTC(2026, 0, 1), reason: 'Lost phone', agent: 'Example Agent', app: 'Example App', client: 'app', workspace: 'team-one', scopes: 'read', name: 'Test phone', email: 'person@example.com', old: 'person@example.com', new: 'person@example.com', inviter: 'person@example.com', product: 'notes', products: 'notes' },
+            vars: { device: 'Chrome on macOS', place: 'Berlin', time: Date.UTC(2026, 0, 1), reason: 'Lost phone', agent: 'Example Agent', app: 'Example App', client: 'app', workspace: 'team-one', scopes: 'read', name: 'Test phone', email: 'person@example.com', old: 'person@example.com', new: 'person@example.com', inviter: 'person@example.com', product: 'notes', products: 'notes', method: 'GitHub' },
             links: { link: 'https://id.example.com/login#token=abc', agents_url: 'https://id.example.com/account/agents', invitation_url: 'https://app.example/start',
                 requests_url: 'https://id.example.com/admin/signups', app_url: 'https://app.example/start' } });
         assertTranslated(`${mail.subject}\n${mail.text}\n${visibleText(mail.html)}`, [...DATA, 'Vibernt Ltd', 'Lost phone', 'team-one', 'read', 'Berlin', 'macOS', 'Thu', 'Jan', 'abc', 'notes'], kind);

@@ -1,5 +1,12 @@
 // Spanish (es). Drafted with AI assistance, awaiting native review before production (docs/TRANSLATING.md).
 export default Object.freeze({
+    "Sign up with {provider}": "Registrarse con {provider}",
+    "No {app} account yet": "Aún no tienes cuenta de {app}",
+    "{email} has no {app} account. Create one, or sign in another way if you use a different email.": "{email} no tiene cuenta de {app}. Crea una o inicia sesión de otra forma si usas otro correo electrónico.",
+    "Sign in another way": "Iniciar sesión de otra forma",
+    "Sign-up method": "Método de registro",
+    "Sign-up method: {method}": "Método de registro: {method}",
+    "This provider is linked to another account.": "Este proveedor está vinculado a otra cuenta.",
     "Choose active or ended connections.": "Elige conexiones activas o finalizadas.",
     "Sessions": "Sesiones",
     "Replaced {date}": "Reemplazada el {date}",

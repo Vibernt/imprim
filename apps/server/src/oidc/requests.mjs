@@ -47,10 +47,14 @@ export function requireAuthorizationSession(row, session) {
     const created = row.expires_at - 1800000, authMs = session.auth_time * 1000;
     invariant(row.prompt !== 'login' || authMs >= created - 1000, 'login_required', 'This app asked for a fresh sign-in. Sign in again.', 401);
     invariant(row.max_age == null || withinMaxAge(session.auth_time, row.max_age), 'login_required', 'This app asked for a recent sign-in. Sign in again.', 401);
+    requireAuthorizationAccount(row, session.user_id);
+}
+
+export function requireAuthorizationAccount(row, userId) {
     // An id_token_hint named the person this app expects; nobody else may finish the request.
-    invariant(row.hint_sub == null || row.hint_sub === session.user_id, 'login_required', 'This app asked for a different account. Sign in as that person.', 401);
-    invariant((!row.workspace_join || JSON.parse(row.workspace_join).user_id === session.user_id) &&
-        (!row.workspace_access || JSON.parse(row.workspace_access).user_id === session.user_id),
+    invariant(row.hint_sub == null || row.hint_sub === userId, 'login_required', 'This app asked for a different account. Sign in as that person.', 401);
+    invariant((!row.workspace_join || JSON.parse(row.workspace_join).user_id === userId) &&
+        (!row.workspace_access || JSON.parse(row.workspace_access).user_id === userId),
         'access_denied', 'This sign-in request belongs to another account.', 403);
 }
 export async function completeAuthorization(env, request, id, session, responseCookies = [], { interactive = true } = {}) {

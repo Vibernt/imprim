@@ -216,10 +216,12 @@ test('platform screens rotate and revoke signing keys and create, update and adm
 test('sign-up requests require inline confirmation and move approved requests out of Pending', async t => {
     const { page, go, server, toast, fits } = await open(t, 375, 'dark');
     const db = server.env.DB.db, { id, email, name } = seedSignupRequest(db);
+    db.prepare("UPDATE signup_requests SET provider='github',provider_id='42',provider_login='applicant' WHERE id=?").run(id);
     await go('/admin/signups');
     const table = page.getByRole('table', { name: 'Sign-up requests' });
     const row = table.getByRole('row').filter({ hasText: email });
     await row.getByText(name, { exact: true }).waitFor();
+    await row.getByText('GitHub', { exact: true }).waitFor();
     await fits('Pending sign-up requests');
     const tabbar = page.getByRole('navigation', { name: 'Admin console' }).filter({ has: page.getByRole('button', { name: 'More' }) });
     assert.deepEqual(await tabbar.locator('.fd-tabbar-label').allTextContents(), ['Clients', 'Users', 'Workspaces', 'Sign-ups', 'More']);
@@ -236,6 +238,7 @@ test('sign-up requests require inline confirmation and move approved requests ou
     await approve.click();
     const confirmation = page.locator('screen-admin-signups .fd-confirm-inline');
     await confirmation.waitFor();
+    await page.locator('screen-admin-signups').getByText('Sign-up method: GitHub', { exact: true }).waitFor();
     const confirm = confirmation.getByRole('button', { name: 'Approve request' });
     assert.equal(await confirm.isDisabled(), true);
     const input = confirmation.getByRole('textbox', { name: 'Type the email to confirm' });

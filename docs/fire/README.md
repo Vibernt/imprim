@@ -1,7 +1,7 @@
 # Fire in Imprim
 
-Every Imprim page uses **Fire v0.12.4** (commit `e283633`), MIT, from the pinned package
-`"fire-design": "github:vidhatanand/firedesign#v0.12.4"` (root and `apps/web` `package.json`).
+Every Imprim page uses **Fire v0.13.2** (commit `19584ed`), MIT, from the pinned package
+`"fire-design": "github:vidhatanand/firedesign#v0.13.2"` (root and `apps/web` `package.json`).
 `scripts/build-fire.mjs` copies its CSS, ES modules and other static assets into `apps/server/public/fire/`,
 the generated directory served by Workers Static Assets. The package includes SIL OFL notices for the fonts
 and the ISC notice for the Lucide icons.
@@ -43,12 +43,13 @@ How Imprim uses it:
   `node scripts/diagrams.mjs` after changing them, or after a Fire release changes those tokens.
 
 **Upgrading Fire.** Change the tag in the root and `apps/web` `package.json` and run `npm install` in both. Copy `GUIDE.md`, `WRITING.md`,
-and `AGENT-RULES.md` from the package and `CLASSES.md` and `VOCABULARY.md` from the tag's `docs/_ref/`.
+and `AGENT-RULES.md` from the package and `CLASSES.md` and `VOCABULARY.md` from its `docs/_ref/`.
 Record the release here and in [WEB.md](../WEB.md). Run `npm run test:quiet` and `npm run check` to regenerate the assets
 and check the upgrade. Review the sign-in, account and console pages in light and dark at desktop and phone widths.
 
 | Fire | In Imprim since | What changed for Imprim |
 |---|---|---|
+| 0.13.2 | 2026-11-27 | Skeletons are stronger and wait 160 ms before they show; opening a modal no longer moves a page without a scroll bar; a stacked table's expandable rows open on a phone. The package now holds the reference screens, docs pages and pictures, and the `fire` skill leads with them; `AGENT-RULES.md` asks every screen to name the reference screen it follows. Fire proposals are now public issues (`fire propose`): Imprim's agents write them and show the maintainer, who decides what is filed. Nothing to change in Imprim's markup or scripts (it imports `fire-design`, not `fire-design/elements`). |
 | 0.12.4 | 2026-11-24 | A person's reduced-motion setting wins over every look: `fire/tokens.css` keeps `--fd-motion` at 0 (and the press scale at 1) with `!important`, above the brand's `theme.css`. Nothing to change in Imprim; a smoke test holds it. The logo field fix does not touch Imprim (no `fd-logo`). |
 | 0.12.3 | 2026-11-24 | `boot.js`, or another classic script, goes after every stylesheet in `<head>`, or Chromium can paint buttons link blue for 160 ms. Server pages end `<head>` with Imprim's own `/imprim/head.js` (sign-in pages load no Fire JavaScript); the console's build moves `boot.js` last (`bootLast`) and the Worker puts the brand's `theme.css` in front of it. 0.12.2 changed only `render-equal`. |
 | 0.12.1 | 2026-11-20 | No change to Fire's styles or behaviour since 0.10.2. 0.11.0 took the Facet adapter out of Fire; 0.12.0 changed `render-equal` (Imprim does not run it) and Fire's starters; 0.12.1 changed the rules for agents: templates are references, never starters, and a component Fire lacks is built to Fire's standard and proposed internally, in `REQUESTS.md`. |

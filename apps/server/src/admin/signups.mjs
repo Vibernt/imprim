@@ -20,7 +20,7 @@ export async function listSignupRequests(env, query) {
     const realm = realmId(env), status = query.get('status') ?? 'pending', before = query.get('before');
     invariant(statuses.includes(status), 'invalid_request', 'Invalid sign-up request status.');
     invariant(before === null || validId(before), 'invalid_request', 'Invalid page cursor.');
-    const { results } = await env.DB.prepare(`SELECT s.id,s.email,s.workspace_name,s.product,s.client_id,s.status,s.created,s.reason,
+    const { results } = await env.DB.prepare(`SELECT s.id,s.email,s.workspace_name,s.product,s.client_id,s.status,s.created,s.reason,s.provider,
         json_extract(c.branding,'$.name') AS app_name
         FROM signup_requests s LEFT JOIN clients c ON c.id=s.client_id AND c.realm_id=s.realm_id
         WHERE s.realm_id=? AND s.status=? AND (s.status!='pending' OR s.verified_at>?)

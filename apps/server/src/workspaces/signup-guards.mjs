@@ -12,7 +12,7 @@ export function signupSettingsGuard(env, client, mode) {
     [realmId(env), client.id, client.product, ...(mode ? [mode] : [])], 'access_denied', signupOff, 403);
 }
 
-// Only link verification has a pending authorization request and browser binding.
+// Browser-driven sign-up has a pending authorization request and browser binding.
 export function signupBrowserChecks(env, { client, row }, email, now) {
     return [
         signupGuard(`EXISTS(SELECT 1 FROM auth_requests a JOIN clients c ON c.id=a.client_id
@@ -23,7 +23,13 @@ export function signupBrowserChecks(env, { client, row }, email, now) {
         'browser_binding', msg('Sign-in must finish in the browser that started it.'), 403),
         signupGuard(`NOT EXISTS(SELECT 1 FROM auth_requests a WHERE a.id=? AND a.hint_sub IS NOT NULL
             AND NOT EXISTS(SELECT 1 FROM users u WHERE u.id=a.hint_sub AND u.realm_id=? AND u.email=?))`,
-        [row.id, realmId(env), email], 'login_required', msg('This app asked for a different account. Sign in as that person.'), 401)
+        [row.id, realmId(env), email], 'login_required', msg('This app asked for a different account. Sign in as that person.'), 401),
+        signupGuard(`NOT EXISTS(SELECT 1 FROM auth_requests a WHERE a.id=? AND NOT EXISTS(
+            SELECT 1 FROM users u WHERE u.realm_id=? AND u.email=?
+            AND (a.workspace_join IS NULL OR json_extract(a.workspace_join,'$.user_id')=u.id)
+            AND (a.workspace_access IS NULL OR json_extract(a.workspace_access,'$.user_id')=u.id))
+            AND (a.workspace_join IS NOT NULL OR a.workspace_access IS NOT NULL))`,
+        [row.id, realmId(env), email], 'access_denied', msg('This sign-in request belongs to another account.'), 403)
     ];
 }
 
@@ -44,4 +50,20 @@ export function signupAccessGuard(env, client, email, now) {
             '(SELECT id FROM users WHERE realm_id=c.realm_id AND email=?)')} OR ${openWorkspaceInvitationSql}))`,
     [client.id, realmId(env), email, 'mailbox', domainOf(email), 'mailbox', email, now, email, email, now],
     'conflict', msg('Access changed. Request a new email link.'));
+}
+
+export function signupProviderMethodGuard(env, client, provider, hostedDomain) {
+    // An email link carries proof of the mailbox. Only a direct Google callback has a current hosted-domain claim.
+    const checkDomain = provider === 'google' && hostedDomain !== undefined;
+    return signupGuard(`EXISTS(SELECT 1 FROM clients c WHERE c.realm_id=? AND c.id=?
+        AND EXISTS(SELECT 1 FROM json_each(c.sign_in_methods) WHERE value=?)
+        ${checkDomain ? `AND (json_array_length(c.google_hosted_domains)=0
+            OR EXISTS(SELECT 1 FROM json_each(c.google_hosted_domains) WHERE value=?))` : ''})`,
+    [realmId(env), client.id, provider, ...(checkDomain ? [hostedDomain] : [])], 'access_denied',
+    msg('Sign-in method or hosted domain is not allowed for this app.'), 403);
+}
+
+export function signupProviderAccountGuard(env, email) {
+    return signupGuard('NOT EXISTS(SELECT 1 FROM admins WHERE realm_id=? AND email=?)',
+        [realmId(env), email], 'access_denied', 'Account unavailable.', 403);
 }

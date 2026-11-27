@@ -1,25 +1,38 @@
 import { localeOf } from '../i18n/index.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { realmId } from '../realms/realm.mjs';
-import { signupAccessGuard, signupBrowserChecks, signupGuard, signupOwnershipGuard, signupSettingsGuard } from './signup-guards.mjs';
+import { signupAccessGuard, signupBrowserChecks, signupGuard, signupOwnershipGuard, signupSettingsGuard,
+    signupProviderAccountGuard, signupProviderMethodGuard } from './signup-guards.mjs';
+import { signupProviderGuard } from './signup-identity.mjs';
+import { notifySignupAdmins } from './signup-email.mjs';
 import { signupName } from './signup.mjs';
 
 export const signupRequestLifetime = 30 * 86400000;
 
-export async function recordSignupRequest(env, pending, { email, workspace_name }) {
+export async function submitSignupApproval(env, ctx, pending, signup, hostedDomain) {
+    const saved = await recordSignupRequest(env, pending, signup, hostedDomain);
+    if (saved) ctx.waitUntil(notifySignupAdmins(env, pending.client, saved));
+    return `${env.ISSUER}/signup-pending?request_id=${encodeURIComponent(pending.row.id)}`;
+}
+
+export async function recordSignupRequest(env, pending, signup, hostedDomain) {
+    const { email, workspace_name, provider = null, provider_id = null, provider_login = null } = signup;
     const { client } = pending, now = Date.now(), realm = realmId(env), id = crypto.randomUUID();
     const workspaceName = signupName(email, workspace_name);
     const activeAccount = signupGuard(`NOT EXISTS(SELECT 1 FROM users WHERE realm_id=? AND email=?
         AND (status<>'active' OR merged_into IS NOT NULL))`, [realm, email], 'access_denied', 'Account unavailable.', 403);
+    const providerChecks = provider ? [signupProviderAccountGuard(env, email),
+        signupProviderMethodGuard(env, client, provider, hostedDomain), signupProviderGuard(env, signup)] : [];
     const guards = [signupSettingsGuard(env, client, 'approval'), ...signupBrowserChecks(env, pending, email, now),
-        activeAccount, signupOwnershipGuard(env, client, email), signupAccessGuard(env, client, email, now)];
+        activeAccount, ...providerChecks, signupOwnershipGuard(env, client, email), signupAccessGuard(env, client, email, now)];
     const conditions = guards.map(guard => `(${guard.sql})`);
     const args = guards.flatMap(guard => guard.args);
     const [insert, verdict] = await env.DB.batch([
-        env.DB.prepare(`INSERT INTO signup_requests(id,realm_id,client_id,product,email,workspace_name,locale,created,verified_at)
-            SELECT ?,?,?,?,?,?,?,?,? WHERE ${conditions.join(' AND ')}
+        env.DB.prepare(`INSERT INTO signup_requests(id,realm_id,client_id,product,email,workspace_name,locale,created,verified_at,
+            provider,provider_id,provider_login)
+            SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE ${conditions.join(' AND ')}
             ON CONFLICT(realm_id,email,product) WHERE status='pending' DO NOTHING`)
-            .bind(id, realm, client.id, client.product, email, workspaceName, localeOf(env), now, now, ...args),
+            .bind(id, realm, client.id, client.product, email, workspaceName, localeOf(env), now, now, provider, provider_id, provider_login, ...args),
         env.DB.prepare(`SELECT CASE ${conditions.map((condition, index) => `WHEN NOT ${condition} THEN ${index}`).join(' ')} END AS failed`)
             .bind(...args)
     ]);
@@ -28,7 +41,7 @@ export async function recordSignupRequest(env, pending, { email, workspace_name 
         const { code, message, status } = guards[failure];
         invariant(false, code, message, status);
     }
-    return insert.meta.changes === 1 ? { id, email, workspace_name: workspaceName, product: client.product } : null;
+    return insert.meta.changes === 1 ? { id, email, workspace_name: workspaceName, product: client.product, provider } : null;
 }
 
 export function expireSignupRequests(env, now) {

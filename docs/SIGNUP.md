@@ -26,6 +26,30 @@ neutral response.
 The sign-up link verifies the mailbox. It works once, within 15 minutes, in the browser that started the request.
 In `open` mode, verification creates the account and workspace and resumes authorization.
 
+### Google and GitHub
+
+The sign-up view offers Google and GitHub when the app already offers email sign-up and lists the provider among
+its sign-in methods. The buttons carry the optional workspace name through the provider flow. Google hosted-domain
+restrictions still apply. Agent requests and registry providers do not get sign-up buttons.
+
+Sign-up needs proof that the person controls the mailbox. A verified Gmail address qualifies, as does a verified
+Google address whose domain exactly equals Google's signed `hd` claim. GitHub and other Google addresses receive
+an Imprim link at the verified address the provider returned. The OAuth round trip serves as the bot check.
+Email and address limits still apply. The link works only in the original browser. Until the person redeems it,
+Imprim saves the pending link and provider identity, with no account, workspace, admission or approval request.
+
+After mailbox proof, `open` creates the workspace and links the provider identity in the same write. Direct Google
+sign-up creates a Google session. A follow-up email link creates an email session. A conflicting provider link
+stops the write. A person who already has an account and can sign in to the app or join a workspace continues
+through ordinary sign-in. When app policy already accepts the address but a weak provider would have to create a
+user, the email link proves the mailbox and completes ordinary sign-in. It links the provider and applies the
+app's existing admission rules.
+
+If ordinary Google or GitHub sign-in fails solely for missing app access and that provider offers sign-up, the
+app-branded page offers **Create an account** and **Sign in another way**. The first opens the sign-up view.
+The person starts a fresh provider round trip from there. This page keeps the authorization request open and
+creates no account, session or provider link.
+
 ## Approval
 
 In `approval` mode the hosted page confirms that the request is waiting for approval. The verified request grants
@@ -33,8 +57,8 @@ no session, account, workspace or app admission. A realm can have one pending re
 A repeat from any app for that product keeps the original request and sends no duplicate admin notice. Pending
 requests expire 30 days after verification. Maintenance records the expired status.
 
-Realm administrators receive a branded email with the applicant, workspace name, app and product. **Sign-up
-requests** at `/admin/signups` defaults to Pending and also shows Approved, Declined and Expired. Approve and
+Realm administrators receive a branded email with the applicant, workspace name, app, product and sign-up method.
+The console shows the method on the list and in the decision view. **Sign-up requests** at `/admin/signups` defaults to Pending and also shows Approved, Declined and Expired. Approve and
 Decline require inline confirmation in the console and fresh administrator authentication, a current second factor,
 CSRF and the issuer's Origin on the API. Repeating a decision, or deciding an expired request, returns `409`.
 
@@ -47,6 +71,10 @@ decline can record an optional reason for administrators. Decision emails use th
 Declines send a short notice. Approvals link to the app's `initiate_login_uri`, or to the issuer's `/login` when
 the app has no URL. Set `initiate_login_uri` so applicants can start a fresh authorization from the app. Direct
 issuer sign-in serves administrators.
+
+Approval links the provider identity saved on a verified request. If another account already owns the identity
+at approval time, Imprim creates the workspace without linking it and records `provider_link_skipped: true` in
+the `workspace_signup` audit detail.
 
 Decision emails are attempted after the decision commits. If sending fails, the console reports delivery failure
 and the audit records `signup_email_failed`. The decision remains in effect.
@@ -69,3 +97,6 @@ Apps with `workspace_admin` enabled can also create a team workspace and invite 
 Migration `0025_signup.sql` adds `clients.self_signup`, `workspaces.created_via` and the `signup` magic-link
 purpose. Migration `0026_signup_requests.sql` stores verified requests, their language and decision details,
 and enforces the pending-request limit.
+
+Migration `0034_provider_signup.sql` adds the OAuth purpose and workspace name, and stores pending Google or
+GitHub identity metadata on links and verified requests.

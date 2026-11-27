@@ -20,7 +20,7 @@ export const EMAILS = Object.freeze({
         after: [msg('Ignore this email if you did not request it.')] },
     signup_admin_request: { subject: msg('New sign-up request'), heading: msg('New sign-up request'),
         button: msg('Review sign-up requests'), link: 'requests_url', footer: true,
-        before: [msg('{email} requested the workspace {workspace} in {app} ({client}) for product {product}.')] },
+        before: [msg('{email} requested the workspace {workspace} in {app} ({client}) for product {product}.'), msg('Sign-up method: {method}')] },
     signup_approved: { subject: msg('Your sign-up for {name} was approved'), heading: msg('Your sign-up was approved'),
         button: msg('Sign in'), link: 'app_url', footer: true,
         before: [msg('Your workspace is ready. Sign in to get started.')] },

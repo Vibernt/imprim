@@ -16,13 +16,13 @@ export function icon(name, size) {
 }
 export { dotLogo, dotMark } from './dots.mjs';
 // The head of a centred screen: its heading and one line, centred.
-export const heading = (title, description = '') => `<header class="fd-screen-head"><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${e(description)}</p>` : ''}</header>`;
+export const heading = (title, description = '') => `<header class="fd-screen-head"><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="fd-muted">${breakableText(description)}</p>` : ''}</header>`;
 // The top of a result screen (link sent, signed out, stopped): an icon tile, then the heading, centred.
 export const result = (name, tone, title, description = '', { muted = true } = {}) => `<header class="fd-screen-head"><span class="fd-tile" data-size="44" data-tone="${tone}">${icon(name)}</span><h1 class="fd-h1">${e(title)}</h1>${description ? `<p class="${muted ? 'fd-muted' : 'fd-body'}">${e(description)}</p>` : ''}</header>`;
 export const section = (title, description, body) => `<section class="fd-stack" data-gap="3"><div class="fd-stack" data-gap="1"><h2 class="fd-h3">${e(title)}</h2>${description ? `<p class="fd-small fd-muted">${e(description)}</p>` : ''}</div>${body}</section>`;
 // A button. `html` is already-safe inner markup (an icon plus escaped text); otherwise `label` is escaped.
-export function button(label, { variant, size, block, type = 'submit', icon: name, html, truncate = false, ...rest } = {}) {
-    return `<button class="fd-btn"${attrs({ type, 'data-variant': variant, 'data-size': size, 'data-block': block, ...rest })}>${name ? icon(name) : ''}<span${truncate ? ' class="fd-truncate"' : ''}>${html ?? e(label)}</span></button>`;
+export function button(label, { variant, size, block, type = 'submit', icon: name, mark, html, truncate = false, ...rest } = {}) {
+    return `<button class="fd-btn"${attrs({ type, 'data-variant': variant, 'data-size': size, 'data-block': block, ...rest })}>${name ? icon(name) : mark ?? ''}<span${truncate ? ' class="fd-truncate"' : ''}>${html ?? e(label)}</span></button>`;
 }
 export const linkButton = (label, href, { variant, size, block, icon: name } = {}) =>
     `<a class="fd-btn"${attrs({ href, 'data-variant': variant, 'data-size': size, 'data-block': block })}>${name ? icon(name) : ''}<span>${e(label)}</span></a>`;
@@ -32,7 +32,7 @@ export function field({ id, label, hint, error, size, ...input }) {
         ? `<textarea class="fd-textarea"${attrs({ id, 'data-mono': input.mono, rows: input.rows ?? 6, name: input.name, required: input.required, spellcheck: input.mono ? 'false' : undefined, 'aria-describedby': describedBy })}>${e(input.value ?? '')}</textarea>`
         : `<input class="fd-input"${attrs({ id, 'data-size': size, 'aria-invalid': error ? 'true' : undefined, 'aria-describedby': describedBy, type: input.type, name: input.name, value: input.value,
             placeholder: input.placeholder, autocomplete: input.autocomplete, autocapitalize: input.autocapitalize, inputmode: input.inputmode, maxlength: input.maxlength, minlength: input.minlength, pattern: input.pattern,
-            required: input.required, autofocus: input.autofocus, readonly: input.readonly, spellcheck: input.spellcheck })}>`;
+            required: input.required, disabled: input.disabled, autofocus: input.autofocus, readonly: input.readonly, spellcheck: input.spellcheck })}>`;
     return `<div class="fd-field"><label class="fd-field-label" for="${e(id)}">${e(label)}</label>${control}${hint ? `<p class="fd-field-hint" id="${e(id)}-hint">${e(hint)}</p>` : ''}${error ? `<p class="fd-field-error" id="${e(id)}-error">${icon('circle-alert', 14)}<span>${e(error)}</span></p>` : ''}</div>`;
 }
 // A 6-digit code in Fire's one-time-code boxes. It is one ordinary input, so the form works without script;
@@ -73,7 +73,7 @@ export const code = value => `<code class="fd-code">${e(value)}</code>`;
 export const table = (label, headers, rows) => `<div class="fd-table-wrap"><div class="fd-table-scroll"><table class="fd-table" aria-label="${e(label)}"><thead><tr>${headers.map(h => `<th>${e(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
 export const actions = (...buttons) => `<div class="fd-form-actions">${buttons.join('')}</div>`;
 // "or" between two ways to do one thing.
-export const orDivider = env => { const or = e(t(env, 'or')); return `<div class="fd-row" data-gap="3" role="separator" aria-label="${or}"><hr class="fd-divider fd-grow"><span class="fd-eyebrow">${or}</span><hr class="fd-divider fd-grow"></div>`; };
+export const orDivider = (env, hidden = false) => { const or = e(t(env, 'or')); return `<div class="fd-row" data-gap="3" role="separator" aria-label="${or}"${attrs({ hidden })}><hr class="fd-divider fd-grow"><span class="fd-eyebrow">${or}</span><hr class="fd-divider fd-grow"></div>`; };
 export const small = text => `<p class="fd-small fd-muted">${e(text)}</p>`;
 
 export function appRows(label, apps) {

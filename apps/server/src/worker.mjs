@@ -122,8 +122,10 @@ async function route(request, env, ctx, url) {
         case 'POST /account/profile': case 'POST /account/sessions': case 'POST /account/apps': case 'POST /account/devices':
         case 'POST /account/email': case 'POST /account/language': case 'GET /account/email/confirm': case 'POST /account/email/confirm': case 'POST /account/delete':
             return accountAction(request, env, ctx);
+        case 'POST /v1/auth/github/signup':
         case 'GET /v1/auth/github/start': return githubStart(request, env);
         case 'GET /auth/github/callback': return githubCallback(request, env);
+        case 'POST /v1/auth/google/signup':
         case 'GET /v1/auth/google/start': return googleStart(request, env);
         case 'GET /login/google/callback': return googleCallback(request, env);
         case 'GET /login': return loginPage(request, env, url);
@@ -154,7 +156,8 @@ export function limiterFor(method, path) {
 // Browser endpoints whose errors a person reads (sign-in.js, passkey.js and the account forms show them).
 const PEOPLE_PATHS = /^\/(?:v1\/(?:auth|account)\/|account(?:\/|$)|mfa$|agent\/consent$|machine-client$|workspace-join$|workspace-access$|switch-account$|device$|logout$|login$|signed-in$)/;
 // Browser form posts whose refusals are pages (with Accept: text/html); scripts on these paths use fetch, which does not ask for HTML.
-const HTML_FORMS = new Set(['/authorize', '/workspace-join', '/workspace-access', '/switch-account', '/agent/consent', '/machine-client', '/mfa', '/account/password']);
+const HTML_FORMS = new Set(['/authorize', '/workspace-join', '/workspace-access', '/switch-account', '/agent/consent', '/machine-client', '/mfa', '/account/password',
+    '/v1/auth/google/signup', '/v1/auth/github/signup']);
 // The request_id of a GET query or of a form posted to HTML_FORMS, looked up only to offer "Sign in again" on the page.
 async function lookUpSignIn(env, request, url, form) {
     try {

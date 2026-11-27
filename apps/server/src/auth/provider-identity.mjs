@@ -6,7 +6,7 @@ import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
 // A stable provider subject retains its owner across email changes, unless that email belongs to someone else.
 // A new provider subject links to an existing account only when the provider is authoritative for the mailbox, or
 // when this browser already holds a session for that account (S4). A stale "verified" flag never takes over an account.
-export async function providerIdentity(env, client, provider, profile, session = null, pending = null) {
+export async function inspectProviderIdentity(env, client, provider, profile, pending) {
     const realm = realmId(env);
     const linked = await env.DB.prepare(`SELECT u.* FROM user_identities i JOIN users u ON u.id=i.user_id
         WHERE i.realm_id=? AND i.provider=? AND i.provider_id=? AND u.realm_id=i.realm_id`).bind(realm, provider, profile.providerId).first();
@@ -16,13 +16,27 @@ export async function providerIdentity(env, client, provider, profile, session =
     invariant(!await isAdmin(env, email) && !await isAdmin(env, profile.email), 'access_denied', 'Account unavailable.', 403);
     // A registry provider marked authoritative for the domain (trusted_domains) proves the mailbox, as Google's hd does.
     const proof = profile.email !== email ? 'provider' : profile.authoritative ? 'mailbox' : profile.verified === false ? 'claim' : mailboxProof(provider, profile.email, profile.hd);
-    if (!linked && matching?.status === 'active' && !matching.merged_into)
-        invariant(proof === 'mailbox' || session?.user_id === matching.id, 'link_required',
-            'An account already uses this email. Sign in with an email link first, then continue with this provider in the same browser.', 403);
     invariant(!linked || (linked.status === 'active' && !linked.merged_into), 'access_denied', 'Account unavailable.', 403);
     const allowed = await admitted(env, client, email, proof);
-    invariant(allowed || await canSignInForWorkspaceJoin(env, pending, { userId: linked?.id ?? matching?.id, email }),
-        'access_denied', 'Account unavailable.', 403);
+    const join = !allowed && await canSignInForWorkspaceJoin(env, pending, { userId: linked?.id ?? matching?.id, email });
+    return { linked, matching, email, proof, allowed, join,
+        needsLink: !linked && matching?.status === 'active' && !matching.merged_into && proof !== 'mailbox' };
+}
+
+export function requireProviderLink(identity, session) {
+    invariant(!identity.needsLink || session?.user_id === identity.matching.id, 'link_required',
+        'An account already uses this email. Sign in with an email link first, then continue with this provider in the same browser.', 403);
+}
+
+export async function providerIdentity(env, client, provider, profile, session = null, pending = null) {
+    const identity = await inspectProviderIdentity(env, client, provider, profile, pending);
+    return signInProviderIdentity(env, client, provider, profile, identity, session);
+}
+
+export async function signInProviderIdentity(env, client, provider, profile, identity, session) {
+    requireProviderLink(identity, session);
+    invariant(identity.allowed || identity.join, 'access_denied', 'Account unavailable.', 403);
+    const { linked, matching, email, proof, allowed } = identity, realm = realmId(env);
     // Mailbox proof for an unverified account clears identities linked on another provider's word.
     if (!linked && proof === 'mailbox' && matching?.status === 'active' && !matching.merged_into) await claimMailbox(env, matching);
     const user = linked || await ensureUser(env, email, proof === 'mailbox');

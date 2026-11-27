@@ -38,3 +38,37 @@ test('migration 0025 preserves magic-link rows, constraints, indexes and request
         assert.deepEqual(rows(), [before[1]]);
     } finally { db.close(); }
 });
+
+test('migration 0034 preserves existing state, links and requests and requires complete provider keys', () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+        db.exec('PRAGMA foreign_keys=ON');
+        const root = new URL('../apps/server/migrations/', import.meta.url);
+        const apply = name => db.exec('BEGIN;\n' + readFileSync(new URL(name, root), 'utf8') + '\nCOMMIT;');
+        const name = '0034_provider_signup.sql';
+        for (const migration of readdirSync(root).filter(file => file.endsWith('.sql') && file < name).sort()) apply(migration);
+        db.exec(`INSERT INTO clients(id,redirect_uris) VALUES('app','["https://app.example.com/callback"]');
+            INSERT INTO auth_requests(id,client_id,redirect_uri,state,nonce,challenge,scope,browser_hash,expires_at)
+                VALUES('request','app','https://app.example.com/callback','s','n','c','openid','browser',10000);
+            INSERT INTO oauth_states(hash,browser_hash,verifier,request_id,expires_at,provider)
+                VALUES('oauth','browser','verifier','request',5000,'google');
+            INSERT INTO magic_links(hash,email,request_id,browser_hash,expires_at,purpose)
+                VALUES('mail','person@example.com','request','browser',5000,'signup');
+            INSERT INTO signup_requests(id,realm_id,client_id,product,email,workspace_name,locale,created,verified_at)
+                VALUES('signup','default','app','notes','person@example.com','Team','en',0,0)`);
+        apply(name);
+        assert.deepEqual({ ...db.prepare('SELECT purpose,workspace_name FROM oauth_states').get() },
+            { purpose: 'sign_in', workspace_name: null });
+        assert.throws(() => db.exec("UPDATE oauth_states SET purpose='wrong'"), /CHECK/);
+        for (const table of ['magic_links', 'signup_requests']) {
+            const record = () => ({ ...db.prepare(`SELECT provider,provider_id,provider_login FROM ${table}`).get() });
+            assert.deepEqual(record(), { provider: null, provider_id: null, provider_login: null });
+            for (const pairs of ["provider='github'", "provider_id='42'", "provider_login='person'",
+                "provider='github',provider_id=''", "provider='registry',provider_id='42'"])
+                assert.throws(() => db.exec(`UPDATE ${table} SET ${pairs}`), /CHECK/);
+            db.exec(`UPDATE ${table} SET provider='google',provider_id='1234'`);
+            assert.deepEqual(record(), { provider: 'google', provider_id: '1234', provider_login: null });
+        }
+        assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+    } finally { db.close(); }
+});

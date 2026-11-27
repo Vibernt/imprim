@@ -29,6 +29,15 @@ export async function liveSignupMode(env, client) {
 
 export const liveSignupEnabled = async (env, client) => signupEnabled(env, client) && await liveSignupMode(env, client) !== 'off';
 
+export async function requireLiveSignup(env, pending) {
+    requireSignup(env, pending);
+    const mode = await liveSignupMode(env, pending.client);
+    invariant(mode !== 'off', 'access_denied', signupOff, 403);
+    return mode;
+}
+
+export const signupProviderNames = Object.freeze({ google: 'Google', github: 'GitHub' });
+
 export function signupWorkspaceName(value) {
     if (value === undefined) return null;
     invariant(typeof value === 'string' && !value.includes('\0') && [...value.trim()].length <= 120,

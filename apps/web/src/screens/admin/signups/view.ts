@@ -1,6 +1,7 @@
 import { html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { icon } from '../../../lib/icon';
+import { t } from '../../../lib/i18n';
 import { href, navigate } from '../../../lib/router';
 import { cap, confirmPhrase, mono, status, table, when } from '../core-view';
 
@@ -10,8 +11,10 @@ type Status = typeof statuses[number];
 export type Decision = 'approve' | 'decline';
 export interface SignupRow {
   id: string; email: string; workspace_name: string; product: string; client_id: string;
-  app_name: string | null; status: Status; created: number; reason: string | null;
+  app_name: string | null; provider: 'google' | 'github' | null; status: Status; created: number; reason: string | null;
 }
+
+const methodLabel = (row: SignupRow) => row.provider === 'google' ? 'Google' : row.provider === 'github' ? 'GitHub' : t('Email');
 
 export const actionId = (id: string, action: Decision) => `signup-${id}-${action}`;
 export const confirmationId = 'signup-confirm-email';
@@ -36,6 +39,7 @@ export function statusFilter(value: string) {
 function confirmation(row: SignupRow, action: Decision, pending: boolean, cancel: () => void,
   submit: (body: object) => void) {
   return html`<div class="fd-column" data-size="sm">
+    <p class="fd-muted">${t('Sign-up method: {method}', { method: methodLabel(row) })}</p>
     ${confirmPhrase({ id: confirmationId, phrase: row.email, label: 'Type the email to confirm',
       action: cap(action) + ' request', pending, variant: action === 'approve' ? 'primary' : 'danger', cancel,
       submit: (_, data) => submit(action === 'decline' ? { reason: data.get('reason') } : {}),
@@ -51,11 +55,11 @@ export function signupTable(rows: SignupRow[], filter: string, selection: { id: 
   submit: (id: string, action: Decision, body: object) => void) {
   const isPending = filter === 'pending';
   const selected = rows.find(row => row.id === selection?.id && row.status === 'pending');
-  return html`${table('Sign-up requests', ['Email', 'Workspace name', 'Product / app', 'Requested',
+  return html`${table('Sign-up requests', ['Email', 'Workspace name', 'Product / app', t('Sign-up method'), 'Requested',
     ...(isPending ? ['Actions'] : ['Status'])], rows.map(row => [
       row.email, row.workspace_name,
       html`<div class="fd-table-two"><span>${mono(row.product)}</span><span class="fd-table-sub">${row.app_name ?? row.client_id}</span></div>`,
-      when(row.created),
+      methodLabel(row), when(row.created),
       isPending ? html`<div class="fd-row" data-wrap data-gap="2">
         <button id=${actionId(row.id, 'approve')} class="fd-btn" type="button" data-variant="outline"
           ?disabled=${pending} @click=${() => select(row.id, 'approve')}>Approve</button>

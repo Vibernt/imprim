@@ -24,7 +24,7 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 
 ## D1 schema
 
-Migrations `0001` through `0033` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
+Migrations `0001` through `0034` create or extend these tables. Workspace child tables are scoped through the workspace's `realm_id`. Timestamps are stored in milliseconds unless a protocol claim says otherwise.
 
 | Table | Contents |
 |---|---|
@@ -33,8 +33,8 @@ Migrations `0001` through `0033` create or extend these tables. Workspace child 
 | `clients` | App credentials, URLs, admission, sign-in and agent policy. |
 | `client_drafts` | Reserved app IDs and registration essentials before activation. |
 | `auth_requests` | Browser-bound pending app or agent authorization request, with its sanitized `ui_locales` and any workspace-join or access offer bound to the person and product. A join offer also records the offered workspaces. |
-| `magic_links` | Hashed, browser-bound email link and request reference. |
-| `oauth_states` | Hashed upstream state, PKCE verifier, provider and nonce. |
+| `magic_links` | Hashed, browser-bound email link, request reference and optional pending sign-up identity. |
+| `oauth_states` | Hashed upstream state, PKCE verifier, provider, nonce and sign-in or sign-up purpose. |
 | `sessions` | Hashed identity session and CSRF, `sid`, method, `amr`, second-factor time, admin scope, device, place and Google `hd`. |
 | `codes` | Single-use human OIDC code, redirect, challenge and session. |
 | `access_tokens` | Hashed opaque UserInfo bearer token. |
@@ -66,7 +66,7 @@ Migrations `0001` through `0033` create or extend these tables. Workspace child 
 | `brand_assets` | Realm-scoped, content-addressed logos and marks. |
 | `workspaces`, `workspace_members`, `workspace_products`, `workspace_invitations` | Realm workspaces, base roles, participating products and shared invitations. `workspaces.created_via` marks sign-up workspaces. |
 | `workspace_resources`, `workspace_holds`, `workspace_event_outbox` | Registered agent resources, app holds on closing a workspace and durable workspace events. |
-| `signup_requests` | Verified sign-up requests, recipient language and realm administrator decisions. |
+| `signup_requests` | Verified sign-up requests, recipient language, optional provider identity and realm administrator decisions. |
 
 `audit` rejects updates, and deletes of rows younger than 400 days, through triggers. App client IDs and agent client IDs use separate tables. Users imported with `scripts/import-users.mjs` keep their ids as `users.id`, which is the token `sub`.
 
@@ -76,7 +76,7 @@ Migrations `0001` through `0033` create or extend these tables. Workspace child 
 
 **Magic link.** A same-origin POST checks the browser, optional Turnstile and rate limits, then returns neutral `{accepted:true}`. Eligible addresses receive a 15-minute link at `/login#token=…`. The person clicks Sign in in the original browser. Verification atomically consumes the hash, rechecks admission and method policy, and issues an identity session. A GET or link prefetch cannot consume the token.
 
-**Upstream providers.** GitHub, Google and every registry provider (Microsoft, Apple, any OIDC issuer) start from a pending authorization and store hashed, browser-bound OAuth state with PKCE. Their callbacks consume state before network I/O, exchange the provider code and recheck current client policy. GitHub links by stable numeric ID. Google and registry providers verify a signed ID token, audience, nonce and email, then link by the provider's `sub`. A Google-restricted app also checks the signed `hd` claim. No provider access token is stored. An email links an existing account only with mailbox proof ([Protocol](PROTOCOL.md#sign-in-and-sessions)).
+**Upstream providers.** GitHub, Google and every registry provider (Microsoft, Apple, any OIDC issuer) start from a pending authorization and store hashed, browser-bound OAuth state with PKCE. Their callbacks consume state before network I/O, exchange the provider code and recheck current client policy. GitHub links by stable numeric ID. Google and registry providers verify a signed ID token, audience, nonce and email, then link by the provider's `sub`. A Google-restricted app also checks the signed `hd` claim. No provider access token is stored. Provider sign-up uses separate same-origin POST starts for Google and GitHub. It requires mailbox proof before workspace creation or approval. An email links an existing account only with mailbox proof ([Protocol](PROTOCOL.md#sign-in-and-sessions)).
 
 **SSO.** A top-level `/authorize` redirect reuses a valid identity session if its method and Google domain satisfy the current app policy. `prompt=none` returns `login_required` when it cannot proceed without sign-in. Agent requests still require consent and return `consent_required` for `prompt=none`.
 

@@ -21,6 +21,6 @@
     "check": "node scripts/check.mjs"
   },
   "devDependencies": {
-    "fire-design": "github:vidhatanand/firedesign#v0.12.4"
+    "fire-design": "github:vidhatanand/firedesign#v0.13.2"
   }
 }

@@ -3,6 +3,30 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-27
+
+Migration: `0034_provider_signup.sql` (the purpose and workspace name of a provider start, and the provider account
+waiting on a sign-up link or request).
+
+- **Sign up with Google or GitHub.** When an app offers self-serve sign-up and lists Google or GitHub among its
+  sign-in methods, **Create an account** shows **Sign up with Google** and **Sign up with GitHub** beside the email
+  form, carrying the optional workspace name (`POST /v1/auth/google/signup`, `POST /v1/auth/github/signup`, with the
+  issuer's Origin and the original browser).
+- **The email is proven first.** A Gmail address, or one whose domain is Google's hosted domain, finishes sign-up at
+  once. GitHub and other Google addresses get a sign-up link by email; nothing is created until it is opened in the
+  same browser. The provider account is linked in the same write that creates the account and workspace, or when an
+  administrator approves the request (skipped, and recorded, if someone else has linked it meanwhile). Sign-up
+  requests and their notification show how the person signed up.
+- **No account yet.** Someone who signs in with Google or GitHub on an app they have no access to, where sign-up is
+  open to them, sees "No {app} account yet" with **Create an account** (`/login?request_id=…&view=signup`) and
+  **Sign in another way**, instead of "Account unavailable". Nothing is written. Where sign-up is unavailable, and
+  for blocked or merged accounts, the refusal is unchanged.
+- **Fire v0.13.2.** Loading placeholders are easier to see and wait 160 ms before they show, so a fast load does not
+  flash one. Opening a dialog no longer shifts a page that has no scroll bar. No Imprim markup or script changes.
+- `docs/fire`: AGENT-RULES, GUIDE and CLASSES from the tag. Agent instructions now ask every screen to
+  name the Fire reference screen it follows; a Fire proposal is written with `fire propose` and shown to the
+  maintainer, who decides whether it is filed publicly.
+
 ## 2026-11-26.4
 
 Migrations: `0031_hosted_app_access.sql` (an app's `listed` setting, the workspace-access step),

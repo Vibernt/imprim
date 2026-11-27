@@ -6,6 +6,7 @@ import { accountSmoke } from './smoke-account.mjs';
 import { accountDirectorySmoke } from './smoke-account-directory.mjs';
 import { smokeServer } from './smoke-server.mjs';
 import { adminCoreSmoke } from './smoke-admin-core.mjs';
+import { providerSignupSmoke } from './smoke-provider-signup.mjs';
 import { hostedStatusSmoke } from './smoke-hosted-status.mjs';
 import { workspaceConsentSmoke } from './smoke-workspace-consent.mjs';
 import { forgetRealms } from '../../server/src/realms/realm.mjs';
@@ -102,6 +103,7 @@ accountSmoke(open);
 accountDirectorySmoke(open);
 workspaceConsentSmoke(browser);
 hostedStatusSmoke(browser);
+providerSignupSmoke(browser);
 machineClientSmoke(browser, open);
 
 for (const role of ['realm', 'platform']) test(`${role} navigation is gated by the roster role`, async t => {
