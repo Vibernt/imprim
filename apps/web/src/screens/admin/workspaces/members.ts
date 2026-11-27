@@ -1,11 +1,11 @@
 import { html, nothing } from 'lit';
-import { card } from '../../page-layout';
+import { card, inlineError } from '../../page-layout';
 import { cap, field, when } from '../realm-ui';
 import { roleField } from './forms';
 import { optionalTable } from './summary';
 import type { Submit, Workspace } from './types';
 
-export function members(workspace: Workspace, pending: boolean, submit: Submit) {
+export function members(workspace: Workspace, pending: boolean, submit: Submit, error?: string) {
   const editable = workspace.editable && workspace.kind === 'team';
   return card('Members', html`${optionalTable('Members', ['Email', 'Role', ...(editable ? ['Actions'] : [])], workspace.members.map((member, index) =>
       [member.email, cap(member.role), ...(editable ? [!member.manageable ? '—' : html`
@@ -23,7 +23,7 @@ export function members(workspace: Workspace, pending: boolean, submit: Submit) 
             <button class="fd-btn" type="submit" data-variant="danger" aria-label=${'Remove ' + member.email} ?disabled=${pending}>Remove member</button>
           </form>
         </div>`] : [])]), 'Members appear after accepting an invitation.')}
-    ${workspace.can_invite ? inviteForm(workspace, pending, submit) : nothing}
+    ${workspace.can_invite ? inviteForm(workspace, pending, submit, error) : nothing}
     ${workspace.invitations.length ? invitations(workspace, pending, submit) : nothing}
   `);
 }
@@ -40,10 +40,11 @@ function invitations(workspace: Workspace, pending: boolean, submit: Submit) {
   </div>`;
 }
 
-function inviteForm(workspace: Workspace, pending: boolean, submit: Submit) {
+function inviteForm(workspace: Workspace, pending: boolean, submit: Submit, error?: string) {
   return html`<form class="fd-form" method="post" ?inert=${pending} @submit=${(event: SubmitEvent) => submit('invite', event)}>
     ${field('workspace-invite-email', 'Email', { name: 'email', type: 'email', required: true, max: 254 })}
     ${roleField('workspace-invite-role', 'Invitation role', 'member', workspace.can_grant_owner)}
+    ${error ? inlineError(error) : nothing}
     <div class="fd-form-actions"><button class="fd-btn" type="submit" data-variant="primary" ?disabled=${pending}>Send invitation</button></div>
   </form>`;
 }

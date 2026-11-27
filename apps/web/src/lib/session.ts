@@ -9,6 +9,7 @@ export interface Session {
   readonly admin_ready: boolean;
   readonly mfa: boolean;
   readonly fresh_until: number;
+  readonly workspaces_available: boolean;
   readonly realm: { readonly id: string; readonly display_name: string };
 }
 

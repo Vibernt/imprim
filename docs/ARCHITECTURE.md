@@ -7,7 +7,7 @@ Imprim is a Cloudflare Worker with D1 state, an email binding, rate-limit bindin
 | Component | Work |
 |---|---|
 | Worker routes | OIDC and agent OAuth endpoints, sign-in pages, account and admin APIs, machine endpoints. |
-| Account and admin app | `apps/web/`: a Lit app served as static assets with realm branding, language and Fire labels injected per request. It uses `GET /v1/me`, `GET /v1/i18n/<locale>.json`, `/v1/account/*` and `/admin/api/*` JSON APIs with the session cookie and CSRF and Origin checks. Admin APIs also enforce second-factor and freshness rules. |
+| Account and admin app | `apps/web/`: a Lit app served as static assets with realm branding, language and Fire labels injected per request. It uses `GET /v1/me`, `GET /v1/i18n/<locale>.json`, `/v1/account/*` and `/admin/api/*` JSON APIs with the session cookie and CSRF and Origin checks. Account workspace routes require live workspace membership and reuse the guarded workspace writes. Admin APIs also enforce second-factor and freshness rules. |
 | Pages | Server-rendered HTML built from [Fire](fire/README.md) components (`pages/ui.mjs`, `pages/layout.mjs`, `pages/shell.mjs`). Every text is escaped; sign-in and consent screens load no Fire JavaScript. |
 | Languages | `i18n/`: the request's language, chosen once per request from `ui_locales`, the person's saved language, `Accept-Language` and the brand, and the catalogues that translate English message ids ([Languages](TRANSLATING.md)). The admin console is English. |
 | Email | `services/email/`: every message as data, rendered as plain text and a branded HTML part in the recipient's language, with an inline logo; sent through the email binding. |

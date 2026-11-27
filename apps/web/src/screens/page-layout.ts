@@ -66,3 +66,8 @@ export function formSection(id: string, title: string, content: TemplateResult, 
     <div class="fd-form-section-body">${content}</div>
   </section>`;
 }
+
+export const inlineError = (message: string) => html`<div class="fd-callout" data-tone="danger" role="alert">
+  <i class="fd-callout-icon" data-icon="circle-alert" aria-hidden="true"></i>
+  <div class="fd-callout-content"><p class="fd-callout-body">${message}</p></div>
+</div>`;

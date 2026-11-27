@@ -59,8 +59,10 @@ Status: built. This page is the specification for Fire 0.13.2 and the Lit accoun
 ## APIs
 
 - `GET /v1/me`: `{ sub, email, initials, locale, admin: null | 'realm' | 'platform', admin_ready: bool, mfa: bool,
-  fresh_until, realm: { id, display_name } }`. `admin_ready` is true only when the session passes every admin console
+  fresh_until, workspaces_available, realm: { id, display_name } }`. `admin_ready` is true only when the session passes every admin console
   rule (`adminBlock` in `admin/auth.mjs`, the same check the console enforces). Signed out: 401 `login_required`.
+- Account Workspaces appears when `workspaces_available` is true. The phone tabs are Apps, Workspaces, Agents,
+  Security and More, which contains Profile, Sessions and Sign out. See [the account API](PROTOCOL.md#account-workspaces).
 - Account: `/v1/account/*` JSON for every account screen (profile and email change, sessions and apps, agents and
   their labels and revocation, security: factors, passkeys, recovery codes, password set and change, deletion). Admin:
   `/admin/api/*` extended to cover every console screen. Each handler reuses the service functions the HTML pages
@@ -98,6 +100,8 @@ button side by side in one `fd-row data-align="end"`, the hint below (`fieldWith
 end with one `fd-form-actions`; an input never goes inside `fd-setting`; empty states sit inside their card; destructive actions come last, in a danger card, confirmed with `fd-confirm-inline` | Account Profile, Security, Sessions and apps, Agents; admin User detail, Workspace detail, Settings, Branding |
 | `form.html` | One `form.fd-form[data-size="full"]` at full content width; `fd-form-section` only as its direct children, never in a grid; inputs and textareas fill the section; one `fd-form-actions` at the end | Client new and edit, Workspace create, Realm create and edit (administrators as a card below the form) |
 | `api-keys.html`, `audit.html` | Page head with the primary action, a toolbar (search, filters), one table in `.fd-table-wrap > .fd-table-scroll`, row actions in the last column, the empty state inside the table area | Clients, Services, Users, Audit log, Sign-up requests, Workspaces, Signing keys (rotate in the head, revoke as a row action), Realms |
+| `logs.html` | Compact account page head and one stacked table, with loading, empty and error rows in the table frame | Account Workspaces list |
+| `record.html` | Compact account page head and separate bands for the roster, invitations, products and the leave action. Forms and row confirmations open inline | Account Workspace detail |
 
 Rules: a callout always has its `fd-callout-icon`; a code block is an `fd-codeblock` with its body; buttons keep their
 natural width; nothing scrolls sideways at 375px. `npx fire lint --surface app apps/web/src` and the review gate

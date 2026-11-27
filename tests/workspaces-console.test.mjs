@@ -13,8 +13,8 @@ async function setup(t) {
     const w = await world(t), db = w.env.DB.db;
     db.exec(`UPDATE realms SET config=json_set(config,'$.workspaces','on') WHERE id='default';
         UPDATE admins SET role='realm';
-        UPDATE clients SET workspaces='shared', product='notes', backchannel_uri='https://app.example/backchannel' WHERE id='app';
-        UPDATE clients SET workspaces='shared', product='tasks', backchannel_uri='https://app.example/backchannel' WHERE id='other';`);
+        UPDATE clients SET workspaces='shared', product='notes', initiate_login_uri='https://notes.example.com/start', backchannel_uri='https://app.example/backchannel' WHERE id='app';
+        UPDATE clients SET workspaces='shared', product='tasks', initiate_login_uri='https://tasks.example.com/start', backchannel_uri='https://app.example/backchannel' WHERE id='other';`);
     const { cookie, csrf } = await adminLogin(w);
     const admin = db.prepare('SELECT id FROM users WHERE email=?').get(adminEmail).id;
     const get = (path = root, headers = {}) => w.call(path, { headers: { cookie, ...headers } });
@@ -78,7 +78,7 @@ test('a realm admin can manage a team through the workspace JSON API', async t =
     assert.equal(w.mails.length, mailCount + 1);
     assert.equal(w.mails.at(-1).to, 'new@example.com');
     assert.match(w.mails.at(-1).text, /admin@example\.com/);
-    assert.ok(w.mails.at(-1).html.includes(w.env.ISSUER + '/login'));
+    assert.ok(w.mails.at(-1).html.includes('https://notes.example.com/start'));
     assert.deepEqual((await (await w.get(path)).json()).workspace.invitations.map(row => [row.id, row.email, row.role]),
         [[invitation.id, 'new@example.com', 'viewer']]);
     w.db.exec("INSERT INTO workspaces(id,realm_id,kind,name,created) VALUES('unrelated','default','team','Unrelated',0)");
@@ -210,12 +210,12 @@ test('the status filter is preserved across 50-row pages and imported IDs remain
 
 test('a different first owner gets an invitation and provider failure is disclosed after commit', async t => {
     const w = await setup(t), { db } = w;
-    const { path, id } = await w.create({ ...teamInput, products: [], first_owner_email: 'FIRST@example.com' });
+    const { path, id } = await w.create({ ...teamInput, products: ['notes'], first_owner_email: 'FIRST@example.com' });
     const invitation = db.prepare('SELECT email,role FROM workspace_invitations WHERE workspace_id=?').get(id);
     assert.deepEqual({ ...invitation }, { email: 'first@example.com', role: 'owner' });
     assert.equal(db.prepare('SELECT count(*) AS n FROM workspace_members WHERE workspace_id=?').get(id).n, 0);
     assert.equal(w.mails.at(-1).to, 'first@example.com');
-    assert.equal(db.prepare('SELECT count(*) AS n FROM workspace_products WHERE workspace_id=?').get(id).n, 0);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM workspace_products WHERE workspace_id=?').get(id).n, 1);
     w.env.EMAIL.send = async () => { throw new Error('Provider unavailable'); };
     const response = await w.post(path + '/invite', { email: 'another@example.com', role: 'member' });
     assert.equal(response.status, 503);
@@ -253,4 +253,20 @@ test('existing workspace form URLs still accept line-delimited products and retu
     const path = response.headers.get('location');
     assert.match(path, /^\/admin\/workspaces\/ws_[a-f0-9]{32}$/);
     assert.deepEqual((await (await w.get('/admin/api/' + path.slice(7))).json()).workspace.products, ['notes', 'tasks']);
+});
+
+test('the console refuses invitations with no linked app sign-in address before any write', async t => {
+    const w = await setup(t), { db } = w;
+    const { path, id } = await w.create();
+    db.exec('UPDATE clients SET initiate_login_uri=NULL');
+    const message = 'No app in this workspace has a sign-in address yet. Ask your administrator.';
+    for (const [endpoint, payload] of [[path + '/invite', { email: 'new@example.com', role: 'member' }],
+        [root, { ...teamInput, first_owner_email: 'new@example.com' }]]) {
+        const refusal = await w.post(endpoint, payload);
+        assert.equal(refusal.status, 409);
+        assert.deepEqual(await refusal.json(), { error: 'no_sign_in_address', error_description: message });
+    }
+    assert.equal(db.prepare('SELECT count(*) AS n FROM workspaces').get().n, 1);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM workspace_invitations').get().n, 0);
+    assert.equal(db.prepare('SELECT version FROM workspaces WHERE id=?').get(id).version, 1);
 });

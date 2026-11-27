@@ -5,7 +5,7 @@ import { FireLight } from '../lib/fire-light';
 import { t } from '../lib/i18n';
 import { icon } from '../lib/icon';
 import { href, type Outlet, type View } from '../lib/router';
-import { documentForArea, mobileNav, sidebarNav, tabbar } from './navigation';
+import { accountMore, documentForArea, mobileNav, sidebarNav, tabbar } from './navigation';
 import './status';
 
 export class AppShell extends FireLight implements Outlet {
@@ -91,7 +91,8 @@ export class AppShell extends FireLight implements Outlet {
           <p class="fd-sr-only" id="im-route-status" aria-live="polite"></p>
         </div>
         <div class="fd-mobile-nav" id="im-mobile-nav" role="dialog" aria-modal="true" aria-label=${admin ? 'Menu' : t('Menu')} data-state="closed" hidden>
-          <a class="fd-mobile-nav-account" href=${href('/account')} ?data-im-document=${documentForArea(view, 'account')}><span>${email}</span><span class="fd-account-avatar" aria-hidden="true">${initials}</span></a>
+          <a class=${accountMore(view) ? 'fd-mobile-nav-account im-phone-tab-destination' : 'fd-mobile-nav-account'}
+            href=${href('/account')} ?data-im-document=${documentForArea(view, 'account')}><span>${email}</span><span class="fd-account-avatar" aria-hidden="true">${initials}</span></a>
           ${mobileNav(view)}
           <div class="fd-mobile-nav-section"><a class="fd-mobile-nav-item" href="/logout"><span>${signOut}</span></a></div>
         </div>

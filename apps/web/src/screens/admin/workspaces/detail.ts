@@ -16,10 +16,10 @@ const configuration = (workspace: Workspace, pending: boolean, submit: Submit) =
     </form>`)}
 `;
 
-export const workspaceDetail = (workspace: Workspace, pending: boolean, submit: Submit) => keyed(workspace, html`
+export const workspaceDetail = (workspace: Workspace, pending: boolean, submit: Submit, error?: string) => keyed(workspace, html`
   <div class="fd-stack" data-gap="6">
     ${summary(workspace)}
-    ${members(workspace, pending, submit)}
+    ${members(workspace, pending, submit, error)}
     ${workspaceProducts(workspace, pending, submit)}
     ${activity(workspace)}
     ${workspace.editable ? configuration(workspace, pending, submit) : nothing}

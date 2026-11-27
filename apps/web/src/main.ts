@@ -16,7 +16,9 @@ async function start(): Promise<void> {
   try {
     const session = await loadSession();
     await loadI18n(session.locale);
-    await startRouter({ routes, session, outlet, base: import.meta.env.BASE_URL,
+    const visibleRoutes = routes.filter(route => session.workspaces_available ||
+      (route.path !== '/account/workspaces' && route.path !== '/account/workspaces/:id'));
+    await startRouter({ routes: visibleRoutes, session, outlet, base: import.meta.env.BASE_URL,
       title: (title) => `${title} · ${session.realm.display_name}` });
   } catch (error) {
     if (!(error instanceof ApiError && error.redirecting)) outlet.startupFailed = true;

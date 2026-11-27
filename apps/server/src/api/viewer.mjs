@@ -4,6 +4,7 @@ import { initialsOf } from '../auth/session.mjs';
 import { localeOf } from '../i18n/index.mjs';
 import { json } from '../lib/http.mjs';
 import { adminRole } from '../services/admission.mjs';
+import { canSeeAccountWorkspaces } from '../workspaces/account-read.mjs';
 import { requireApiSession } from './json.mjs';
 
 export async function viewer(request, env) {
@@ -19,6 +20,7 @@ export async function viewer(request, env) {
         admin_ready: admin !== null && !(await adminBlock(env, session, admin, true)),
         mfa: session.mfa_at > Date.now() - ADMIN_MFA_MS,
         fresh_until: session.auth_time * 1000 + ADMIN_FRESH_MS,
+        workspaces_available: await canSeeAccountWorkspaces(env, session.user_id),
         realm: { id: env.REALM.id, display_name: env.REALM.display_name }
     });
 }

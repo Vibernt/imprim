@@ -37,7 +37,7 @@ apps can opt in to membership and base roles managed by Imprim. Users imported w
 | `GET /login` | Email fragment confirmation, or a standalone email request restricted to the realm's admin roster. With `request_id` of a sign-in still open in this browser (an app's email link, or Sign in again on a page that stopped) it is that app's sign-in page again. `view=signup` opens the sign-up view when the request qualifies; any other `request_id` is ignored. Without one, it links to the short public app list ([next steps](#next-steps-on-pages-that-stop)). |
 | `GET /check-email`, `/signup-pending`, `/signed-in`, `/signed-out`, `/error` | Hosted confirmation and [next steps](#next-steps-on-pages-that-stop). `/signed-in` requires a current identity session. |
 | `GET /device`, `GET`/`POST /agent/consent` | The code entry, account check and approval pages for agents. A valid device code starts a browser-bound app request. A signed-in person can continue to consent or switch accounts. |
-| `GET /account`, `/account/apps`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | The account pages: profile, apps, security, sessions, connected agents, and the password, factor and email-change pages (below). |
+| `GET /account`, `/account/apps`, `/account/workspaces`, `/account/workspaces/{id}`, `/account/security`, `/account/sessions`, `/account/agents`, `/account/password`, `/account/mfa`, `/account/email/confirm` | Account pages for profile, apps, workspaces, security, sessions, connected agents, and password, factor and email changes. |
 | `POST /account/{profile,sessions,apps,devices,email,email/confirm,delete,password,mfa,revoke}` | Account changes; same Origin and CSRF. |
 | `POST /account/passkeys/{options,register,remove}` | Passkey registration and removal. In the hosted setup, `POST /account/mfa` with `action=rename-passkey` saves the new passkey's name with session CSRF, Origin and recent MFA. |
 | `GET /v1/account/apps` | `{apps:[{id,name,summary,mark,href,last_signed_in}]}` for the signed-in person. These are the same live admissions with registered sign-in addresses as the hosted personal list (up to 12 in this realm). `summary`, `mark` and `last_signed_in` can be null. |
@@ -59,6 +59,33 @@ style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; 
 callback). The sign-in page adds Turnstile's origin to `script-src` and `frame-src` only when both Turnstile keys
 are configured; with neither, the email button works without a challenge for development. Console pages use a
 stricter policy ([Control plane](CONTROL_PLANE.md#authentication-and-routes)).
+
+### Account workspaces
+
+These endpoints use the account API rate limiter. Every request requires a live session cookie for this realm.
+POST also requires issuer `Origin` and `X-CSRF-Token`. The realm's shared workspace switch must be on and the
+person must be a member of the active workspace, otherwise the API returns `404 not_found`.
+`GET /v1/me` returns `workspaces_available` when the account has at least one visible workspace.
+
+| Route | Response or effect |
+|---|---|
+| `GET /v1/account/workspaces` | `{workspaces:[{workspace_id,name,kind,role,members,products:[{product,apps:[{id,name,initiate_login_uri}]}]}]}`. Rows are ordered by name. `members` is a count. An app's address is null if it has none or if it is unlisted and the person has no live admission. |
+| `GET /v1/account/workspaces/{id}?after=…` | `{workspace,role,members:{rows:[{sub,email,role,created}],after},invitations?}`. `workspace` is the list record with `version` and `owner_count` in place of `role`. The roster returns up to 50 members and an opaque `after` cursor, or null at the end. Invitations are visible to owners and admins and have `invitation_id`, `email`, `role` and `expires_at`. Times are Unix milliseconds. |
+| `POST /v1/account/workspaces/{id}/invitations` | `{email,role}` creates or replaces an invitation. Returns `201` with `{invitation_id,expires_at}`. `409 no_sign_in_address` leaves the workspace and its invitations unchanged. A delivery failure after the invitation is saved returns `503 workspace_invitation_email_failed`. |
+| `POST /v1/account/workspaces/{id}/invitations/{invitation_id}/revoke` | Revokes the open invitation in this workspace. |
+| `POST /v1/account/workspaces/{id}/members/{sub}/role` | `{role}` changes the member's role. Accepted roles are `owner`, `admin`, `member`, and `viewer`. |
+| `POST /v1/account/workspaces/{id}/members/{sub}/remove` | Removes the member and ends access according to the workspace access rules. |
+| `POST /v1/account/workspaces/{id}/leave` | Removes the current person and returns `{workspaces_available}` with their post-leave visibility. |
+| `POST /v1/account/workspaces/{id}/rename` | `{name}` changes the name. Whitespace is trimmed and the name must have 1–120 characters. NUL is refused. |
+
+Revoke, role changes, remove and rename return `200 {}`. Owners can rename. Owners and admins can manage team
+invitations and members, with owner-role changes restricted to owners. A team must retain an owner after removal,
+demotion or leave. Account changes use the session's workspace permissions and record `detail.source: "account"`
+in the audit. See [Account workspaces](WORKSPACES.md#account-workspaces) and [invitation email](WORKSPACES.md#email).
+
+Percent-encode member subjects as path segments. For the exact imported subjects `.` and `..`, use the raw
+segments `:dot` and `:dotdot`, respectively. URL parsing consumes dot segments. A percent-encoded colon preserves
+a literal colon in a subject.
 
 ## Authorization
 

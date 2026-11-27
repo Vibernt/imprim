@@ -37,6 +37,8 @@ is `true`. Add `branding.summary` for a short app description and `branding.loca
    pass the ID token issued to the app as `actorToken`. Keep app-specific permissions and check them on each request.
 4. Verify `workspace_token` on the back channel. Deduplicate `jti`, apply newer versions and use `workspaceMembers`
    to catch up. [Shared workspace specification](WORKSPACES.md)
+5. Link from your team screen to `https://id.example.com/account/workspaces/{id}` on your issuer, using the Imprim
+   workspace ID. Members can see the shared roster and manage it according to their workspace role.
 
 ### Self-serve sign-up
 

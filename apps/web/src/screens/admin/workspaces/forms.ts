@@ -1,5 +1,6 @@
-import { html } from 'lit';
+import { html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
+import { inlineError } from '../../page-layout';
 import { cap, field, formSection } from '../realm-ui';
 import type { Role, Submit } from './types';
 
@@ -22,11 +23,12 @@ export const roleField = (id: string, label: string, role: Role, canGrantOwner: 
     </select></label>
   </div>`;
 
-export const createForm = (pending: boolean, submit: Submit) => html`
+export const createForm = (pending: boolean, submit: Submit, error?: string) => html`
   <form class="fd-form" data-size="full" ?inert=${pending} method="post" @submit=${(event: SubmitEvent) => submit('create', event)}>
     ${formSection('workspace-create-team', 'Team', html`${nameField()}${productField('products', 'Products')}`)}
     ${formSection('workspace-create-owner', 'First owner', field('first_owner_email', 'First owner email',
       { type: 'email', required: true, max: 254 }),
     'If you enter a different email, Imprim sends an invitation.') }
+    ${error ? inlineError(error) : nothing}
     <div class="fd-form-actions"><button class="fd-btn" type="submit" data-variant="primary" ?disabled=${pending}>Create workspace</button></div>
   </form>`;

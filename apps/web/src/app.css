@@ -1,6 +1,8 @@
 /* Fire's layout starts at the elements rendered by these light-DOM components. */
 app-shell,
 screen-apps,
+screen-account-workspaces,
+screen-account-workspace,
 screen-profile,
 screen-security,
 screen-sessions,
@@ -33,4 +35,11 @@ screen-load-error {
 /* Fire's top-bar menu still serves the full navigation between the tab-bar and sidebar breakpoints. */
 @container fd-app (max-width: 639.98px) {
   .im-phone-tab-destination { display: none; }
+}
+
+.im-workspace-app-name {
+  display: block;
+  max-inline-size: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

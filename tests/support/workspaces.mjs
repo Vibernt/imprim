@@ -11,8 +11,8 @@ export async function setup(t, { enabled = true } = {}) {
     const db = w.env.DB.db;
     db.prepare("UPDATE realms SET config=json_set(config,'$.workspaces',?) WHERE id='default'").run(enabled ? 'on' : 'off');
     db.prepare(`UPDATE clients SET workspaces='shared',product='notes',personal_workspaces='on',workspace_admin='on',
-        agent_resource_prefixes='["https://app.example/w/"]',backchannel_uri='https://app.example/events' WHERE id='app'`).run();
-    db.prepare("UPDATE clients SET workspaces='shared',product='tasks',backchannel_uri='https://other.example/events' WHERE id='other'").run();
+        initiate_login_uri='https://app.example.com/start',agent_resource_prefixes='["https://app.example/w/"]',backchannel_uri='https://app.example/events' WHERE id='app'`).run();
+    db.prepare("UPDATE clients SET workspaces='shared',product='tasks',initiate_login_uri='https://tasks.example.com/start',backchannel_uri='https://other.example/events' WHERE id='other'").run();
     function api(method, path, body, auth = basic()) {
         const headers = { accept: 'application/json', ...(auth ? { authorization: auth } : {}) };
         if (body !== undefined) headers['content-type'] = 'application/json';

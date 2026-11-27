@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { login, world } from './support/world.mjs';
 import { TestHTMLRewriter } from './support/html-rewriter.mjs';
 import { adminLogin } from './support/admin.mjs';
+import { accountSession } from './support/account-api.mjs';
+import { seedAccountWorkspace } from './support/account-workspaces.mjs';
 import { fireLabels } from './support/i18n.mjs';
 import { WEB_PATHS } from '../apps/server/src/web/serve.mjs';
 
@@ -122,7 +124,7 @@ test('a parameterized admin path is subject to the existing scoped MFA and platf
 
 test('the Lit shell registers all account and admin routes', () => {
     assert.deepEqual(WEB_PATHS, new Set([
-        '/account', '/account/apps', '/account/security', '/account/sessions', '/account/agents',
+        '/account', '/account/apps', '/account/workspaces', '/account/workspaces/:id', '/account/security', '/account/sessions', '/account/agents',
         '/admin', '/admin/clients', '/admin/clients/new', '/admin/clients/:id', '/admin/services',
         '/admin/users', '/admin/users/:id', '/admin/users/:id/merge', '/admin/audit', '/admin/signups',
         '/admin/workspaces', '/admin/workspaces/:id', '/admin/workspaces/:id/close',
@@ -216,4 +218,35 @@ test('unknown account and admin documents are 404 shells only after their own se
         assert.match(await response.text(), /<app-shell><\/app-shell>/);
     }
     assert.equal(reads, 2);
+});
+
+test('workspace documents and the account navigation use live membership and the realm switch', async t => {
+    globalThis.HTMLRewriter = TestHTMLRewriter;
+    t.after(() => { delete globalThis.HTMLRewriter; });
+    const w = await world(t), person = await accountSession(w), db = w.env.DB.db;
+    w.env.ASSETS = { fetch: () => new Response(index, { headers: { 'content-type': 'text/html' } }) };
+    const get = path => w.call(path, { headers: { ...accept, cookie: person.cookie } });
+    const visible = async () => (await (await get('/v1/me')).json()).workspaces_available;
+    const base = '/account/workspaces';
+    db.exec("UPDATE realms SET config=json_set(config,'$.workspaces','on')");
+    assert.equal(await visible(), false);
+    const hidden = await get(base);
+    assert.equal(hidden.status, 404);
+    assert.match(await hidden.text(), /<app-shell><\/app-shell>/);
+    seedAccountWorkspace(db, 'team', 'Alpha team', { owner: person.user.id });
+    seedAccountWorkspace(db, 'closed', 'Closed team', { status: 'closed', owner: person.user.id });
+    assert.equal(await visible(), true);
+    assert.equal((await get(base)).status, 200);
+    assert.equal((await get(base + '/team')).status, 200);
+    assert.equal((await get(base + '/closed')).status, 404);
+    assert.equal((await get(base + '/unknown')).status, 404);
+    const password = await (await get('/account/password')).text();
+    assert.match(password, /fd-nav-item" href="\/account\/apps".*fd-nav-item" href="\/account\/workspaces"/);
+    const tabs = password.match(/<nav class="fd-tabbar"[^>]*>(.*?)<\/nav>/s)[1];
+    assert.deepEqual([...tabs.matchAll(/class="fd-tabbar-label">([^<]+)/g)].map(match => match[1]),
+        ['Apps', 'Workspaces', 'Agents', 'Security', 'More']);
+    db.exec("UPDATE realms SET config=json_set(config,'$.workspaces','off')");
+    assert.equal(await visible(), false);
+    assert.equal((await get(base + '/team')).status, 404);
+    assert.doesNotMatch(await (await get('/account/password')).text(), /href="\/account\/workspaces"/);
 });

@@ -9,7 +9,7 @@ import { accountPage } from '../pages/shell.mjs';
 import { heading, field, hidden, button, callout, actions } from '../pages/ui.mjs';
 import { t } from '../i18n/index.mjs';
 import { passwordStatus, requirePasswordEmail, savePassword } from './password-service.mjs';
-function form(env, request, values, password, saved, pending) {
+function form(env, request, session, values, password, saved, pending) {
     const current = password.current_password_required
         ? field({ id: 'current_password', label: t(env, 'Current password'), type: 'password', name: 'current_password', autocomplete: 'current-password', required: true }) : '';
     const title = password.updated !== null ? t(env, 'Change password') : t(env, 'Set a password');
@@ -21,7 +21,7 @@ ${callout('', t(env, 'We check new passwords against known data breaches. Saving
 ${values.request_id ? button(t(env, 'Save password'), { variant: 'primary', size: 'lg', block: true }) : actions(button(t(env, 'Save password'), { variant: 'primary' }))}</form>`;
     // Mid sign-in (an app is waiting) this is a centred screen; otherwise it sits in the account pages.
     return values.request_id ? page(title, heading(title, description) + body, { client: pending.client, formTargets: [pending.row.redirect_uri] })
-        : accountPage(title, body, { env, active: 'security', description, back: [t(env, 'Security'), '/account/security'], normalBack: true });
+        : accountPage(title, body, { env, session, active: 'security', description, back: [t(env, 'Security'), '/account/security'], normalBack: true });
 }
 export async function passwordPage(request, env, ctx) {
     const session = await getSession(request, env);
@@ -30,7 +30,7 @@ export async function passwordPage(request, env, ctx) {
     if (request.method === 'GET') {
         const query = uniqueParams(new URL(request.url).searchParams);
         const pending = query.request_id ? await pendingRequest(env, request, query.request_id) : null;
-        return form(env, request, query, await passwordStatus(env, session), Boolean(query.done), pending);
+        return form(env, request, session, query, await passwordStatus(env, session), Boolean(query.done), pending);
     }
     const body = await readBody(request, 'form');
     await requireCsrf(request, env, session, body.csrf);

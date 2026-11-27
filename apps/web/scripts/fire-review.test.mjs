@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { smokeServer } from './smoke-server.mjs';
 import { approvalPath, seedMachineWorkspace, seededRequest } from '../../../tests/support/workspace-machines.mjs';
 import { forgetRealms } from '../../server/src/realms/realm.mjs';
+import { seedAccountWorkspaceMember } from '../../../tests/support/account-workspaces.mjs';
 import { seedSignupRequest } from './signup-fixture.mjs';
 
 test('fire review: every Lit screen at 1440 and 375, light and dark', { timeout: 600000 }, async t => {
@@ -19,6 +20,12 @@ test('fire review: every Lit screen at 1440 and 375, light and dark', { timeout:
         branding: { name: 'Draft notes' }, redirect_uris: ['https://notes.example.com/callback'], sign_in_methods: ['email'],
     }));
     const user = db.prepare('SELECT id FROM users ORDER BY created LIMIT 1').get();
+    seedAccountWorkspaceMember(db, 'ws_review', user.id, 'owner', now);
+    db.prepare('INSERT INTO users(id,email,created) VALUES(?,?,?)').run('review-member', 'teammate@example.com', now);
+    seedAccountWorkspaceMember(db, 'ws_review', 'review-member', 'member', now);
+    db.prepare("UPDATE clients SET initiate_login_uri='https://notes.example.com/sign-in' WHERE id='app'").run();
+    db.prepare(`INSERT INTO workspace_invitations(id,workspace_id,email,role,created,expires_at)
+        VALUES('review-invite','ws_review','invited@example.com','viewer',?,?)`).run(now, now + 86400000);
     seedMachineWorkspace(db, user.id);
     forgetRealms(server.env);
     const { request_id } = await seededRequest(server);
@@ -29,7 +36,8 @@ test('fire review: every Lit screen at 1440 and 375, light and dark', { timeout:
     const client = db.prepare('SELECT id FROM clients ORDER BY id LIMIT 1').get();
     const routes = [
         ['/account', 'account'], ['/account/apps', 'account-apps'], ['/account/security', 'account-security'], ['/account/sessions', 'account-sessions'],
-        ['/account/agents', 'account-agents'], [approvalPath(request_id), 'machine-approval'], ['/admin/clients', 'clients'], ['/admin/clients/new', 'client-new'],
+        ['/account/agents', 'account-agents'], ['/account/workspaces', 'account-workspaces'],
+        ['/account/workspaces/ws_review', 'account-workspace-detail'], [approvalPath(request_id), 'machine-approval'], ['/admin/clients', 'clients'], ['/admin/clients/new', 'client-new'],
         ['/admin/clients/' + client.id, 'client-edit'], ['/admin/clients/draft-notes', 'client-draft'], ['/admin/services', 'services'], ['/admin/users', 'users'],
         ['/admin/users/' + user.id, 'user-detail'], ['/admin/audit', 'audit'], ['/admin/signups', 'signups'], ['/admin/workspaces', 'workspaces'],
         ['/admin/workspaces/ws_review', 'workspace-detail'], ['/admin/branding', 'branding'], ['/admin/settings', 'configuration'],

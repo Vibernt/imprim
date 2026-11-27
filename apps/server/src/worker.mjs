@@ -4,6 +4,7 @@ import { catalogueResponse } from './api/catalogue.mjs';
 import { profileApi } from './api/profile.mjs';
 import { accountAccessApi } from './api/account-access.mjs';
 import { accountSecurityApi } from './api/account-security.mjs';
+import { accountWorkspaceApi, accountWorkspaceApiPath } from './api/account-workspaces.mjs';
 import { admin } from './admin/routes.mjs';
 import { registerAgent } from './agents/registration.mjs';
 import { machineApproval } from './machines/approval.mjs';
@@ -52,6 +53,7 @@ const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, 
 async function route(request, env, ctx, url) {
     if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return admin(request, env, ctx);
     if (workspaceApiPath(request.method, url.pathname)) return workspaceApi(request, env, ctx, url);
+    if (accountWorkspaceApiPath(url.pathname)) return accountWorkspaceApi(request, env, ctx, url);
     const brandAsset = request.method === 'GET' && /^\/assets\/brand\/([0-9a-f]{64})$/.exec(url.pathname);
     if (brandAsset) return serveAsset(env, brandAsset[1]);
     const start = request.method === 'GET' && PROVIDER_START.exec(url.pathname);
@@ -191,7 +193,8 @@ export async function handleRequest(request, base, ctx) {
         return isShellResponse(response) ? response : await withBrand(response, env);
     } catch (error) {
         const known = error instanceof AppError;
-        if (!known) console.error(JSON.stringify({ type: 'request_failed', path: url.pathname, code: 'internal_error' }));
+        const logPath = accountWorkspaceApiPath(url.pathname) ? '/v1/account/workspaces' : url.pathname;
+        if (!known) console.error(JSON.stringify({ type: 'request_failed', path: logPath, code: 'internal_error' }));
         const code = known ? error.code : 'server_error', status = known ? error.status : 500;
         // A person's browser may POST an authorization request (OIDC Core 3.1.2.1); refusals before the redirect is trusted are pages.
         const workspaceRequest = workspaceApiPath(request.method, url.pathname);
@@ -219,7 +222,7 @@ export async function handleRequest(request, base, ctx) {
                 : json({ error: code, error_description: message }, status);
             if (html || signedOut) response = await withBrand(response, env);
         } catch {
-            console.error(JSON.stringify({ type: 'error_page_failed', path: url.pathname, code: 'internal_error' }));
+            console.error(JSON.stringify({ type: 'error_page_failed', path: logPath, code: 'internal_error' }));
             const errorEnv = { ...env, SIGN_IN: null };
             return withBrand(await errorPage(errorEnv, t(errorEnv, 'The request could not be completed.'), 500), errorEnv);
         }

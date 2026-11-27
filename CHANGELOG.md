@@ -3,6 +3,27 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-27.1
+
+No migration.
+
+- **Workspaces in the account.** Where a realm has shared workspaces on, someone who belongs to an active workspace
+  sees **Workspaces** in their account (after Apps; on a phone, the tab bar is Apps, Workspaces, Agents, Security and
+  More). The list shows each workspace's kind, the person's role, member count and apps. A workspace's page shows its
+  members, and for admins and owners its open invitations (re-send, revoke), an invite form, role changes and
+  removal, each confirmed on the page. Owners rename it; any member can leave it, except the last owner. Apps are
+  shown, not changed, and a workspace cannot be closed here. Personal workspaces show only their owner and apps.
+- **The account workspace API**, `/v1/account/workspaces`, with the session, the CSRF token and the issuer's
+  Origin. It uses the same guarded writes as apps and the console, so the same role rules, events and access teardown
+  apply, and it audits with `source: "account"`. A realm administrator has only their member role here. A
+  workspace the person does not belong to is not found.
+- **Invitation links never lead to the administrator sign-in.** An invitation from the account or the console links
+  to the sign-in address of one of the workspace's apps: the one the inviter signed in to most recently, otherwise
+  the first by name. An app's invitation links to that app. **When no such app has a sign-in address
+  (`initiate_login_uri`), the invitation is refused with `409 no_sign_in_address`**, including from
+  `POST /v1/workspaces/{id}/invitations` for an app with no address; give each app its sign-in address.
+- Apps can link to `/account/workspaces/{id}` from their own team screens ([Integrating](docs/INTEGRATE.md)).
+
 ## 2026-11-27
 
 Migration: `0034_provider_signup.sql` (the purpose and workspace name of a provider start, and the provider account

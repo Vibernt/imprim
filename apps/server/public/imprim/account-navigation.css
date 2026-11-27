@@ -1,0 +1,4 @@
+/* On a phone these destinations are already in the tab bar. The tablet sheet shows them all. */
+@container fd-app (max-width: 639.98px) {
+  .im-phone-tab-destination { display: none; }
+}

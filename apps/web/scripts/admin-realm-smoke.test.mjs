@@ -8,7 +8,7 @@ import { stacked } from './smoke-admin-core.mjs';
 const browser = await chromium.launch();
 test.after(() => browser.close());
 
-async function open(t, width = 1440, colorScheme = 'light') {
+async function open(t, width = 1440, colorScheme = 'light', expectedConflict = null) {
     const server = await smokeServer(t, 'platform');
     const context = server.track(await browser.newContext({ viewport: { width, height: 900 }, colorScheme, locale: 'en-US' }));
     t.after(() => context.close());
@@ -17,7 +17,12 @@ async function open(t, width = 1440, colorScheme = 'light') {
     page.setDefaultTimeout(8000);
     const failures = [];
     page.on('pageerror', error => failures.push(error.message));
-    page.on('console', message => { if (message.type() === 'error') failures.push(message.text()); });
+    page.on('console', message => {
+        if (message.type() !== 'error') return;
+        // A refusal the test provokes on purpose (a 409 from the endpoint it names) is not a failure.
+        const conflict = expectedConflict?.test(message.location().url) && /status of 409/.test(message.text());
+        if (!conflict) failures.push(message.text());
+    });
     page.on('requestfailed', request => {
         if (request.failure()?.errorText !== 'net::ERR_ABORTED') failures.push(request.failure()?.errorText);
     });
@@ -31,7 +36,7 @@ async function open(t, width = 1440, colorScheme = 'light') {
 }
 
 test('Workspaces uses Fire filters and form controls and closes only after the name is typed', async t => {
-    const { page, server, go, fits, toast } = await open(t);
+    const { page, server, go, fits, toast } = await open(t, 1440, 'light', /\/admin\/api\/workspaces\/[^/]+\/invite$/);
     const db = server.env.DB.db;
     db.prepare("UPDATE clients SET product='reports',workspaces='shared' WHERE id='other'").run();
     const seed = db.prepare("INSERT INTO workspaces(id,realm_id,kind,name,status,created) VALUES(?,'default','team',?,?,0)");
@@ -81,6 +86,11 @@ test('Workspaces uses Fire filters and form controls and closes only after the n
     await page.getByRole('heading', { name: 'Renamed Team', exact: true }).waitFor();
     await page.getByLabel('Email', { exact: true }).fill('join@example.net');
     await page.getByLabel('Invitation role').selectOption('viewer');
+    await page.getByRole('button', { name: 'Send invitation' }).click();
+    // No app of the workspace's products has a sign-in address: the refusal is shown and nothing is saved.
+    await page.getByText('No app in this workspace has a sign-in address yet. Ask your administrator.', { exact: true }).waitFor();
+    assert.equal(db.prepare("SELECT count(*) AS n FROM workspace_invitations WHERE email='join@example.net'").get().n, 0);
+    db.prepare("UPDATE clients SET product='notes',workspaces='shared',initiate_login_uri='https://notes.example.com/sign-in' WHERE id='app'").run();
     await page.getByRole('button', { name: 'Send invitation' }).click();
     await toast('Invitation sent');
     await page.getByRole('button', { name: 'Revoke invitation for join@example.net' }).click();

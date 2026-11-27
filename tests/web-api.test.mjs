@@ -32,7 +32,7 @@ test('/v1/me reports the existing subject, locale, exact roster role and authent
     const person = db.prepare('SELECT id,email FROM users').get(), session = db.prepare('SELECT auth_time FROM sessions').get();
     assert.deepEqual(await get(), {
         sub: person.id, email: person.email, initials: 'PE', locale: 'fr', admin: null, admin_ready: false, mfa: false,
-        fresh_until: session.auth_time * 1000 + ADMIN_FRESH_MS, realm: { id: 'default', display_name: 'Vibernt' }
+        fresh_until: session.auth_time * 1000 + ADMIN_FRESH_MS, workspaces_available: false, realm: { id: 'default', display_name: 'Vibernt' }
     });
     db.prepare("INSERT INTO admins(realm_id,email,role,created) VALUES('default',?,'realm',0)").run(person.email);
     assert.equal((await get()).admin, 'realm');

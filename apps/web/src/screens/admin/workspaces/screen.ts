@@ -15,6 +15,8 @@ const titles: Record<Action, string> = {
 };
 
 class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
+  static override properties = { ...AdminRealmScreen.properties, invitationError: { state: true } };
+  declare private invitationError: { endpoint: string; description: string } | undefined;
   private get workspaceId() { return this.view.params.id; }
   private get closing() { return this.view.route.path.endsWith('/close'); }
   private get creating() { return !this.workspaceId && this.view.query.get('create') === '1'; }
@@ -53,6 +55,7 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
     if (event.defaultPrevented) return;
     event.preventDefault();
     if (this.pending) return;
+    this.invitationError = undefined;
     const form = formData(event);
     this.pending = true;
     const endpoint = action === 'create' ? apiRoot : apiRoot + '/' + encodeURIComponent(this.workspaceId) + '/' + action;
@@ -69,6 +72,10 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
       else await this.load();
     } catch (error) {
       if (!this.isConnected) return;
+      if (error instanceof ApiError && error.error === 'no_sign_in_address') {
+        this.invitationError = { endpoint, description: error.description };
+        return;
+      }
       const saved = error instanceof ApiError && error.error === 'workspace_invitation_email_failed' && error.details.workspace_id;
       if (saved) {
         notice('Invitation email failed', error instanceof Error ? error.message : undefined, 'danger');
@@ -85,9 +92,11 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
       <p class="fd-callout-title">Shared workspaces are off</p>
       <p class="fd-callout-body">Set ${mono('workspaces')} to ${mono('on')} in this realm’s configuration to enable them.</p>
     </div></div>`;
+    const inviteEndpoint = this.creating ? apiRoot : apiRoot + '/' + encodeURIComponent(this.workspaceId) + '/invite';
+    const error = this.invitationError?.endpoint === inviteEndpoint ? this.invitationError.description : undefined;
     if ('workspace' in data) return this.closing ? closeWorkspace(data.workspace, this.pending, this.submit)
-      : html`${workspaceDetail(data.workspace, this.pending, this.submit)}`;
-    if (this.creating) return createForm(this.pending, this.submit);
+      : html`${workspaceDetail(data.workspace, this.pending, this.submit, error)}`;
+    if (this.creating) return createForm(this.pending, this.submit, error);
     return workspaceList(data, this.view.query.get('status') ?? '', this.view.query.get('before'));
   }
 }

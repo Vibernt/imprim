@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { machineClientSmoke } from './smoke-machine-clients.mjs';
 import { accountSmoke } from './smoke-account.mjs';
+import { accountWorkspacesSmoke } from './smoke-account-workspaces.mjs';
 import { accountDirectorySmoke } from './smoke-account-directory.mjs';
 import { smokeServer } from './smoke-server.mjs';
 import { adminCoreSmoke } from './smoke-admin-core.mjs';
@@ -14,7 +15,7 @@ import { forgetRealms } from '../../server/src/realms/realm.mjs';
 const browser = await chromium.launch();
 test.after(() => browser.close());
 
-async function open(t, { width = 1440, colorScheme = 'light', role = null, timezoneId, expectedBadRequest, expectedNotFound = [] } = {}) {
+async function open(t, { width = 1440, colorScheme = 'light', role = null, timezoneId, expectedBadRequest, expectedConflict, expectedNotFound = [] } = {}) {
     const server = await smokeServer(t, role);
     const context = server.track(await browser.newContext({ viewport: { width, height: 900 }, colorScheme, locale: 'en-US', timezoneId }));
     t.after(() => context.close());
@@ -28,7 +29,9 @@ async function open(t, { width = 1440, colorScheme = 'light', role = null, timez
             && /Failed to load resource:.*status of 400/.test(message.text());
         const notFound = expectedNotFound.some(path => message.location().url === server.origin + path)
             && /Failed to load resource:.*status of 404/.test(message.text());
-        if (!expected && !notFound) failures.push(message.text());
+        const conflict = expectedConflict && message.location().url === server.origin + expectedConflict
+            && /Failed to load resource:.*status of 409/.test(message.text());
+        if (!expected && !notFound && !conflict) failures.push(message.text());
     });
     page.on('requestfailed', request => {
         const error = request.failure()?.errorText;
@@ -101,6 +104,7 @@ test('Profile writes through the Worker, uses its catalogue, and confirms email 
 
 accountSmoke(open);
 accountDirectorySmoke(open);
+accountWorkspacesSmoke(open);
 workspaceConsentSmoke(browser);
 hostedStatusSmoke(browser);
 providerSignupSmoke(browser);

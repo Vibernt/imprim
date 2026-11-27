@@ -27,10 +27,10 @@ const overviewHref = values => {
     return `/account/mfa${query.size ? `?${query}` : ''}`;
 };
 // Mid sign-in (an app is waiting) each step is a centred screen; otherwise it sits in the account pages, under Security.
-const show = (env, values, title, description, body, options = {}) => values.request_id
+const show = (env, session, values, title, description, body, options = {}) => values.request_id
     ? page(title, heading(title, description) + accountLine(env, values.email, { id: values.request_id, csrf: values.csrfToken }) + body,
         { size: 'md', client: values.client, formTargets: [values.redirectUri], ...options })
-    : accountPage(title, body, { env, active: 'security', description, back: [t(env, 'Security'), '/account/security'], ...options });
+    : accountPage(title, body, { env, session, active: 'security', description, back: [t(env, 'Security'), '/account/security'], ...options });
 async function overview(request, env, session, values, message = '') {
     const { factors, passkeys, recovery_count: left } = await readFactors(env, session);
     const hasFactor = factors.length + passkeys.length > 0;
@@ -56,7 +56,7 @@ ${field({ id: 'passkey-name', name: 'name', label: t(env, 'Passkey name'), maxle
         ? post(request, values, 'continue', '', button(t(env, 'Continue'), { variant: 'primary', size: 'lg', block: true })) : '';
     const codes = hasFactor ? section(t(env, 'Recovery codes'), t(env, 'Each code works once, for when you can’t use your app or passkey.'),
         setting(left ? tPlural(env, left, '{count} unused code', '{count} unused codes') : t(env, 'No unused codes'), t(env, 'New codes replace every old one.'), post(request, values, 'recovery', '', button(t(env, 'Generate new codes'), { variant: 'outline', size: 'sm', icon: 'refresh-cw' })))) : '';
-    return show(env, values, t(env, 'Two-factor authentication'), t(env, 'Ask for a code or a passkey each time you sign in.'), required + notice +
+    return show(env, session, values, t(env, 'Two-factor authentication'), t(env, 'Ask for a code or a passkey each time you sign in.'), required + notice +
         section(t(env, 'Authenticator apps'), t(env, 'Apps that show a new 6-digit code every 30 seconds.'), apps) +
         section(t(env, 'Passkeys'), t(env, 'Sign in with this device’s screen lock instead of a code.'), keys + `<div class="fd-row">${addKey}</div>${messageBox()}` + nameKey) +
         codes + continueSignIn, { script: scriptPath(env, '/assets/passkey.js') });
@@ -96,20 +96,20 @@ export async function mfaAccount(request, env, ctx) {
             field({ id: 'name', label: t(env, 'Name'), name: 'name', value: name, maxlength: 60, required: true, hint: t(env, 'Shown in your list, so you can tell your apps apart.') }) +
             otp({ id: 'code', label: t(env, 'Code'), name: 'code' }),
             `<div class="fd-form-actions">${linkButton(t(env, 'Cancel'), overviewHref(values), { variant: 'ghost' })}${button(t(env, 'Add authenticator app'), { variant: 'primary' })}</div>`, ' class="fd-form"');
-        return show(env, values, t(env, 'Add an authenticator app'), t(env, 'Scan the code, then enter the 6-digit code your app shows.'),
+        return show(env, session, values, t(env, 'Add an authenticator app'), t(env, 'Scan the code, then enter the 6-digit code your app shows.'),
             `<div class="fd-stack" data-gap="4"><figure class="fd-qr">${qr}</figure>${key}</div>` + confirm, { modules: [FORMS_MODULE] });
     }
     if (values.action === 'confirm') {
         const { recovery_codes: codes } = result;
         const saved = codes.length ? callout(t(env, 'Save these recovery codes now'), t(env, 'They are shown once. Each code signs you in one time if you lose your authenticator app.'), { tone: 'warning' }) +
             recoveryCodes(env, codes) + small(t(env, 'Keep them in a password manager or somewhere offline. Anyone with a code can pass this step.')) : '';
-        return show(env, values, t(env, 'Two-factor authentication is on'), t(env, 'Sign-ins now ask for a code from this app.'),
+        return show(env, session, values, t(env, 'Two-factor authentication is on'), t(env, 'Sign-ins now ask for a code from this app.'),
             saved + post(request, values, 'continue', '', values.request_id ? button(t(env, 'Continue'), { variant: 'primary', size: 'lg', block: true }) : `<div class="fd-row">${button(t(env, 'Continue'), { variant: 'primary' })}</div>`));
     }
     if (values.action === 'remove') return overview(request, env, session, values, t(env, 'Authenticator app removed'));
     if (values.action === 'recovery') {
         const { recovery_codes: codes } = result;
-        return show(env, values, t(env, 'New recovery codes'), t(env, 'Your old codes stopped working. Save these before you leave.'),
+        return show(env, session, values, t(env, 'New recovery codes'), t(env, 'Your old codes stopped working. Save these before you leave.'),
             callout(t(env, 'Save these codes now'), t(env, 'They are shown once. Each code signs you in one time.'), { tone: 'warning' }) + recoveryCodes(env, codes) +
             small(t(env, 'Keep them in a password manager or somewhere offline. Anyone with a code can pass this step.')) + `<div class="fd-row">${linkButton(t(env, 'Done'), '/account/mfa', { variant: 'primary' })}</div>`);
     }

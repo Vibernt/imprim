@@ -81,7 +81,7 @@ ALTER TABLE client_admissions ADD COLUMN source TEXT NOT NULL DEFAULT 'app' CHEC
 
 ## Proving who is acting (`actor_token`)
 
-Every call that changes a workspace on a person's behalf, and the joinable workspace list, carries `actor_token`.
+Every app API call that changes a workspace on a person's behalf, and the joinable workspace list, carries `actor_token`.
 This is an ID token Imprim issued to the calling app for that person. Imprim verifies it as `ownIdToken` does
 (`oidc/logout-hint.mjs`): its own signature, `aud`
 equal to the calling client, and a `sid` naming a session that is still live in `sessions` for that `sub`, whose user
@@ -211,6 +211,23 @@ Recipients: every `shared` app in the realm with a `backchannel_uri` whose produ
 the change commits; for `workspace-products-changed`, the products before and after. An app applies an event only if
 its `version` is higher than the one it holds for that workspace, and catches up with the members list.
 
+## Account workspaces
+
+In a realm with shared workspaces enabled, **Account › Workspaces** lists the active workspaces the person belongs to.
+Each record at `/account/workspaces/{id}` shows the roster and its products. App names link to their registered
+sign-in pages when the app is listed or the person has a live admission. A product with no participating apps
+appears by its product key.
+
+Owners can rename the workspace and grant or remove the owner role. On a team, owners and admins can view, send,
+re-send and revoke invitations and manage the roster. Re-sending replaces the previous invitation with one for the
+same email and role. Only an owner can send or re-send an owner invitation. Anyone on the team can leave as long as
+an owner remains. Personal workspaces have a single member and offer rename and product information.
+
+Membership changes follow the same versioning, back-channel delivery and access teardown as the app API. Account
+actions use the person's live session and workspace role. Realm administrators use the separate console for
+administrative duties. Product changes stay in the hosted join step and the console. See the
+[account API](PROTOCOL.md#account-workspaces).
+
 ## Console and tools
 
 - `/admin/workspaces`: list (name, kind, status, products, members), detail (members, open invitations, products,
@@ -224,9 +241,12 @@ its `version` is higher than the one it holds for that workspace, and catches up
 
 ## Email
 
-One invitation email, `workspace_invitation`, in every language Imprim ships, with the HTML part: who invited them,
-the workspace name, the products it uses, and a button to the inviting app's `initiate_login_uri` (or, if unset, the
-issuer's `/login`).
+The `workspace_invitation` email names the inviter, workspace and products in the recipient's language. For
+account and console invitations, its button leads to the registered `initiate_login_uri` of the participating app
+the inviter most recently signed in to across the workspace's products. If none of the apps with an address has
+a recorded sign-in for the inviter, Imprim chooses the first by display name. For app-sent invitations, the button
+uses the inviting app's address. The issuer's administrator sign-in page is never an invitation destination.
+If no eligible app has an address, Imprim refuses the invitation with `409 no_sign_in_address`.
 
 ## Machine clients
 

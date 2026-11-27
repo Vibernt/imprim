@@ -36,7 +36,7 @@ async function requireSession(request, env) {
 async function accountHome(request, env, session, message) {
     const note = callout(message.title ?? message, message.body ?? '', { tone: 'success', role: 'status' });
     const { title, description, bands } = await profile(request, env, session);
-    return accountPage(title, [note + bands[0], ...bands.slice(1)], { env, active: 'profile', description });
+    return accountPage(title, [note + bands[0], ...bands.slice(1)], { env, session, active: 'profile', description });
 }
 async function profile(request, env, session) {
     const user = await readProfile(env, session);

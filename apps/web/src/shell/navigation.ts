@@ -9,10 +9,14 @@ type NavRoute = ScreenRoute & Required<Pick<ScreenRoute, 'label' | 'icon' | 'are
 const navigation = routes.filter((route): route is NavRoute => 'tag' in route && Boolean(route.label && route.icon && route.area));
 
 const current = (view: View, route: NavRoute) =>
-  view.route.path === route.path || (route.area === 'admin' && view.route.path.startsWith(route.path + '/')) ? 'page' : nothing;
+  view.route.path === route.path || ((route.area === 'admin' || route.path === '/account/workspaces') &&
+    view.route.path.startsWith(route.path + '/')) ? 'page' : nothing;
 
 const phoneRoutes = ['/admin/clients', '/admin/users', '/admin/workspaces', '/admin/signups'];
-const onPhoneBar = (route: NavRoute) => phoneRoutes.includes(route.path);
+const accountPhoneRoutes = ['/account/apps', '/account/workspaces', '/account/agents', '/account/security'];
+export const accountMore = (view: View) => view.route.area === 'account' && view.session.workspaces_available;
+const onPhoneBar = (view: View, route: NavRoute) => view.route.area === 'admin' ? phoneRoutes.includes(route.path)
+  : accountMore(view) && accountPhoneRoutes.includes(route.path);
 
 // The admin pages show only when this session passes every admin console rule (admin_ready from /v1/me). An
 // administrator who has not, such as one without a fresh second factor, gets one way in instead: a full page load of
@@ -24,7 +28,8 @@ function groups(view: View) {
     (view.session.admin_ready && (route.group !== 'Platform' || view.session.admin === 'platform'));
   const adminArea = view.route.area === 'admin';
   return [
-    { label: adminArea ? 'Your account' : t('Your account'), routes: navigation.filter(route => route.area === 'account') },
+    { label: adminArea ? 'Your account' : t('Your account'), routes: navigation.filter(route => route.area === 'account' &&
+      (route.path !== '/account/workspaces' || view.session.workspaces_available)) },
     { label: adminArea ? 'Admin console' : t('Admin console'), routes: navigation.filter(route => route.area === 'admin' && !route.group && visible(route)) },
     ...['Realm', 'Platform'].map(label => ({ label, routes: navigation.filter(route => route.group === label && visible(route)) })),
   ].filter(group => group.routes.length);
@@ -51,7 +56,7 @@ export const sidebarNav = (view: View, pending?: number) => html`${groups(view).
 export const mobileNav = (view: View) => html`${groups(view).map(group => html`
   <div class="fd-mobile-nav-section">
     <p class="fd-mobile-nav-label">${group.label}</p>
-    ${group.routes.map(route => html`<a class="fd-mobile-nav-item ${classMap({ 'im-phone-tab-destination': view.route.area === 'admin' && onPhoneBar(route) })}"
+    ${group.routes.map(route => html`<a class="fd-mobile-nav-item ${classMap({ 'im-phone-tab-destination': onPhoneBar(view, route) })}"
       href=${href(route.path)} ?data-im-document=${documentForArea(view, route.area)} aria-current=${current(view, route)}>
       <span>${labelOf(view, route)}</span>${icon(route.icon)}</a>`)}
   </div>`)}
@@ -63,13 +68,13 @@ export const mobileNav = (view: View) => html`${groups(view).map(group => html`
 export const tabbar = (view: View) => {
   const admin = view.route.area === 'admin';
   const visible = groups(view).flatMap(group => group.routes);
-  const tabs = admin ? phoneRoutes.flatMap(path => visible.filter(route => route.path === path))
-    : visible.filter(route => route.area === 'account');
+  const ordered = admin ? phoneRoutes : accountMore(view) ? accountPhoneRoutes : null;
+  const tabs = ordered ? ordered.flatMap(path => visible.filter(route => route.path === path)) : visible.filter(route => route.area === 'account');
   return html`<nav class="fd-tabbar" aria-label=${admin ? 'Admin console' : t('Your account')}>
     ${tabs.map(route => html`<a class="fd-tabbar-item" href=${href(route.path)} ?data-im-document=${documentForArea(view, route.area)} aria-current=${current(view, route)}>
       ${icon(route.icon)}<span class="fd-tabbar-label">${admin && route.path === '/admin/signups' ? 'Sign-ups' : labelOf(view, route)}</span></a>`)}
-    ${admin ? html`<button class="fd-tabbar-item" type="button" data-fd-mobile-nav aria-controls="im-mobile-nav"
+    ${ordered ? html`<button class="fd-tabbar-item" type="button" data-fd-mobile-nav aria-controls="im-mobile-nav"
       aria-expanded="false" aria-current=${tabs.some(route => current(view, route) === 'page') ? nothing : 'page'}>
-      ${icon('ellipsis')}<span class="fd-tabbar-label">More</span></button>` : nothing}
+      ${icon('ellipsis')}<span class="fd-tabbar-label">${admin ? 'More' : t('More')}</span></button>` : nothing}
   </nav>`;
 };

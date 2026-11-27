@@ -1,12 +1,12 @@
 import { json, readBody, uniqueParams, validSub } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
-import { b64url, from64 } from '../lib/crypto.mjs';
 import { limitAddress } from '../auth/rate-limit.mjs';
 import { authenticatedClient } from '../oidc/token.mjs';
 import { GRANTS_PAGE_MAX } from '../machines/endpoints.mjs';
 import { machineApiPath, workspaceMachineApi } from './machine-api.mjs';
 import { verifyActor } from './actor.mjs';
 import { sendWorkspaceInvitation } from './email.mjs';
+import { memberCursor, memberPage, workspaceTarget } from './member-page.mjs';
 import {
     workspacesEnabled, memberships, joinableWorkspaces, getWorkspace, workspaceMembers, workspaceInvitations, createWorkspace,
     renameWorkspace, setWorkspaceProducts, inviteToWorkspace, revokeWorkspaceInvitation, setWorkspaceMemberRole,
@@ -17,31 +17,15 @@ const membershipsPath = (method, path) => method === 'GET' && path === '/v1/memb
 export const workspaceApiPath = (method, path) => membershipsPath(method, path) || /^\/v1\/workspaces(?:\/|$)/.test(path);
 const workspacePath = /^\/v1\/workspaces\/([A-Za-z0-9_-]{1,64})(?:\/(members|products|invitations|close|holds|resources)(?:\/([^/]+))?)?$/;
 
-function pathId(value) {
-    let decoded;
-    try { decoded = decodeURIComponent(value); } catch { invariant(false, 'invalid_request', 'Invalid path parameter.'); }
-    invariant(validSub(decoded), 'invalid_request', 'Invalid path parameter.');
-    return decoded;
-}
-
-function memberCursor(value) {
-    let cursor;
-    invariant(value.length <= 1024 && /^[A-Za-z0-9_-]+$/.test(value), 'invalid_request', 'Invalid cursor.');
-    try { cursor = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(from64(value))); } catch { cursor = null; }
-    invariant(Array.isArray(cursor) && cursor.length === 2 && Number.isSafeInteger(cursor[0]) && validSub(cursor[1]),
-        'invalid_request', 'Invalid cursor.');
-    return cursor;
-}
-
 async function membersResponse(env, client, id, url) {
     const { limit, cursor } = uniqueParams(url.searchParams);
     invariant(limit === undefined || /^[1-9]\d{0,2}$/.test(limit) && Number(limit) <= GRANTS_PAGE_MAX,
         'invalid_request', 'limit is 1 to {max}.', 400, { max: GRANTS_PAGE_MAX });
     const size = Number(limit ?? GRANTS_PAGE_MAX);
-    const { version, rows } = await workspaceMembers(env, client, id, size, cursor === undefined ? null : memberCursor(cursor));
-    const page = rows.slice(0, size), last = page.at(-1);
-    return json({ members: page.map(({ sub, email, role }) => ({ sub, email, role })),
-        next_cursor: rows.length > size ? b64url(new TextEncoder().encode(JSON.stringify([last.created, last.sub]))) : null, version });
+    const { version, rows } = await workspaceMembers(env, client, id, size, memberCursor(cursor));
+    const page = memberPage(rows, size);
+    return json({ members: page.rows.map(({ sub, email, role }) => ({ sub, email, role })),
+        next_cursor: page.after, version });
 }
 
 async function sendInvitation(env, ctx, invitation) {
@@ -120,9 +104,9 @@ async function actorWrite(env, ctx, client, id, route, target, body) {
             await sendInvitation(env, ctx, invitation);
             return json({ invitation_id: invitation.invitationId, expires_at: expires }, 201);
         }
-        case 'DELETE invitations/id': return json(await revokeWorkspaceInvitation(env, client, actor, id, pathId(target)));
-        case 'POST members/id': return json(await setWorkspaceMemberRole(env, client, actor, id, pathId(target), body.role));
-        case 'DELETE members/id': return json(await removeWorkspaceMember(env, client, actor, id, pathId(target)));
+        case 'DELETE invitations/id': return json(await revokeWorkspaceInvitation(env, client, actor, id, workspaceTarget(target)));
+        case 'POST members/id': return json(await setWorkspaceMemberRole(env, client, actor, id, workspaceTarget(target), body.role));
+        case 'DELETE members/id': return json(await removeWorkspaceMember(env, client, actor, id, workspaceTarget(target)));
         case 'POST close': return json(await closeWorkspace(env, client, actor, id, body.confirm, { releaseOwnHold: body.release_own_hold }));
     }
 }

@@ -9,10 +9,13 @@ import { sha256 } from '../lib/crypto.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { redirect } from '../lib/http.mjs';
 import { fireDataScript, fireLabelScript } from '../pages/fire-labels.mjs';
+import { accountWorkspacesPath, canSeeAccountWorkspaces } from '../workspaces/account-read.mjs';
 
 export const WEB_PATHS = new Set([
     '/account',
     '/account/apps',
+    accountWorkspacesPath,
+    accountWorkspacesPath + '/:id',
     '/account/security',
     '/account/sessions',
     '/account/agents',
@@ -78,12 +81,21 @@ export async function serveWeb(request, env, url) {
     const next = encodeURIComponent(url.pathname + url.search);
     // Only admins can sign in at /login directly. A signed-out person on /account gets the account area's own
     // message (sign in to an app first), as before; a signed-out admin path goes to /login.
-    if (!await getSession(request, env)) {
+    const viewer = await getSession(request, env);
+    if (!viewer) {
         invariant(url.pathname.startsWith('/admin'), 'login_required', 'Sign in to an app first, then return to your account.', 401);
         return redirect(`/login?next=${next}`);
     }
     const admin = url.pathname.startsWith('/admin');
-    const known = knownPath(normalizedPath(url.pathname));
+    const path = normalizedPath(url.pathname);
+    let known = knownPath(path);
+    if (known && (path === accountWorkspacesPath || path.startsWith(accountWorkspacesPath + '/'))) {
+        let id = path === accountWorkspacesPath ? undefined : path.slice(accountWorkspacesPath.length + 1);
+        if (id !== undefined) {
+            try { id = decodeURIComponent(id); } catch { id = ''; }
+        }
+        known = await canSeeAccountWorkspaces(env, viewer.user_id, id);
+    }
     if (admin) {
         let session;
         try { session = await adminSession(request, env); }

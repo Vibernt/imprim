@@ -5,7 +5,7 @@ import { world } from './support/world.mjs';
 
 const workspace = 'Research <img src=x onerror=alert(1)> & "Ops"';
 const escaped = 'Research &lt;img src=x onerror=alert(1)&gt; &amp; &quot;Ops&quot;';
-const link = 'https://app.example/start?from=invite&source=notes';
+const link = 'https://app.example.com/start?from=invite&source=notes';
 const translations = {
     en: ['Invitation to', 'invited you to join', 'Products in this workspace', 'Sign in'],
     es: ['Invitación a', 'te ha invitado a unirte a', 'Productos de este espacio de trabajo', 'Iniciar sesión'],
@@ -22,7 +22,9 @@ async function fixture(t) {
     const product = db.prepare('INSERT INTO workspace_products(workspace_id,product,created) VALUES(?,?,0)');
     product.run('team-one', 'projects');
     product.run('team-one', 'notes');
-    db.prepare('UPDATE clients SET initiate_login_uri=? WHERE id=?').run(link, 'app');
+    db.prepare("UPDATE clients SET workspaces='shared',product='notes',initiate_login_uri=? WHERE id='app'").run(link);
+    db.prepare("UPDATE clients SET workspaces='shared',product='projects',initiate_login_uri='https://projects.example.com/sign-in',branding=? WHERE id='other'")
+        .run(JSON.stringify({ name: 'A Projects' }));
     db.prepare(`INSERT INTO workspace_invitations(id,workspace_id,email,role,invited_by,via_client,created,expires_at)
         VALUES(?,?,?,?,?,?,?,?)`).run('invitation', 'team-one', 'dana@example.com', 'member', 'inviter', 'app', Date.now(), Date.now() + 60_000);
     const send = (changes = {}, env = w.env) => sendWorkspaceInvitation(env, {}, {
@@ -45,7 +47,7 @@ test('workspace invitation renders text and branded HTML in all five languages u
         for (const value of ['Vibernt', 'lee@example.com', escaped, intro, products, 'notes', 'projects', `>${button}</a>`])
             assert.ok(mail.html.includes(value), `${locale} HTML is missing ${value}`);
         assert.match(mail.html, new RegExp(`<html lang="${locale}"`));
-        assert.match(mail.html, /class="im-button-text" href="https:\/\/app\.example\/start\?from=invite&amp;source=notes"/);
+        assert.match(mail.html, /class="im-button-text" href="https:\/\/app\.example\.com\/start\?from=invite&amp;source=notes"/);
         assert.equal(mail.html.match(/class="im-button-text"/g).length, 1);
         assert.ok(!mail.html.includes('<img src=x'));
         assert.ok(!mail.text.includes('wrong@example.com'));
@@ -53,17 +55,36 @@ test('workspace invitation renders text and branded HTML in all five languages u
     assert.equal(w.mails.length, 5);
 });
 
-test('workspace invitation uses the issuer login when unset and supports a realm console inviter', async t => {
-    const w = await fixture(t);
-    w.db.prepare('UPDATE clients SET initiate_login_uri=NULL WHERE id=?').run('app');
+test('account and console invitations choose the inviter’s latest product app, then sort by app display name', async t => {
+    const w = await fixture(t), { db } = w;
+    const projects = 'https://projects.example.com/sign-in';
+    db.exec("UPDATE workspace_invitations SET via_client=NULL");
     await w.send();
-    assert.match(w.mails.at(-1).html, /class="im-button-text" href="https:\/\/id\.example\.com\/login"/);
-    assert.ok(w.mails.at(-1).text.includes('https://id.example.com/login'));
-    w.db.prepare('UPDATE workspace_invitations SET via_client=NULL,invited_by=NULL WHERE id=?').run('invitation');
+    assert.ok(w.mails.at(-1).text.includes(projects));
+    const admission = db.prepare('INSERT INTO client_admissions(user_id,client_id,created,last_signed_in) VALUES(?,?,0,?)');
+    admission.run('inviter', 'app', 42);
+    admission.run('inviter', 'other', 41);
+    await w.send();
+    assert.ok(w.mails.at(-1).text.includes(link));
+    db.exec("UPDATE workspace_invitations SET via_client='other'");
+    await w.send();
+    assert.ok(w.mails.at(-1).text.includes(projects), 'app-sent invitations use the inviting app');
+    db.exec('UPDATE workspace_invitations SET via_client=NULL,invited_by=NULL');
     await assert.rejects(w.send(), { code: 'workspace_invitation_sender' });
-    await w.send({ inviterEmail: 'admin@example.com' });
+    const admin = db.prepare('INSERT INTO users(id,email,created) VALUES(?,?,0)');
+    admin.run('console-admin', 'admin@example.com');
+    admission.run('console-admin', 'app', 43);
+    const consoleActor = { inviterEmail: 'admin@example.com', inviterId: 'console-admin' };
+    await w.send(consoleActor);
     assert.ok(w.mails.at(-1).text.includes('admin@example.com invited you'));
-    assert.equal(w.mails.length, 2);
+    assert.ok(w.mails.at(-1).text.includes(link), 'console uses the signed-in administrator’s admission');
+    db.exec('UPDATE clients SET initiate_login_uri=NULL');
+    await assert.rejects(w.send(consoleActor), { code: 'no_sign_in_address' });
+    db.exec("UPDATE workspace_invitations SET via_client='app',invited_by='inviter'");
+    await assert.rejects(w.send(), { code: 'no_sign_in_address' });
+    db.prepare("UPDATE clients SET initiate_login_uri=? WHERE id='app'").run(w.env.ISSUER + '/login?next=%2Fadmin');
+    await assert.rejects(w.send(), { code: 'no_sign_in_address' });
+    assert.equal(w.mails.length, 4);
 });
 
 test('workspace invitation refuses missing, cross-realm, expired, accepted, revoked and closed records', async t => {
