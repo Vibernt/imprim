@@ -1,8 +1,11 @@
 import { html, nothing } from 'lit';
 import { api } from '../../lib/api';
-import { card } from '../page-layout';
 import { AdminRealmScreen } from './realm-screen';
-import { cap, confirmInline, failed, mono, notice, status, table, when } from './realm-ui';
+import { cap, failed, mono, notice, status, table, when } from './realm-ui';
+import type { LoadingPreset } from '../loading';
+import { rowMenu } from '../row-menu';
+import { confirmRowId } from '../confirm-row';
+import { RowConfirmations } from '../row-confirmations';
 
 interface Key {
   kid: string;
@@ -22,22 +25,23 @@ function retires(key: Key, keys: Key[]) {
 const tone = { active: 'success', published: 'warning', retired: 'neutral' } as const;
 
 class SigningKeysScreen extends AdminRealmScreen<{ keys: Key[] }> {
-  static override properties = { selected: { state: true } };
-  declare private selected: string | undefined;
+  protected readonly skeleton: readonly LoadingPreset[] = [{ name: 'table', options: { rows: 5, cols: 4 } }];
+  private readonly confirmation = new RowConfirmations(this, () => 'The request could not be completed.');
+  private get locked() { return this.pending || this.confirmation.pending; }
   protected heading = 'Signing keys';
   protected override get description() { return 'ES256 and RS256 keys for this realm.'; }
   protected endpoint() { return root; }
 
-  private change = async (event: SubmitEvent, kid?: string) => {
+  private rotate = async (event: SubmitEvent) => {
     if (event.defaultPrevented) return;
     event.preventDefault();
-    if (this.pending) return;
+    if (this.locked) return;
+    this.confirmation.clear();
     this.pending = true;
     try {
-      await api(kid ? root + '/' + encodeURIComponent(kid) + '/revoke' : root + '/rotate', { method: 'POST', body: {} });
+      await api(root + '/rotate', { method: 'POST', body: {} });
       if (!this.isConnected) return;
-      this.selected = undefined;
-      notice(kid ? 'Signing key revoked' : 'Signing keys published');
+      notice('Signing keys published');
       await this.load();
     } catch (error) {
       if (this.isConnected) failed(error);
@@ -47,36 +51,42 @@ class SigningKeysScreen extends AdminRealmScreen<{ keys: Key[] }> {
   };
 
   protected override actions() {
-    return this.data ? html`<form method="post" @submit=${this.change}>
-      <button class="fd-btn" type="submit" data-variant="primary" ?disabled=${this.pending}>Rotate now</button>
+    return this.data ? html`<form method="post" @submit=${this.rotate}>
+      <button class="fd-btn" type="submit" data-variant="primary" ?disabled=${this.locked}>Rotate now</button>
     </form>` : nothing;
   }
 
-  private select(kid: string) {
-    this.selected = kid;
-    void this.updateComplete.then(() => this.querySelector<HTMLInputElement>('#confirm-key-id')?.focus());
+  private revokeQuestion(key: Key) {
+    return this.confirmation.view({
+      id: 'key-' + key.kid, table: true, text: `Revoke the ${key.status} ${key.alg} signing key?`,
+      action: 'Revoke key',
+      phrase: { value: key.kid, label: 'Type the key ID' },
+      detail: html`<div class="fd-callout" data-tone="warning" role="note">
+        <i class="fd-callout-icon" data-icon="triangle-alert" aria-hidden="true"></i>
+        <div class="fd-callout-content">
+          <p class="fd-callout-title">Only for a compromised key</p>
+          <p class="fd-callout-body">The key leaves JWKS at once. Its tokens stop verifying when relying parties refresh their keys.</p>
+        </div>
+      </div>`,
+      request: () => api(root + '/' + encodeURIComponent(key.kid) + '/revoke', { method: 'POST', body: {} }),
+      done: async () => {
+        notice('Signing key revoked');
+        await this.load(false);
+      },
+    });
   }
 
   protected content({ keys }: { keys: Key[] }) {
     return html`<div class="fd-stack" data-gap="4">
       <div class="fd-toolbar"><p class="fd-muted">New keys are published now and start signing in 1 hour. Old public keys stay for 24 hours.</p></div>
-      ${table('Signing keys', ['Key ID', 'Algorithm', 'Status', 'Signs from', 'Retires', 'Actions'], keys.map(key =>
-        [html`<code class="fd-code" id=${'key-' + key.kid}>${key.kid}</code>`, mono(key.alg), status(cap(key.status), tone[key.status]), when(key.activates_at), retires(key, keys),
-          key.status === 'retired' ? '—' : html`<button class="fd-btn" type="button" data-variant="ghost"
-            ?disabled=${this.pending} aria-describedby=${'key-' + key.kid} @click=${() => this.select(key.kid)}>Revoke</button>`]),
+      ${table('Signing keys', ['Key ID', 'Algorithm', 'Status', 'Signs from', 'Retires', 'Actions'], keys.map(key => {
+        const id = 'key-' + key.kid;
+        return { id: key.kid, confirmation: key.status === 'retired' ? undefined : this.revokeQuestion(key),
+          cells: [mono(key.kid), mono(key.alg), status(cap(key.status), tone[key.status]), when(key.activates_at), retires(key, keys),
+            key.status === 'retired' ? '—' : rowMenu(id, `More actions for ${key.status} ${key.alg} key`,
+              [{ label: 'Revoke', danger: true, confirmRow: confirmRowId(id) }], this.locked)] };
+      }),
       ['No signing keys', 'Keys will appear when they are published.'])}
-      ${this.selected ? card('Revoke signing key', html`
-        <div class="fd-callout" data-tone="warning">
-          <i class="fd-callout-icon" data-icon="triangle-alert" aria-hidden="true"></i>
-          <div class="fd-callout-content">
-            <p class="fd-callout-title">Only for a compromised key</p>
-            <p class="fd-callout-body">The key leaves JWKS at once. Its tokens stop verifying when relying parties refresh their keys.</p>
-          </div>
-        </div>
-        ${confirmInline('confirm-key-id', this.selected, 'Revoke key', this.pending,
-          event => void this.change(event, this.selected), html`
-            <button class="fd-btn" type="button" data-variant="ghost" @click=${() => { this.selected = undefined; }}>Cancel</button>`)}
-      `) : nothing}
     </div>`;
   }
 }

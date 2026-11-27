@@ -2,12 +2,14 @@ import { html } from 'lit';
 import { navigate, type View } from '../../lib/router';
 import { AdminScreen, corePage } from './core-screen';
 import { card, confirmPhrase, facts, mono, segment, userPath } from './core-view';
+import { recordSkeleton } from '../loading';
 
 type Account = { id: string; email: string };
 type Preview = { source: Account; survivor: Account };
 const endpoint = (id: string) => '/admin/api/users/' + segment(id) + '/merge';
 
 class UserMerge extends AdminScreen<Preview> {
+  protected readonly skeleton = recordSkeleton;
   protected override requestPath(view: View) { return endpoint(view.params.id) + '?' + view.query; }
 
   protected override render() {

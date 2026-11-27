@@ -3,6 +3,31 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-27.2
+
+No migration. The account and console screens only; no server or API change.
+
+- **Fire v0.14.0.** Its new row confirmation (`fd-confirm-row`) asks inside the item's own row before something
+  that cannot be taken back: removing your last second factor, new recovery codes, revoking an agent, disabling a
+  machine client, deleting a service client, revoking a signing key, removing a realm administrator. Machine
+  clients, service clients and signing keys still ask you to type their id. `docs/fire`: AGENT-RULES, GUIDE,
+  WRITING, CLASSES and VOCABULARY from the tag.
+- **Actions you can take back wait 5 seconds with Undo** before anything is sent: signing out a session or an app,
+  forgetting a browser, removing one of several second factors, removing a workspace member, revoking an
+  invitation, removing a product. Leaving the page sends them at once, and they still arrive. Row actions are
+  menus.
+- **Sign-up requests** are a queue: one request open at a time, with what it changes, who it touches and the
+  evidence. **Create workspace** and **Decline** wait 10 seconds with Undo; leaving the page sends nothing. You no
+  longer type the email. Other statuses are a read-only table.
+- **User detail** and **Workspace detail** in the console show status and an actions menu in the page head, with
+  details in a side panel.
+- **Loading** shows the shape of each screen under its title, and the first load shows the app's outline instead
+  of a blank page.
+- **The account area** uses one list style on Security, Sessions and Agents; empty states sit in their cards;
+  controls that are off say why. "Two-step verification" is the one name, and page titles match the menu.
+- A skip link on every account and console page, tabs and a side preview on Branding, and date fields in the audit
+  filter.
+
 ## 2026-11-27.1
 
 No migration.

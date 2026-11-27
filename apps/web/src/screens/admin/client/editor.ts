@@ -9,12 +9,14 @@ import { rotationConfirmation, secretPanel } from './editor-panels';
 import { clientInput, initialControls, readControls, registrationInput, type Client, type ClientFields, type ClientControls, type Delivery } from './model';
 import { registrationSections } from './registration';
 import { clientSections } from './sections';
+import type { LoadingPreset } from '../../loading';
 
 type Editor = ({ defaults: ClientFields } | (Client & { delivery?: Delivery })) & { providers: Record<string, string> };
 const clientsApi = '/admin/api/clients';
 const back = { path: '/admin/clients', label: 'Clients' };
 
 class ClientEditor extends AdminScreen<Editor> {
+  protected readonly skeleton: readonly LoadingPreset[] = [{ name: 'form', options: { count: 5 } }];
   protected override inlineSaveErrors = true;
   static override properties = {
     secret: { state: true }, rotating: { state: true }, formRevision: { state: true }, controls: { state: true },
@@ -77,7 +79,8 @@ class ClientEditor extends AdminScreen<Editor> {
 
   private reviewRotation = (open: boolean) => {
     this.rotating = open;
-    if (open) void this.updateComplete.then(() => this.querySelector<HTMLInputElement>('#confirm-client-rotation')?.focus());
+    const target = open ? '#confirm-client-rotation' : '#im-review-rotation';
+    void this.updateComplete.then(() => this.querySelector<HTMLElement>(target)?.focus());
   };
 
   private rotate = (convert: boolean) => {
@@ -107,15 +110,16 @@ class ClientEditor extends AdminScreen<Editor> {
         ${keyed(this.formRevision, html`
           <form class="fd-form" data-size="full" id="im-client-config" method="post" data-fd-validate autocomplete="off"
             ?inert=${this.pending} @input=${this.updateControls} @change=${this.updateControls} @submit=${this.save}>
-            ${isNew ? registrationSections(data.defaults, data.providers) : html`
-              ${clientSections(data, this.controls ?? initialControls(data), data.providers, data.delivery)}
-              ${data.draft ? nothing : formSection('client-secret', 'Client secret',
-                data.confidential ? 'Rotating stops the current secret.' : 'A public client uses PKCE and has no secret.', html`
-                  <div class="fd-row"><button class="fd-btn" type="button" data-variant="outline"
-                    ?disabled=${this.pending || this.rotating} @click=${() => this.reviewRotation(true)}>Review secret rotation</button></div>`)}
-            `}
+            ${isNew ? registrationSections(data.defaults, data.providers) :
+              clientSections(data, this.controls ?? initialControls(data), data.providers, data.delivery)}
           </form>`)}
-        ${!isNew && this.rotating ? rotationConfirmation(data, this.pending, () => this.reviewRotation(false), this.rotate) : nothing}
+        ${!isNew && !data.draft ? html`<div class="fd-form" data-size="full">
+          ${formSection('client-secret', 'Client secret',
+            data.confidential ? 'Rotating stops the current secret.' : 'A public client uses PKCE and has no secret.',
+            this.rotating ? rotationConfirmation(data, this.pending, () => this.reviewRotation(false), this.rotate) : html`
+              <div class="fd-row"><button class="fd-btn" type="button" data-variant="outline" id="im-review-rotation"
+                ?disabled=${this.pending} @click=${() => this.reviewRotation(true)}>Review secret rotation</button></div>`)}
+        </div>` : nothing}
         ${this.saveErrorNotice()}
         <div class="fd-form-actions" data-variant=${isNew ? nothing : 'sticky'}>
           <a class="fd-btn" data-variant="ghost" href=${href(back.path)}>Cancel</a>

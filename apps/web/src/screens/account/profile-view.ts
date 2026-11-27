@@ -1,6 +1,6 @@
 import { html, nothing } from 'lit';
 import { t } from '../../lib/i18n';
-import { fieldWithAction, setting } from '../page-layout';
+import { card, fieldWithAction, setting } from '../page-layout';
 
 export interface Profile {
   email: string;
@@ -20,7 +20,7 @@ export function profileFields(profile: Profile, pending: Action | null, submit: 
   const disabled = pending !== null;
   const save = (field: keyof Drafts, label: string) => html`${editor.drafts[field] === undefined ||
     (field === 'language' && editor.drafts.profile !== undefined) ? nothing :
-    html`<button class="fd-btn" type="submit" data-variant="primary" ?disabled=${disabled}>${label}</button>`}`;
+    html`<button class="fd-btn" type="submit" data-variant="outline" ?disabled=${disabled}>${label}</button>`}`;
   return html`
     ${setting(t('Email'), html`<span class="fd-mono im-breakable">${profile.email}</span>
       ${profile.email_verified ? nothing : html`<div>${t('Sign in with an email link to confirm it.')}</div>`}`, html`
@@ -51,9 +51,11 @@ export function profileFields(profile: Profile, pending: Action | null, submit: 
 }
 
 export function deleteSection(email: string, pending: Action | null, submit: Submit) {
-  return html`<hr class="fd-divider"><section class="fd-stack" data-gap="3" aria-labelledby="im-delete-heading">
-      <h2 class="fd-h3" id="im-delete-heading">${t('Delete account')}</h2>
-      <p class="fd-small fd-muted">${t('Signs you out of every app and agent and removes how you sign in. It can’t be undone.')}</p>
+  return card(t('Delete account'), html`
+    <div class="fd-setting" data-tone="danger" data-align="start">
+      <div class="fd-setting-text">
+        <p class="fd-setting-desc">${t('Signs you out of every app and agent and removes how you sign in. It can’t be undone.')}</p>
+      </div>
       <form class="fd-confirm-inline" method="post" data-fd-confirm-inline data-confirm=${email.toLowerCase()}
         @submit=${(event: SubmitEvent) => submit('delete', event)}>
         <div class="fd-field">
@@ -70,5 +72,5 @@ export function deleteSection(email: string, pending: Action | null, submit: Sub
         <div class="fd-row" data-wrap><button class="fd-btn" type="submit" data-variant="danger" data-fd-confirm-submit>${t('Delete account')}</button>
           <p class="fd-small fd-muted">${t('Deleting requires a sign-in in the last 10 minutes.')}</p></div>
       </form>
-    </section>`;
+    </div>`);
 }

@@ -13,7 +13,7 @@ class ScreenMoving extends FireLight {
     const { route, query } = this.view;
     const admin = route.area === 'admin';
     return html`
-      <main class="fd-page">
+      <main class="fd-page" id="main" tabindex="-1">
         <div class="fd-frame">
           ${pageHead(route.label?.() ?? '')}
           <section class="fd-band" data-grow>

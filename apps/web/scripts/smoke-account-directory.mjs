@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { finishHold, postsTo, undoHold } from './smoke-actions.mjs';
 
 export async function assertPhoneFit(page, labels) {
     const bar = page.locator('.fd-tabbar');
@@ -26,8 +27,9 @@ export function accountDirectorySmoke(open) {
         const tabs = page.locator('.fd-tabbar'), grid = page.locator('screen-apps .fd-card-grid');
         const cards = grid.locator('a.fd-card[data-interactive]');
         await tabs.getByRole('link', { name: 'Apps', exact: true }).click();
-        await grid.getByText('No apps yet', { exact: true }).waitFor();
-        await grid.getByText('Apps you can sign in to with this account appear here.', { exact: true }).waitFor();
+        await page.locator('screen-apps .fd-empty').getByText('No apps yet', { exact: true }).waitFor();
+        assert.equal(await grid.count(), 0);
+        await page.getByText('Apps you can sign in to with this account.', { exact: true }).waitFor();
         assert.equal(await cards.count(), 0);
 
         const at = Date.UTC(2026, 0, 10, 1, 30), href = 'https://notes.example.com/sign-in';
@@ -47,10 +49,28 @@ export function accountDirectorySmoke(open) {
         await card.getByText('Collect and share your notes.', { exact: true }).waitFor();
         assert.equal(await cards.count(), 1);
         await tabs.getByRole('link', { name: 'Sessions', exact: true }).click();
-        const sessionApps = page.getByRole('group', { name: 'Apps', exact: true });
+        const sessionApps = page.getByRole('list', { name: 'Apps', exact: true });
         await sessionApps.getByText(`Signed in ${format(zone)}`, { exact: true }).waitFor();
-        assert.equal(await sessionApps.getByRole('link', { name: 'Open Notes', exact: true }).getAttribute('href'), href);
-        await sessionApps.getByRole('button', { name: 'Sign out of Notes', exact: true }).waitFor();
+        const menu = sessionApps.getByRole('button', { name: 'More actions for Notes' });
+        const signOut = sessionApps.getByRole('menuitem', { name: 'Sign out of Notes', exact: true });
+        await menu.press('Enter');
+        assert.equal(await sessionApps.getByRole('menuitem', { name: 'Open Notes', exact: true }).getAttribute('href'), href);
+        assert.equal(await signOut.getAttribute('data-tone'), 'danger');
+        await page.keyboard.press('Escape');
+        await signOut.waitFor({ state: 'hidden' });
+        const count = () => db.prepare("SELECT COUNT(*) AS total FROM app_sessions WHERE client_id='app'").get().total;
+        assert.equal(count(), 1);
+        const posts = postsTo(page, '/v1/account/apps');
+        await menu.click();
+        await signOut.click();
+        await undoHold(page, menu.locator('xpath=ancestor::li'), menu, posts);
+        assert.equal(count(), 1);
+        await menu.click();
+        await signOut.click();
+        await finishHold(page);
+        await page.getByText('Signed out of the app', { exact: true }).waitFor();
+        assert.deepEqual(posts, [{ client_id: 'app' }]);
+        assert.equal(count(), 0);
 
         db.prepare("INSERT INTO clients(id,redirect_uris) VALUES('calendar','[]')").run();
         brandApp.run(JSON.stringify({ name: 'Tasks' }), 'https://tasks.example.com/sign-in', 'other');

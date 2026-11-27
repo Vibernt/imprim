@@ -1,6 +1,6 @@
 # Account and admin interface
 
-Status: built. This page is the specification for Fire 0.13.2 and the Lit account and admin interface; the code matches it.
+Status: built. This page is the specification for Fire 0.14.0 and the Lit account and admin interface; the code matches it.
 
 ## What changes and what does not
 
@@ -15,8 +15,8 @@ Status: built. This page is the specification for Fire 0.13.2 and the Lit accoun
 
 ## Fire
 
-- Fire v0.13.2 (commit `19584ed`), MIT, from its public repository: both the root `package.json` (a dev dependency, for
-  the Worker, scripts and tests) and `apps/web/package.json` pin `"fire-design": "github:vidhatanand/firedesign#v0.13.2"`.
+- Fire v0.14.0 (commit `9de1e67`), MIT, from its public repository: both the root `package.json` (a dev dependency, for
+  the Worker, scripts and tests) and `apps/web/package.json` pin `"fire-design": "github:vidhatanand/firedesign#v0.14.0"`.
   Upgrading Fire means changing that tag in both and recording it here and in `docs/fire/README.md`.
 - The Worker imports Fire's modules (`icons.js`, `palettes.js`, `typefaces.js`) as `fire-design/fire/js/…`; Wrangler
   bundles them. They are the only imports outside `apps/server/src` that `npm run check` allows.
@@ -102,6 +102,11 @@ end with one `fd-form-actions`; an input never goes inside `fd-setting`; empty s
 | `api-keys.html`, `audit.html` | Page head with the primary action, a toolbar (search, filters), one table in `.fd-table-wrap > .fd-table-scroll`, row actions in the last column, the empty state inside the table area | Clients, Services, Users, Audit log, Sign-up requests, Workspaces, Signing keys (rotate in the head, revoke as a row action), Realms |
 | `logs.html` | Compact account page head and one stacked table, with loading, empty and error rows in the table frame | Account Workspaces list |
 | `record.html` | Compact account page head and separate bands for the roster, invitations, products and the leave action. Forms and row confirmations open inline | Account Workspace detail |
+
+Irreversible actions on one item use `fd-confirm-row`, inside a list row or in the table detail row immediately
+after the item. Recovery codes use it in their card. Machine clients, service clients and signing keys require the
+item's ID in the question. Reversible row actions use the five-second hold with Undo. Leaving a workspace uses
+its own typed confirmation.
 
 Rules: a callout always has its `fd-callout-icon`; a code block is an `fd-codeblock` with its body; buttons keep their
 natural width; nothing scrolls sideways at 375px. `npx fire lint --surface app apps/web/src` and the review gate

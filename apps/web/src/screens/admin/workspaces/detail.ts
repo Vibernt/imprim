@@ -1,33 +1,40 @@
 import { html, nothing } from 'lit';
-import { keyed } from 'lit/directives/keyed.js';
-import { card, fieldWithAction, setting } from '../../page-layout';
+import { href } from '../../../lib/router';
+import { card } from '../../page-layout';
+import { rowMenu } from '../../row-menu';
 import { confirmInline } from '../realm-ui';
+import { recordLayout } from '../record-layout';
 import { workspaceProducts } from './products';
 import { members } from './members';
-import { activity, summary } from './summary';
-import { workspacePath, type Submit, type Workspace } from './types';
+import { nameField } from './forms';
+import { activity, holdReason, summary } from './summary';
+import { workspacePath, type Controls, type Submit, type Workspace } from './types';
 
-const configuration = (workspace: Workspace, pending: boolean, submit: Submit) => html`
-  ${card('Name', html`
-    <form class="fd-form" method="post" ?inert=${pending} @submit=${(event: SubmitEvent) => submit('rename', event)}>
-      ${fieldWithAction('workspace-name', 'Workspace name', undefined, html`
-        <input class="fd-input fd-grow" id="workspace-name" name="name" required maxlength="120" .value=${workspace.name}>`, html`
-        <button class="fd-btn" type="submit" data-variant="outline" ?disabled=${pending}>Save name</button>`)}
-    </form>`)}
-`;
+export const workspaceActionsId = 'workspace-actions';
 
-export const workspaceDetail = (workspace: Workspace, pending: boolean, submit: Submit, error?: string) => keyed(workspace, html`
-  <div class="fd-stack" data-gap="6">
-    ${summary(workspace)}
-    ${members(workspace, pending, submit, error)}
-    ${workspaceProducts(workspace, pending, submit)}
-    ${activity(workspace)}
-    ${workspace.editable ? configuration(workspace, pending, submit) : nothing}
-    ${workspace.editable ? card('Close workspace', workspace.holds.length
-      ? html`<p class="fd-muted">Apps must release their holds before you can close this workspace.</p>`
-      : setting('Permanently end workspace access', '', html`
-        <a class="fd-btn" data-variant="secondary" href=${workspacePath(workspace.id) + '/close'}>Review closure</a>`, true)) : nothing}
-  </div>`);
+export const workspaceActions = (workspace: Workspace, pending: boolean, open: () => void) =>
+  rowMenu(workspaceActionsId, 'More actions for ' + workspace.name, [
+    { label: 'Rename', run: open },
+    workspace.holds.length
+      ? { label: 'Close workspace', danger: true, disabledReason: holdReason, reasonId: 'im-workspace-hold-reason' }
+      : { label: 'Close workspace', danger: true, href: href(workspacePath(workspace.id) + '/close') },
+  ], pending);
+
+const rename = (workspace: Workspace, { pending, submit, cancel }: Controls) => card('Rename workspace', html`
+  <form class="fd-form" method="post" ?inert=${pending} @submit=${(event: SubmitEvent) => submit('rename', event)}>
+    ${nameField(workspace.name)}
+    <div class="fd-form-actions">
+      <button class="fd-btn" type="button" data-variant="ghost" @click=${() => cancel(workspaceActionsId)}>Cancel</button>
+      <button class="fd-btn" type="submit" data-variant="outline" ?disabled=${pending}>Save name</button>
+    </div>
+  </form>`);
+
+export const workspaceDetail = (workspace: Workspace, controls: Controls) => recordLayout(html`
+  ${controls.renaming && workspace.editable ? rename(workspace, controls) : nothing}
+  ${members(workspace, controls)}
+  ${workspaceProducts(workspace, controls)}
+  ${activity(workspace)}
+`, summary(workspace));
 
 export const closeWorkspace = (workspace: Workspace, pending: boolean, submit: Submit) => card(workspace.name, html`
     <div class="fd-callout" data-tone="warning"><i class="fd-callout-icon" data-icon="triangle-alert" aria-hidden="true"></i><div class="fd-callout-content">

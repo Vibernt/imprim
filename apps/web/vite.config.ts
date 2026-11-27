@@ -1,5 +1,6 @@
 import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite';
 import { lazyFireTweaks } from './scripts/lazy-fire-tweaks.mjs';
+import { skeletonApp } from 'fire-design/skeleton';
 import { firstPaintFont } from './scripts/first-font.mjs';
 
 // Keep the production CSP and preload the default interface face. The Worker supplies the realm's look.
@@ -38,7 +39,8 @@ function fireHtml(): Plugin {
         const asset = font && Object.values(ctx.bundle!).find((out) => out.type === 'asset' && out.originalFileNames.some((name) => name.endsWith(`/${font}`)));
         if (asset) tags.push({ tag: 'link', injectTo: 'head', attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: base + asset.fileName, crossorigin: true } });
         else if (ctx.bundle) this.warn('no font to preload: fire slim reports no Latin regular face for the theme');
-        const out = html.replace('<!-- csp -->\n', policy);
+        const out = html.replace('<!-- csp -->\n', policy)
+          .replace('<!-- first-load -->', skeletonApp({ preset: 'table', rows: 5, cols: 4, nav: 6, tabbar: 5 }));
         return { html: ctx.server ? out : bootLast(out), tags };
       },
     },

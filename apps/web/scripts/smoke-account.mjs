@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { currentStep, fromBase32, totpAt } from '../../../apps/server/src/auth/totp.mjs';
 import { assertPhoneFit } from './smoke-account-directory.mjs';
+import { dismissRowConfirm, focused, openAction, finishHold, postsTo, undoHold, dismissToasts } from './smoke-actions.mjs';
+import { issueSession } from '../../server/src/auth/session.mjs';
 
 export function accountSmoke(open) {
     test('phone keyboard navigation opens the Lit account screens', async t => {
@@ -21,14 +23,14 @@ export function accountSmoke(open) {
         await page.waitForFunction(() => document.activeElement?.matches('screen-security h1'));
         assert.equal(await heading.textContent(), 'Security');
         assert.equal(page.url(), `${server.origin}/account/security`);
-        await page.getByRole('heading', { name: 'Authenticator app', exact: true }).waitFor();
-        await page.getByRole('heading', { name: 'Passkey', exact: true }).waitFor();
-        assert.equal(await page.getByRole('heading', { name: 'Remembered browsers' }).count(), 0);
+        await page.getByRole('heading', { name: 'Authenticator apps', exact: true }).waitFor();
+        await page.getByRole('heading', { name: 'Passkeys', exact: true }).waitFor();
+        assert.equal(await page.getByRole('heading', { name: 'Remembered browsers', exact: true }).count(), 0);
         assert.equal(await page.locator('app-shell').count(), 1);
         await tabs.getByRole('link', { name: 'Sessions', exact: true }).click();
-        await page.getByRole('heading', { name: 'Remembered browsers' }).waitFor();
+        await page.getByRole('heading', { name: 'Remembered browsers', exact: true }).waitFor();
         await tabs.getByRole('link', { name: 'Agents', exact: true }).click();
-        await page.getByRole('heading', { name: 'Connected agents' }).waitFor();
+        await page.getByRole('heading', { name: 'Agents', exact: true }).waitFor();
         await page.getByText('No agents connected', { exact: true }).waitFor();
     });
 
@@ -36,8 +38,8 @@ export function accountSmoke(open) {
         const { page, server } = await open(t);
         const nav = page.locator('.fd-sidebar');
         await nav.getByRole('link', { name: 'Security', exact: true }).click();
-        await page.getByRole('heading', { name: 'Authenticator app', exact: true }).waitFor();
-        await page.getByText('Two-step sign-in is off.', { exact: true }).waitFor();
+        await page.getByRole('heading', { name: 'Authenticator apps', exact: true }).waitFor();
+        await page.getByText('Two-step verification is off.', { exact: true }).waitFor();
         assert.equal(await page.getByLabel('Passkey name', { exact: true }).count(), 0);
         assert.equal(await nav.getByRole('link', { name: 'Security', exact: true }).getAttribute('aria-current'), 'page');
         assert.equal(await nav.locator('a[href="/admin"]').count(), 0);
@@ -63,11 +65,24 @@ export function accountSmoke(open) {
         assert.equal(await page.locator('.fd-codes-item').count(), 10);
         await page.getByRole('button', { name: 'Done', exact: true }).click();
         await page.getByText('Travel phone', { exact: true }).waitFor();
-        await page.getByText('Two-step sign-in is on.', { exact: true }).waitFor();
-        assert.equal(await page.getByRole('button', { name: 'Remove Travel phone' }).getAttribute('data-variant'), 'outline');
+        await page.getByText('Two-step verification is on.', { exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: 'More actions for Travel phone' }).getAttribute('data-variant'), 'ghost');
         assert.equal(await page.locator('.fd-codes').count(), 0);
         await page.reload();
-        await page.getByRole('button', { name: 'Generate new codes' }).waitFor();
+        const recovery = page.locator('section.fd-card').filter({ has: page.getByRole('heading', { name: 'Recovery codes', exact: true }) });
+        const generate = recovery.locator('button[data-fd-confirm-row]');
+        const recoveryPosts = postsTo(page, '/v1/account/mfa/recovery');
+        const confirmation = recovery.locator('.fd-confirm-row');
+        await generate.click();
+        await dismissRowConfirm(page, confirmation, generate, recoveryPosts);
+        await generate.click();
+        await dismissRowConfirm(page, confirmation, generate, recoveryPosts, 'Escape');
+        await generate.click();
+        await confirmation.getByText('Your 10 unused codes stop working.', { exact: true }).waitFor();
+        await confirmation.getByRole('button', { name: 'Generate new codes', exact: true }).click();
+        await page.getByRole('heading', { name: 'New recovery codes', exact: true }).waitFor();
+        assert.equal(recoveryPosts.length, 1);
+        await page.getByRole('button', { name: 'Done', exact: true }).click();
         assert.equal(await page.locator('.fd-codes').count(), 0);
         await page.getByRole('button', { name: 'Set a password', exact: true }).click();
         const password = page.getByLabel('New password');
@@ -81,9 +96,76 @@ export function accountSmoke(open) {
         await server.drain();
     });
 
+    test('Security gives disabled controls a reason and sends no mutation', async t => {
+        const { page, server } = await open(t);
+        await page.addInitScript(() => { Reflect.deleteProperty(window, 'PublicKeyCredential'); });
+        await page.goto(server.origin + '/account/security');
+        await page.locator('.fd-reason').getByText('This browser cannot add passkeys.').waitFor();
+        const withoutSupport = page.getByRole('button', { name: 'Add passkey', exact: true });
+        assert.equal(await withoutSupport.getAttribute('aria-disabled'), 'true');
+
+        server.env.DB.db.exec("UPDATE users SET email_verified=0");
+        await page.reload();
+        const writes = [];
+        page.on('request', request => {
+            if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/v1/account/')) writes.push(request.url());
+        });
+        for (const label of ['Add authenticator app', 'Add passkey']) {
+            const control = page.getByRole('button', { name: label, exact: true });
+            await control.waitFor();
+            assert.equal(await control.getAttribute('aria-disabled'), 'true');
+            const reason = await control.getAttribute('aria-describedby');
+            assert.equal(await page.locator(`#${reason} .fd-reason-why`).textContent(), 'Confirm your email first.');
+            await control.press('Enter');
+            await control.click({ force: true });
+        }
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+        assert.deepEqual(writes, []);
+    });
+
+    test('a held sign-out still reaches the server when the page is left before it commits', async t => {
+        const { page, server } = await open(t);
+        const db = server.env.DB.db, user = db.prepare('SELECT * FROM users').get();
+        const { session } = await issueSession(server.env, user, 'email');
+        db.prepare('UPDATE sessions SET device=? WHERE sid=?').run('Firefox on Mac', session.sid);
+        // Record how each account POST was sent: a commit on pagehide only arrives if fetch is told to keep it alive.
+        // Playwright does not report a request the old document sends while it unloads, so the page records it.
+        await page.evaluate(() => {
+            const fetch = window.fetch;
+            window.fetch = (input, init = {}) => {
+                if (init.method === 'POST') {
+                    const sent = JSON.parse(sessionStorage.getItem('im-sent') ?? '[]');
+                    sent.push({ url: new URL(String(input), location.href).pathname, keepalive: init.keepalive === true });
+                    sessionStorage.setItem('im-sent', JSON.stringify(sent));
+                }
+                return fetch(input, init);
+            };
+        });
+        const posts = postsTo(page, '/v1/account/sessions');
+        await page.locator('.fd-sidebar').getByRole('link', { name: 'Sessions', exact: true }).click();
+        const firefox = page.getByRole('list', { name: 'Signed-in sessions' }).getByRole('listitem').filter({ hasText: 'Firefox on Mac' });
+        await openAction(firefox, 'More actions for Firefox on Mac', 'Sign out Firefox on Mac');
+        await page.locator('.fd-toast[data-front][data-held][data-state="open"]').getByRole('button', { name: 'Undo', exact: true }).waitFor();
+        assert.equal(posts.length, 0, 'Nothing is sent while the action is held');
+        assert.ok(db.prepare('SELECT 1 FROM sessions WHERE sid=?').get(session.sid));
+        // Leave the page well inside the 5 seconds: Fire commits the held action on pagehide.
+        await page.goto(server.origin + '/account/apps');
+        for (let tries = 0; db.prepare('SELECT 1 FROM sessions WHERE sid=?').get(session.sid) && tries < 50; tries++) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        assert.equal(db.prepare('SELECT 1 FROM sessions WHERE sid=?').get(session.sid), undefined, 'The session is signed out on the server');
+        const sent = JSON.parse(await page.evaluate(() => sessionStorage.getItem('im-sent')) ?? '[]');
+        assert.deepEqual(sent.filter(request => request.url.endsWith('/v1/account/sessions')),
+            [{ url: '/v1/account/sessions', keepalive: true }]);
+    });
+
     test('phone Sessions shows browsers and Agents separates editable connections from history', async t => {
         const { page, server } = await open(t, { width: 375 });
-        const db = server.env.DB.db, user = db.prepare('SELECT id FROM users').get(), now = Date.now();
+        const db = server.env.DB.db, user = db.prepare('SELECT * FROM users').get(), now = Date.now();
+        for (const device of ['Firefox on Mac', 'Chrome on Linux']) {
+            const { session } = await issueSession(server.env, user, 'email');
+            db.prepare('UPDATE sessions SET device=? WHERE sid=?').run(device, session.sid);
+        }
         db.prepare(`INSERT INTO trusted_devices(hash,user_id,client_id,name,created,last_used,expires_at)
             VALUES(?,?,'app','Test browser',?,?,?)`).run('b'.repeat(64), user.id, now, now, now + 60000);
         db.exec(`UPDATE clients SET agent_scope_catalogue='{"read":"Read workspace"}' WHERE id='app';
@@ -101,15 +183,42 @@ export function accountSmoke(open) {
             .run(crypto.randomUUID(), user.id, now, now, now - 1);
         const nav = page.locator('.fd-tabbar');
         await nav.getByRole('link', { name: 'Sessions', exact: true }).click();
-        await page.getByText('This browser', { exact: true }).waitFor();
+        const current = page.locator('.fd-list-row').filter({ hasText: 'This browser' });
+        await current.locator('.fd-list-body .fd-badge').waitFor();
+        assert.equal(await current.locator('.fd-list-trail, .fd-disclosure').count(), 0);
         assert.equal(await nav.getByRole('link', { name: 'Sessions', exact: true }).getAttribute('aria-current'), 'page');
         await page.getByRole('heading', { name: 'Signed-in sessions', exact: true }).waitFor();
         await page.getByRole('heading', { name: 'Apps', exact: true }).waitFor();
-        await page.getByRole('button', { name: 'Forget Test browser' }).click();
+        const sessions = postsTo(page, '/v1/account/sessions');
+        const firefox = page.getByRole('list', { name: 'Signed-in sessions' }).getByRole('listitem').filter({ hasText: 'Firefox on Mac' });
+        const otherSessions = page.getByRole('button', { name: 'Sign out other sessions', exact: true });
+        await otherSessions.click();
+        await undoHold(page, firefox, otherSessions, sessions);
+        const signOutOne = () => openAction(firefox, 'More actions for Firefox on Mac', 'Sign out Firefox on Mac');
+        await undoHold(page, firefox, await signOutOne(), sessions);
+        await signOutOne();
+        await finishHold(page);
+        await page.getByText('Session signed out', { exact: true }).waitFor();
+        await firefox.waitFor({ state: 'detached' });
+        assert.equal(sessions.length, 1);
+        await otherSessions.click();
+        await finishHold(page);
+        await page.getByText('Signed out of other sessions', { exact: true }).waitFor();
+        assert.equal(sessions[1].sid, 'others');
+        // At 375px the toast stack sits over the next card's row actions until it times out or is dismissed.
+        await dismissToasts(page);
+
+        const browser = page.getByRole('list', { name: 'Remembered browsers' }).getByRole('listitem');
+        const forget = () => openAction(browser, 'More actions for Test browser', 'Forget Test browser');
+        const devices = postsTo(page, '/v1/account/devices');
+        await undoHold(page, browser, await forget(), devices);
+        await forget();
+        await finishHold(page);
         await page.getByText('Browser forgotten', { exact: true }).waitFor();
+        assert.deepEqual(devices, [{ device: 'b'.repeat(64) }]);
         await page.getByText('No remembered browsers', { exact: true }).waitFor();
         await nav.getByRole('link', { name: 'Agents', exact: true }).click();
-        await page.getByRole('heading', { name: 'Connected agents', exact: true }).waitFor();
+        await page.getByRole('heading', { name: 'Agents', exact: true }).waitFor();
         assert.equal(await nav.getByRole('link', { name: 'Agents', exact: true }).getAttribute('aria-current'), 'page');
         const row = page.locator('.fd-list-row').filter({ hasText: 'Test agent' });
         const unverified = page.locator('.fd-list-row').filter({ hasText: 'Self-registered editor' });
@@ -155,15 +264,22 @@ export function accountSmoke(open) {
         await row.locator('.fd-list-title').getByText('Desk connection', { exact: true }).waitFor();
         assert.equal(db.prepare("SELECT label FROM agent_grants WHERE client_name='Test agent'").get().label, 'Desk connection');
         await assertPhoneFit(page, ['Profile', 'Apps', 'Security', 'Sessions', 'Agents']);
-        await row.getByRole('button', { name: 'More actions for Desk connection' }).click();
-        await row.getByRole('menuitem', { name: 'Revoke' }).click();
-        await row.getByText('Revoke access for Desk connection?', { exact: true }).waitFor();
-        await row.getByRole('button', { name: 'Cancel' }).click();
+        const revoke = () => openAction(row, 'More actions for Desk connection', 'Revoke');
+        const revokePosts = postsTo(page, '/v1/account/agents/revoke');
+        const confirm = row.locator(':scope > .fd-confirm-row');
+        await dismissRowConfirm(page, confirm, await revoke(), revokePosts);
         assert.equal(db.prepare("SELECT revoked_at FROM agent_grants WHERE client_name='Test agent'").get().revoked_at, null);
-        await menu.click();
-        await row.getByRole('menuitem', { name: 'Revoke' }).click();
-        await row.getByRole('button', { name: 'Revoke', exact: true }).click();
+        const other = () => openAction(unverified, 'More actions for Self-registered editor', 'Revoke');
+        await revoke();
+        const otherTrigger = await other();
+        await confirm.waitFor({ state: 'hidden' });
+        await dismissRowConfirm(page, unverified.locator(':scope > .fd-confirm-row'), otherTrigger, revokePosts, 'Escape');
+        await revoke();
+        await confirm.getByText('Revoke access for Desk connection?', { exact: true }).waitFor();
+        await confirm.getByRole('button', { name: 'Revoke', exact: true }).click();
         await page.getByText('Agent revoked', { exact: true }).waitFor();
+        assert.equal(revokePosts.length, 1);
+        await focused(page, unverified.locator('button[data-fd-menu]'));
         await summary.getByText('Ended connections (2)', { exact: true }).waitFor();
         if (await history.getAttribute('open') === null) await summary.click();
         const revoked = history.locator('.fd-list-row').filter({ hasText: 'Desk connection' });

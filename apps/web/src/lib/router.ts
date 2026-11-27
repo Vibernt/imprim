@@ -81,6 +81,7 @@ let outlet: Outlet;
 let format = (title: string) => title;
 let token = 0;
 let key = '';
+let renderedAddress = '';
 const scrolls = new Map<string, number>();
 const prefetched = new Set<Route>();
 const newKey = () => Math.random().toString(36).slice(2);
@@ -165,6 +166,7 @@ async function resolve(mode: Mode): Promise<void> {
   // Set before the screen renders so that a screen may refine it.
   const { title } = view.route;
   document.title = format(typeof title === 'function' ? title(view) : title);
+  renderedAddress = location.pathname + location.search;
   const { screen, changed } = await outlet.show(view, mode === 'first');
   if (mine !== token || mode === 'first' || !changed) return;
   // A new screen is a new page to the visitor: focus its heading, go to the top (or back to where they were).
@@ -229,8 +231,11 @@ export function startRouter(options: RouterOptions): Promise<void> {
   key = (history.state as { key?: string } | null)?.key ?? newKey();
   history.replaceState({ ...history.state, key }, '');
   addEventListener('popstate', (event) => {
+    // A same-document fragment, such as the skip target, belongs to the browser.
+    const nextKey = (event.state as { key?: string } | null)?.key;
+    if (location.pathname + location.search === renderedAddress && (!nextKey || nextKey === key)) return;
     scrolls.set(key, scrollY);
-    key = (event.state as { key?: string } | null)?.key ?? newKey();
+    key = nextKey ?? newKey();
     void resolve('pop');
   });
   document.addEventListener('click', onClick);

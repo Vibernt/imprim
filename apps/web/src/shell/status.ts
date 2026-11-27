@@ -7,7 +7,7 @@ import { href, retry, type View } from '../lib/router';
 import { pageHead } from '../screens/page-layout';
 
 const page = (title: string, glyph: IconName, description: string, actions: TemplateResult, tone?: string) => html`
-  <main class="fd-page">
+  <main class="fd-page" id="main" tabindex="-1">
     <div class="fd-frame">
       ${pageHead(title)}
       <section class="fd-band" aria-label=${title} data-grow>
@@ -26,7 +26,7 @@ class ScreenNotFound extends FireLight {
   protected override render() {
     const admin = this.view.route.area === 'admin';
     const title = admin ? 'Page not found' : t('Page not found');
-    return html`<main class="fd-page"><div class="fd-frame">
+    return html`<main class="fd-page" id="main" tabindex="-1"><div class="fd-frame">
       <section class="fd-band" data-grow aria-label=${title}>
         <div class="fd-empty" data-size="lg">
           <span class="fd-empty-icon">${icon('search')}</span>

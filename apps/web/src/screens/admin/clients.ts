@@ -6,8 +6,10 @@ import { listCount } from './list-view';
 import { cap, clientPath, link, mono, status, table } from './core-view';
 import { methodLabel } from './sign-in-methods';
 import type { Client } from './client/model';
+import type { LoadingPreset } from '../loading';
 
 class ClientsScreen extends AdminScreen<{ clients: Client[] }> {
+  protected readonly skeleton: readonly LoadingPreset[] = [{ name: 'table', options: { rows: 5, cols: 4 } }];
   protected requestPath() { return '/admin/api/clients?include_drafts=1'; }
 
   protected override render() {

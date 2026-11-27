@@ -1,10 +1,13 @@
-import { html, nothing } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { card } from '../../page-layout';
+import { rowMenu } from '../../row-menu';
+import { confirmRowId } from '../../confirm-row';
 import { cap, field, formSection, status, table } from '../realm-ui';
 
 export type AdminRole = 'platform' | 'realm';
 export interface RealmAdmin { email: string; role: AdminRole }
+export const adminRowId = (realm: Realm, admin: RealmAdmin) => `realm-admin-${realm.id}-${admin.email}`;
 export interface Realm {
   id: string;
   issuer: string | null;
@@ -43,12 +46,17 @@ export const realmForm = (realm: Realm | undefined, pending: boolean, submit: (e
   </form>`);
 
 export function adminRoster(realm: Realm, viewer: { realm: { id: string }; email: string }, pending: boolean,
-  submit: (event: SubmitEvent) => void, remove: (admin: RealmAdmin) => void) {
+  submit: (event: SubmitEvent) => void, removalQuestion: (admin: RealmAdmin) => TemplateResult) {
   return card('Administrators', html`
-    ${realm.admins.length ? table('Administrators', ['Email', 'Role', 'Actions'], realm.admins.map(admin => [admin.email, cap(admin.role),
-      viewer.realm.id === realm.id && viewer.email === admin.email ? 'Your role' : html`
-        <button type="button" class="fd-btn" data-variant="outline" ?disabled=${pending}
-          aria-label=${'Remove administrator ' + admin.email} @click=${() => remove(admin)}>Remove</button>`]))
+    ${realm.admins.length ? table('Administrators', ['Email', 'Role', 'Actions'], realm.admins.map(admin => {
+      const id = adminRowId(realm, admin);
+      const ownRole = viewer.realm.id === realm.id && viewer.email === admin.email;
+      return { id, confirmation: ownRole ? undefined : removalQuestion(admin),
+        cells: [admin.email, cap(admin.role),
+          ownRole ? 'Your role' :
+            rowMenu(id, 'More actions for ' + admin.email,
+              [{ label: 'Remove', danger: true, confirmRow: confirmRowId(id) }], pending)] };
+    }))
       : html`<p class="fd-muted">No administrators yet.</p>`}
     <form class="fd-form" method="post" @submit=${submit}>
       <fieldset class="fd-stack" data-gap="3" ?disabled=${pending}>

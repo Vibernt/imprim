@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { machineClientSmoke } from './smoke-machine-clients.mjs';
+import { loadingSmoke } from './smoke-loading.mjs';
 import { accountSmoke } from './smoke-account.mjs';
 import { accountWorkspacesSmoke } from './smoke-account-workspaces.mjs';
+import { securityActionsSmoke } from './smoke-security-actions.mjs';
+import { heldSmoke } from './smoke-held.mjs';
 import { accountDirectorySmoke } from './smoke-account-directory.mjs';
 import { smokeServer } from './smoke-server.mjs';
 import { adminCoreSmoke } from './smoke-admin-core.mjs';
@@ -62,7 +65,8 @@ test('Profile writes through the Worker, uses its catalogue, and confirms email 
     await name.fill('  Ada Lovelace  ');
     await page.locator('#locale').selectOption('fr');
     assert.equal(await page.getByRole('button', { name: 'Save language' }).count(), 0);
-    assert.equal(await page.locator('main button[data-variant="primary"]').count(), 1);
+    assert.equal(await page.getByRole('button', { name: 'Save name' }).getAttribute('data-variant'), 'outline');
+    assert.equal(await page.locator('main button[data-variant="primary"]').count(), 0);
     await name.press('Tab');
     await page.keyboard.press('Enter');
     await page.getByText('Name saved', { exact: true }).waitFor();
@@ -71,7 +75,7 @@ test('Profile writes through the Worker, uses its catalogue, and confirms email 
 
     assert.equal(await page.locator('#locale').inputValue(), 'fr');
     await page.getByRole('button', { name: 'Save language' }).click();
-    await page.getByRole('heading', { name: 'Profil', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Profil', level: 1, exact: true }).waitFor();
     assert.equal(await page.locator('html').getAttribute('lang'), 'fr');
     assert.equal(await page.locator('#locale').inputValue(), 'fr');
     assert.equal(await page.locator('#display_name').inputValue(), 'Ada Lovelace');
@@ -102,7 +106,10 @@ test('Profile writes through the Worker, uses its catalogue, and confirms email 
     await server.drain();
 });
 
+loadingSmoke(open);
 accountSmoke(open);
+securityActionsSmoke(open);
+heldSmoke(open);
 accountDirectorySmoke(open);
 accountWorkspacesSmoke(open);
 workspaceConsentSmoke(browser);

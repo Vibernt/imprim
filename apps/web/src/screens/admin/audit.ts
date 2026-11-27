@@ -4,6 +4,7 @@ import { AdminScreen, corePage } from './core-screen';
 import { mono, nextPage, table, when } from './core-view';
 import { eventLabel } from './audit-events';
 import { auditFilters } from './audit-filters';
+import type { LoadingPreset } from '../loading';
 
 interface AuditRow {
   id: number; created: number; event: string; detail: string | null;
@@ -23,6 +24,7 @@ const detail = (value: string | null) => {
 };
 
 class AuditScreen extends AdminScreen<{ audit: AuditRow[]; next: number | null }> {
+  protected readonly skeleton: readonly LoadingPreset[] = [{ name: 'table', options: { rows: 5, cols: 5 } }];
   protected requestPath(view: View) { return '/admin/api/audit?' + view.query; }
 
   private changeFilters = (filters: Record<string, string>) => {

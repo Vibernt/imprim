@@ -1,50 +1,76 @@
 import { html, nothing } from 'lit';
 import { card, inlineError } from '../../page-layout';
-import { cap, field, when } from '../realm-ui';
+import { rowMenu } from '../../row-menu';
+import { cap, field, table, when } from '../realm-ui';
 import { roleField } from './forms';
-import { optionalTable } from './summary';
-import type { Submit, Workspace } from './types';
+import type { Controls, Workspace } from './types';
 
-export function members(workspace: Workspace, pending: boolean, submit: Submit, error?: string) {
+type Member = Workspace['members'][number];
+export const memberMenuId = (id: string) => 'workspace-member-' + id;
+export const memberRoleId = (id: string) => 'member-role-' + id;
+const inviteMenuId = (id: string) => 'workspace-invitation-' + id;
+
+export function members(workspace: Workspace, controls: Controls) {
   const editable = workspace.editable && workspace.kind === 'team';
-  return card('Members', html`${optionalTable('Members', ['Email', 'Role', ...(editable ? ['Actions'] : [])], workspace.members.map((member, index) =>
-      [member.email, cap(member.role), ...(editable ? [!member.manageable ? '—' : html`
-        <div class="fd-row" data-wrap data-align="end" data-gap="3">
-          <form method="post" @submit=${(event: SubmitEvent) => submit('role', event)}>
-            <fieldset class="fd-row" data-align="end" data-gap="2" ?disabled=${pending}>
-              <legend class="fd-sr-only">Member role</legend>
-              <input type="hidden" name="sub" .value=${member.id}>
-              ${roleField('member-role-' + index, 'Role for ' + member.email, member.role, workspace.can_grant_owner)}
-              <button class="fd-btn" type="submit" data-variant="outline">Save role</button>
-            </fieldset>
-          </form>
-          <form method="post" @submit=${(event: SubmitEvent) => submit('remove-member', event)}>
-            <input type="hidden" name="sub" .value=${member.id}>
-            <button class="fd-btn" type="submit" data-variant="danger" aria-label=${'Remove ' + member.email} ?disabled=${pending}>Remove member</button>
-          </form>
-        </div>`] : [])]), 'Members appear after accepting an invitation.')}
-    ${workspace.can_invite ? inviteForm(workspace, pending, submit, error) : nothing}
-    ${workspace.invitations.length ? invitations(workspace, pending, submit) : nothing}
+  const headers = editable ? ['Email', 'Role', 'Actions'] : ['Email', 'Role'];
+  return card('Members', html`
+    ${workspace.can_invite ? inviteForm(workspace, controls) : nothing}
+    ${table('Members', headers, workspace.members.map(member => {
+      const id = memberMenuId(member.id);
+      const busy = controls.busy(id);
+      const action = member.manageable ? rowMenu(id, 'More actions for ' + member.email, [
+        { label: 'Change role', run: () => controls.openRole(member.id) },
+        { label: 'Remove', danger: true, run: () => controls.hold(id, 'Removing ' + member.email, 'remove-member', { sub: member.id }) },
+      ], controls.pending || busy || controls.role === member.id) : '—';
+      return {
+        id, busy, cells: [member.email, cap(member.role), ...(editable ? [action] : [])],
+        detail: controls.role === member.id && member.manageable ? roleForm(workspace, member, controls) : undefined,
+      };
+    }), ['No members', 'Members appear after accepting an invitation.'], { emptyOnly: true })}
+    ${workspace.invitations.length ? invitations(workspace, controls) : nothing}
   `);
 }
 
-function invitations(workspace: Workspace, pending: boolean, submit: Submit) {
+function roleForm(workspace: Workspace, member: Member, controls: Controls) {
+  return html`<form class="fd-form" method="post" @submit=${(event: SubmitEvent) => controls.submit('role', event)}>
+    <fieldset class="fd-row" data-align="end" data-wrap data-gap="3" ?disabled=${controls.pending}>
+      <legend class="fd-sr-only">Change member role</legend>
+      <input type="hidden" name="sub" .value=${member.id}>
+      ${roleField(memberRoleId(member.id), 'Role for ' + member.email, member.role, workspace.can_grant_owner)}
+      <div class="fd-row">
+        <button class="fd-btn" type="submit" data-variant="outline">Save role</button>
+        <button class="fd-btn" type="button" data-variant="ghost" @click=${() => controls.cancel(memberMenuId(member.id))}>Cancel</button>
+      </div>
+    </fieldset>
+  </form>`;
+}
+
+function invitations(workspace: Workspace, controls: Controls) {
   return html`<div class="fd-stack" data-gap="3">
     <h3 class="fd-title">Open invitations</h3>
-    ${optionalTable('Open invitations', ['Email', 'Role', 'Expires', ...(workspace.editable ? ['Actions'] : [])],
-      workspace.invitations.map(invite => [invite.email, cap(invite.role), when(invite.expires_at), ...(workspace.editable ? [html`
-        <form method="post" @submit=${(event: SubmitEvent) => submit('revoke-invitation', event)}>
-          <input type="hidden" name="invitation_id" .value=${invite.id}>
-          <button class="fd-btn" type="submit" data-variant="outline" aria-label=${'Revoke invitation for ' + invite.email} ?disabled=${pending}>Revoke</button>
-        </form>`] : [])]), 'Invitations appear here until they are accepted, revoked or expire.')}
+    ${table('Open invitations', ['Email', 'Role', 'Expires', ...(workspace.editable ? ['Actions'] : [])],
+      workspace.invitations.map(invite => {
+        const id = inviteMenuId(invite.id);
+        const busy = controls.busy(id);
+        return {
+          id, busy, cells: [invite.email, cap(invite.role), when(invite.expires_at), ...(workspace.editable
+            ? [rowMenu(id, 'More actions for invitation to ' + invite.email, [{
+              label: 'Revoke', danger: true, run: () => controls.hold(id, 'Revoking invitation to ' + invite.email,
+                'revoke-invitation', { invitation_id: invite.id }),
+            }], controls.pending || busy)] : [])],
+        };
+      }))}
   </div>`;
 }
 
-function inviteForm(workspace: Workspace, pending: boolean, submit: Submit, error?: string) {
-  return html`<form class="fd-form" method="post" ?inert=${pending} @submit=${(event: SubmitEvent) => submit('invite', event)}>
-    ${field('workspace-invite-email', 'Email', { name: 'email', type: 'email', required: true, max: 254 })}
-    ${roleField('workspace-invite-role', 'Invitation role', 'member', workspace.can_grant_owner)}
-    ${error ? inlineError(error) : nothing}
-    <div class="fd-form-actions"><button class="fd-btn" type="submit" data-variant="primary" ?disabled=${pending}>Send invitation</button></div>
+function inviteForm(workspace: Workspace, { pending, submit, invitationError }: Controls) {
+  return html`<form class="fd-form" method="post" @submit=${(event: SubmitEvent) => submit('invite', event)}>
+    <fieldset class="fd-row" data-align="end" data-wrap data-gap="3" ?disabled=${pending}>
+      <legend class="fd-sr-only">Invite team members</legend>
+      ${field('workspace-invite-email', 'Email', { name: 'email', type: 'email', required: true, max: 254 })}
+      ${roleField('workspace-invite-role', 'Invitation role', 'member', workspace.can_grant_owner)}
+      <button class="fd-btn" type="submit" data-variant="primary">Send invitation</button>
+    </fieldset>
+    ${invitationError ? inlineError(invitationError) : nothing}
   </form>`;
 }

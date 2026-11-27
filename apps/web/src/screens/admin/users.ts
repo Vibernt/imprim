@@ -5,6 +5,7 @@ import { AdminScreen, corePage } from './core-screen';
 import { link, nextPage, status, table, userPath, when } from './core-view';
 
 import { listCount } from './list-view';
+import type { LoadingPreset } from '../loading';
 
 export interface UserSummary {
   id: string; email: string; display_name: string | null; status: string; merged_into: string | null; created: number;
@@ -12,6 +13,7 @@ export interface UserSummary {
 const path = '/admin/users';
 
 class UsersScreen extends AdminScreen<{ users: (UserSummary & { last_sign_in: number | null })[]; next: string | null; total: number }> {
+  protected readonly skeleton: readonly LoadingPreset[] = [{ name: 'table', options: { rows: 5, cols: 5 } }];
   protected requestPath(view: View) { return '/admin/api/users?' + view.query; }
 
   private search = (event: SubmitEvent) => {

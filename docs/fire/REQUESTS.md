@@ -1,6 +1,6 @@
 # Fire requests from Imprim
 
-Imprim uses Fire v0.13.2 (commit `19584ed`).
+Imprim uses Fire v0.14.0 (commit `9de1e67`).
 
 Gaps found while building Imprim's screens with Fire ([GUIDE.md](GUIDE.md) section 7). Own classes and tokens use
 the `im-` prefix. Request a Fire variant when an existing component needs a change.
@@ -9,18 +9,17 @@ the `im-` prefix. Request a Fire variant when an existing component needs a chan
 
 | Request | Where and why | Proposed interface | What Imprim uses today |
 |---|---|---|---|
-| Refuse a field inside a settings row, and a text field wider than a form | 0.10.2 | `wrong-parent` (lint and review) and `wide-field` (review) guard `fieldWithAction` in `apps/web/src/screens/page-layout.ts`, used for every value someone types beside its button |
-| Fieldset reset | 0.10.0 | Native disabled fieldsets use Fire layout classes. Fire resets the border, margin, padding and minimum inline size. |
-| Starter focus ring on page titles | 0.10.0 | The router calls `focusQuiet()` for page headings and regions. |
-| Structural markup lint | 0.10.0 | Fire checks required parts, elements and parents in Lit templates. The browser review gate checks rendered markup and layout. |
+| Refuse a field inside a settings row, and a text field wider than a form | Keep fields out of settings rows and at a readable width. | `wrong-parent` in lint and review, and `wide-field` in review. | The shared `fieldWithAction` helper for a value typed beside its button. |
 | Extend `renderEmail` with inline branding | Sign-in and security emails carry their branding inside the message. The recipient can read them with remote images disabled. | Accept an inline `cid:` logo and a dark logo swap, and draw the brand's dot-matrix initial when no logo is present. | Its own renderer and attachment handling in [services/email](../../apps/server/src/services/email/). |
 | Document a palette subset for Tweaks | Products with a curated palette set need the Tweaks panel to offer only palettes shipped in their CSS. | Document an allowlist that also governs what preset looks can apply. | [Branding](../BRANDING.md) ships the full Fire palette set. |
 | Read plain template strings in `fire lint` and `fire slim` | The Worker renders sign-in and consent without a template framework. Its HTML is in plain JavaScript template strings. | Add a documented opt-in or source marker to discover plain templates for linting and slimming. | Imprim's Node smoke tests inspect the rendered HTML, and the server ships all Fire CSS. See [pages.test.mjs](../../tests/pages.test.mjs). |
+| [Edit one text in several languages](https://github.com/vidhatanand/firedesign/issues/4) | Realm administrators write localized sign-in and email copy. | One field with per-language wording. | Per-language disclosures. |
 
 ## Shipped
 
 | Request | Fire | What Imprim uses now |
 |---|---|---|
+| [Confirm an action in its row](https://github.com/vidhatanand/firedesign/issues/3) | 0.14.0 | Imprim uses `fd-confirm-row` for every in-row confirmation. |
 | Fieldset reset | 0.10.0 | Native disabled fieldsets use Fire layout classes. Fire resets the border, margin, padding and minimum inline size. |
 | Starter focus ring on page titles | 0.10.0 | The router calls `focusQuiet()` for page headings and regions. |
 | Structural markup lint | 0.10.0 | Fire checks required parts, elements and parents in Lit templates. The browser review gate checks rendered markup and layout. |

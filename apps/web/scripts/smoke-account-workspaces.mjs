@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { seedAccountWorkspace, seedAccountWorkspaceMember } from '../../../tests/support/account-workspaces.mjs';
 import { assertPhoneFit } from './smoke-account-directory.mjs';
+import { finishHold, postsTo, undoHold } from './smoke-actions.mjs';
 
 const root = '/account/workspaces';
 const team = root + '/example-team';
@@ -36,6 +37,7 @@ export function accountWorkspacesSmoke(open) {
         const response = await page.goto(server.origin + root);
         assert.equal(response.status(), 200);
         const sidebar = page.locator('.fd-sidebar .fd-nav-item');
+        await sidebar.filter({ hasText: 'Workspaces' }).waitFor();
         assert.deepEqual((await sidebar.allTextContents()).map(text => text.trim()).slice(0, 3), ['Profile', 'Apps', 'Workspaces']);
         const list = page.getByRole('table', { name: 'Workspaces' });
         const teamRow = rowFor(list, 'Editorial team');
@@ -67,9 +69,21 @@ export function accountWorkspacesSmoke(open) {
         await action(page, 'Re-send');
         assert.equal((await resent).status(), 201);
         assert.notEqual(getInvitation().id, first);
-        await rowActions(invited, email).click();
-        await action(page, 'Revoke');
+        // Revoke waits in a held toast: Undo sends nothing and keeps the invitation.
+        const revokePath = '/v1' + team + '/invitations/' + encodeURIComponent(getInvitation().id) + '/revoke';
+        const revokes = postsTo(page, revokePath);
+        const revoke = async () => {
+            const trigger = rowActions(invited, email);
+            await trigger.click();
+            await action(page, 'Revoke');
+            return trigger;
+        };
+        await undoHold(page, invited, await revoke(), revokes);
+        assert.equal(getInvitation().revoked_at, null);
+        await revoke();
+        await finishHold(page);
         await invites.getByText('No open invitations', { exact: true }).waitFor();
+        assert.equal(revokes.length, 1);
 
         const roster = page.getByRole('table', { name: 'Members', exact: true }), member = rowFor(roster, teammate);
         await rowActions(member, teammate).click();
@@ -77,15 +91,21 @@ export function accountWorkspacesSmoke(open) {
         await page.getByLabel('New role', { exact: true }).selectOption('admin');
         await page.getByRole('button', { name: 'Save role', exact: true }).click();
         await member.getByText('Admin', { exact: true }).waitFor();
-        await rowActions(member, teammate).click();
-        await action(page, 'Remove member');
-        const confirmation = page.getByLabel('Type ' + teammate + ' to confirm', { exact: true });
-        const remove = page.getByRole('button', { name: 'Remove member', exact: true });
-        await confirmation.fill('someone@example.com');
-        assert.equal(await remove.isDisabled(), true);
-        await confirmation.fill(teammate);
-        await remove.click();
+        // Remove member waits in a held toast with Undo, without a typed confirmation.
+        const removes = postsTo(page, '/v1' + team + '/members/teammate/remove');
+        const remove = async () => {
+            const trigger = rowActions(member, teammate);
+            await trigger.click();
+            await action(page, 'Remove member');
+            return trigger;
+        };
+        await undoHold(page, member, await remove(), removes);
+        assert.ok(db.prepare('SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id=?').get('example-team', 'teammate'));
+        await remove();
+        assert.equal(await page.getByLabel('Type ' + teammate + ' to confirm', { exact: true }).count(), 0);
+        await finishHold(page);
         await member.waitFor({ state: 'detached' });
+        assert.equal(removes.length, 1);
         assert.equal(db.prepare('SELECT 1 FROM workspace_members WHERE workspace_id=? AND user_id=?').get('example-team', 'teammate'), undefined);
     });
 
@@ -138,10 +158,12 @@ export function accountWorkspacesSmoke(open) {
         const roster = page.getByRole('table', { name: 'Members', exact: true });
         const member = rowFor(roster, 'teammate@example.com');
         assert.equal(await member.evaluate(row => getComputedStyle(row).display), 'grid');
-        await rowActions(member, 'teammate@example.com').click();
+        const removes = postsTo(page, '/v1' + team + '/members/teammate/remove');
+        const trigger = rowActions(member, 'teammate@example.com');
+        await trigger.click();
         await action(page, 'Remove member');
-        await page.getByLabel('Type teammate@example.com to confirm', { exact: true }).waitFor({ state: 'visible' });
-        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await undoHold(page, member, trigger, removes);
+        await assertPhoneFit(page, ['Apps', 'Workspaces', 'Agents', 'Security', 'More']);
         const invites = page.getByRole('table', { name: 'Open invitations', exact: true });
         const invited = rowFor(invites, 'pending@example.com');
         assert.equal(await invited.evaluate(row => getComputedStyle(row).display), 'grid');

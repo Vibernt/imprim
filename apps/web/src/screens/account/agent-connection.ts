@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { t } from '../../lib/i18n';
+import { confirmRowId } from '../confirm-row';
 import { when } from './access-view';
 import { connectionRow, useTime } from './connection-row';
 
@@ -19,14 +20,17 @@ function ended(agent: Agent) {
   return agent.status === 'expired' ? t('Expired {date}', { date }) : t('Revoked {date}', { date });
 }
 
-export function agentRow(agent: Agent, pending: boolean, rename: () => void, revoke: () => void, form: TemplateResult | typeof nothing) {
+export function agentRow(agent: Agent, pending: boolean, rename: () => void,
+  form: TemplateResult | typeof nothing, confirmation?: TemplateResult) {
   const device = [agent.approved_device, agent.approved_location].filter(Boolean).join(', ');
   const date = when(agent.created);
-  return connectionRow({ id: `agent-${agent.id}`, title: agent.label || agent.name,
-    badge: agent.host ? undefined : t('Unverified'), pending, form,
+  const id = `agent-${agent.id}`;
+  return connectionRow({ id, title: agent.label || agent.name,
+    lead: true, badgeTone: 'warning', badge: agent.host ? undefined : t('Unverified'), pending, form, confirmation,
     description: [agent.app, agent.workspace_name, device].filter(Boolean).join(' · '),
     meta: agent.status === 'active' ? useTime(agent.last_used) : ended(agent),
-    actions: agent.status === 'active' ? [{ label: t('Rename'), run: rename }, { label: t('Revoke'), run: revoke, danger: true }] : [],
+    actions: agent.status === 'active' ? [{ label: t('Rename'), run: rename },
+      { label: t('Revoke'), danger: true, confirmRow: confirmRowId(id) }] : [],
     details: html`
       ${agent.label ? html`<span>${agent.name}</span>` : nothing}
       ${agent.host ? html`<code class="fd-mono-sm"><span class="im-breakable">${agent.host}</span></code>` : nothing}

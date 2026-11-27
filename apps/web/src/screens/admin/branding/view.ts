@@ -1,15 +1,35 @@
-import { html } from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { icon } from '../../../lib/icon';
 import { card } from '../../page-layout';
 import { assetUrl } from './logos';
 import type { Branding } from './types';
 
-export const sections = [
+const sections = [
   ['look', 'Look', 'palette'], ['logos', 'Logos', 'image'], ['name', 'Name and links', 'link'],
   ['languages', 'Languages', 'globe'], ['words', 'Words', 'type'],
 ] as const;
 export type Section = typeof sections[number][0];
+
+export function brandingTabs(selected: Section, panels: Record<Section, TemplateResult>,
+  select: (section: Section) => void, pending: boolean) {
+  return html`
+    <div class="fd-tabs" role="tablist" aria-label="Branding"
+      @fd:change=${(event: CustomEvent<{ value: Section }>) => select(event.detail.value)}>
+      ${sections.map(([id, label, glyph]) => html`
+        <button class="fd-tab" type="button" role="tab" aria-selected=${String(selected === id)}
+          id=${'branding-tab-' + id} aria-controls=${'branding-panel-' + id} data-value=${id}>${icon(glyph)}${label}</button>`)}
+    </div>
+    ${sections.map(([id, label]) => html`
+      <div class="fd-tab-panel" id=${'branding-panel-' + id} role="tabpanel" aria-labelledby=${'branding-tab-' + id}
+        ?hidden=${selected !== id}>
+        <fieldset class="fd-stack" data-gap="4" ?disabled=${pending}>
+          <legend class="fd-sr-only">${label}</legend>
+          ${card(label, panels[id])}
+        </fieldset>
+      </div>`)}
+  `;
+}
 
 export function specimen(brand: Branding, realmName: string) {
   const name = brand.name || realmName;

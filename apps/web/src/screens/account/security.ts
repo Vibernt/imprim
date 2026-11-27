@@ -5,15 +5,18 @@ import { AccountScreen, post, success } from './account-screen';
 import { hasSecondFactor, overview, passwordTitle, type Actions, type Security } from './security-overview';
 import { setupView, passwordView, recoveryView, type Setup } from './security-setup';
 import { createPasskey, namePasskey, type AddedPasskey } from './security-passkeys';
+import { SecurityChanges, type Recovery } from './security-changes';
+import type { LoadingPreset } from '../loading';
 
-interface Recovery { recovery_codes: string[] }
 type Step = { setup: Setup } | { recovery: string[]; regenerated: boolean } | { passkey: AddedPasskey } | 'password';
 
 class ScreenSecurity extends AccountScreen<Security> {
+  protected readonly skeleton: readonly LoadingPreset[] = [{ name: 'list', options: { rows: 4 } }];
   static override properties = { step: { state: true } };
   declare private step: Step | undefined;
   private code = '';
   private passkeyRequest?: AbortController;
+  private readonly changes = new SecurityChanges(this, () => this.load(false), this.mutationError, result => this.showCodes(result, true));
 
   protected override read() {
     return api<Security>('/v1/account/security');
@@ -26,6 +29,7 @@ class ScreenSecurity extends AccountScreen<Security> {
   }
 
   private show(step?: Step) {
+    this.changes.confirmation.clear();
     this.code = '';
     this.step = step;
     void this.updateComplete.then(() => {
@@ -53,7 +57,7 @@ class ScreenSecurity extends AccountScreen<Security> {
     const code = this.code;
     void this.mutate(async () => {
       const result = await post<Recovery>('mfa/confirm', { factor_id, name: fields.get('name'), code });
-      if (this.isConnected) success(t('Two-factor authentication is on'));
+      if (this.isConnected) success(t('Two-step verification is on'));
       this.showCodes(result, false);
     });
   };
@@ -73,11 +77,13 @@ class ScreenSecurity extends AccountScreen<Security> {
 
   private actions: Actions = {
     start: () => this.mutate(async () => {
+      this.changes.confirmation.clear();
       const setup = await post<Setup>('mfa/start');
       if (this.isConnected) this.show({ setup });
     }),
     passkey: () => {
       void this.mutate(async () => {
+        this.changes.confirmation.clear();
         const controller = this.passkeyRequest = new AbortController();
         try {
           const result = await createPasskey(controller.signal).catch((error: unknown) => {
@@ -93,14 +99,6 @@ class ScreenSecurity extends AccountScreen<Security> {
         }
       });
     },
-    remove: (kind, id) => this.mutate(async () => {
-      if (kind === 'authenticator') await post('mfa/remove', { factor_id: id });
-      else await post('passkeys/remove', { id });
-      if (!this.isConnected) return;
-      success(kind === 'authenticator' ? t('Authenticator app removed') : t('Passkey removed'));
-      await this.load(false);
-    }),
-    recovery: () => this.mutate(async () => this.showCodes(await post<Recovery>('mfa/recovery'), true)),
     password: () => this.show('password'),
   };
 
@@ -126,8 +124,8 @@ class ScreenSecurity extends AccountScreen<Security> {
         step.regenerated ? t('Your old codes stopped working. Save these before you leave.') : t('They are shown once. Each code signs you in one time.'),
         () => recoveryView(step.recovery, this.done));
     }
-    const status = this.data ? (hasSecondFactor(this.data) ? t('Two-step sign-in is on.') : t('Two-step sign-in is off.')) : '';
-    return this.page(t('Security'), status, data => overview(data, this.pending, this.actions));
+    const status = this.data ? (hasSecondFactor(this.data) ? t('Two-step verification is on.') : t('Two-step verification is off.')) : '';
+    return this.page(t('Security'), status, data => overview(data, this.pending, this.actions, this.changes));
   }
 }
 customElements.define('screen-security', ScreenSecurity);

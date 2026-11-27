@@ -4,7 +4,8 @@ import { ApiError, api } from '../../lib/api';
 import { FireLight } from '../../lib/fire-light';
 import { t } from '../../lib/i18n';
 import { deleteSection, profileFields, type Action, type Drafts, type Profile } from './profile-view';
-import { pageHead } from '../page-layout';
+import { card, pageHead } from '../page-layout';
+import { loading, type LoadingPreset } from '../loading';
 
 const { toast } = overlays;
 const describe = (error: unknown) => error instanceof ApiError ? error.description : t('The request could not be completed.');
@@ -19,6 +20,8 @@ class ScreenProfile extends FireLight {
   declare private loadError: string | undefined;
   declare private drafts: Drafts;
   declare private emailOpen: boolean;
+
+  protected readonly skeleton: readonly LoadingPreset[] = [{ name: 'form', options: { count: 3 } }];
 
   constructor() {
     super();
@@ -105,29 +108,24 @@ class ScreenProfile extends FireLight {
   };
 
   private fields(): TemplateResult {
-    if (this.profile) return profileFields(this.profile, this.pending, this.submit, {
+    if (this.profile) return card(t('Profile'), profileFields(this.profile, this.pending, this.submit, {
       drafts: this.drafts, change: this.change, emailOpen: this.emailOpen, toggleEmail: this.toggleEmail,
-    });
+    }));
     if (this.loadError) return html`
       <div class="fd-empty" data-tone="danger" role="alert">
         <h2 class="fd-h3">${t('The page did not load')}</h2>
         <p class="fd-empty-text">${this.loadError}</p>
         <div class="fd-empty-actions"><button class="fd-btn" type="button" @click=${this.load}>${t('Try again')}</button></div>
       </div>`;
-    return html`
-      <span class="fd-sr-only" role="status">${t('Loading profile')}</span>
-      <div class="fd-skeleton fd-skeleton-form" aria-hidden="true">
-        <div class="fd-skeleton-form-field"><div class="fd-shimmer fd-skeleton-title" data-size="label"></div><div class="fd-shimmer fd-skeleton-form-control"></div></div>
-        <div class="fd-skeleton-form-field"><div class="fd-shimmer fd-skeleton-title" data-size="label"></div><div class="fd-shimmer fd-skeleton-form-control"></div></div>
-      </div>`;
+    return loading(this.skeleton, { status: t('Loading profile'), late: t('Still loading. This is taking longer than usual.') });
   }
 
   protected override render() {
     return html`
-      <main class="fd-page">
+      <main class="fd-page" id="main" tabindex="-1">
         <div class="fd-frame">
           ${pageHead(t('Profile'), t('Your name and email, as the apps you sign in to see them.'))}
-          <section class="fd-band fd-stack" data-gap="5" data-grow aria-busy=${this.pending !== null || (!this.profile && !this.loadError)}>
+          <section class="fd-band fd-stack" data-gap="5" data-grow aria-busy=${this.pending !== null}>
             ${this.fields()}
             ${this.profile ? deleteSection(this.profile.email, this.pending, this.submit) : nothing}
           </section>

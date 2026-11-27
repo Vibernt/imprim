@@ -34,7 +34,7 @@ function agentControls(value: Client, controls: ClientControls) {
       unit: 'days', min: 1, hint: 'People approve again after this long.' })}
     ${amount({ id: 'f-agent_token_rate', label: 'Token requests per agent', name: 'agent_token_rate', value: value.agent_token_rate,
       unit: 'a minute', min: 10, max: 100000, hint: 'Each connection also has its own limit of 60 a minute.' })}
-    ${toggle({ id: 'f-agent_consent_mfa', label: 'Second factor at consent', desc: 'Ask for a code or a passkey before a person approves an agent.',
+    ${toggle({ id: 'f-agent_consent_mfa', label: 'Two-step verification at consent', desc: 'Ask for a code or a passkey before a person approves an agent.',
       name: 'agent_consent_mfa', on: 'required', checked: value.agent_consent_mfa === 'required' })}
     ${toggle({ id: 'f-agent_dpop', label: 'Require key-bound tokens', desc: 'Agents prove a key with every request (DPoP).',
       name: 'agent_dpop', on: 'required', checked: value.agent_dpop === 'required' })}

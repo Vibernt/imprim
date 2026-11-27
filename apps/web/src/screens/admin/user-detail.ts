@@ -1,26 +1,27 @@
 import { html, nothing, type PropertyValues } from 'lit';
-import { navigate, type View } from '../../lib/router';
-import { fieldWithAction, setting } from '../page-layout';
-import { text } from './core-fields';
+import { overlays } from 'fire-design';
+import { api } from '../../lib/api';
+import type { View } from '../../lib/router';
+import { HeldRows } from '../held';
+import { recordSkeleton } from '../loading';
+import { menuTrigger, rowMenu } from '../row-menu';
 import { AdminScreen, corePage } from './core-screen';
-import { card, confirmPhrase, segment, table, when } from './core-view';
-import { methodLabel } from './sign-in-methods';
-import { userRecord, verificationMethods, type UserRecord } from './user-record';
+import { segment, status, when } from './core-view';
+import { recordLayout } from './record-layout';
+import { labels, reviewField, userActionsId, userConfirmation, type Review, type UserAction } from './user-actions';
+import { linkedIdentities, sessionMenuId, userFacts, userSessions, type UserRecord } from './user-record';
 
-type Action = 'block' | 'unblock' | 'delete' | 'reset-mfa' | 'revoke-session';
-type Review = { action: Exclude<Action, 'unblock'>; sid?: string };
-const labels = {
-  block: 'Block user', unblock: 'Unblock user', delete: 'Delete user', 'reset-mfa': 'Reset two-factor', 'revoke-session': 'Revoke session',
-};
-const success = {
-  block: 'User blocked', unblock: 'User unblocked', delete: 'User deleted', 'reset-mfa': 'Two-factor reset', 'revoke-session': 'Session revoked',
+const success: Record<UserAction, string> = {
+  block: 'User blocked', unblock: 'User unblocked', delete: 'User deleted', 'reset-mfa': 'Two-step verification reset',
 };
 const apiPath = (id: string) => '/admin/api/users/' + segment(id);
 const back = { path: '/admin/users', label: 'Users' };
 
 class UserDetail extends AdminScreen<UserRecord> {
+  protected readonly skeleton = recordSkeleton;
   static override properties = { review: { state: true } };
   declare private review: Review | undefined;
+  private readonly holds = new HeldRows(() => this.requestUpdate());
 
   protected override requestPath(view: View) { return apiPath(view.params.id); }
 
@@ -32,86 +33,63 @@ class UserDetail extends AdminScreen<UserRecord> {
     super.willUpdate(changed);
   }
 
-  private act(user: UserRecord, action: Action, body: object = {}) {
+  private focusAfterUpdate(id: string) {
+    void this.updateComplete.then(() => this.querySelector<HTMLElement>(`#${CSS.escape(id)}`)?.focus());
+  }
+
+  private act(user: UserRecord, action: UserAction, body: object = {}) {
     void this.write(apiPath(user.id) + '/' + action, body, success[action], () => {
       this.review = undefined;
       return this.reload();
     });
   }
 
-  private setReview = (review: Review) => {
+  private select(review?: Review) {
+    if (this.pending) return;
     this.review = review;
-    void this.updateComplete.then(() => this.querySelector<HTMLInputElement>('#confirm-user-action')?.focus());
-  };
-
-  private confirm(user: UserRecord, review: Review) {
-    return confirmPhrase({
-      id: 'confirm-user-action', phrase: user.email, label: 'Type the user’s email',
-      action: labels[review.action], pending: this.pending, cancel: () => { this.review = undefined; },
-      submit: (_, data) => this.act(user, review.action, review.sid === undefined
-        ? review.action === 'reset-mfa' ? { reason: data.get('reason') } : {}
-        : { sid: review.sid }),
-      fields: review.action === 'reset-mfa' ? text({
-        id: 'reason', name: 'reason', label: 'Reason', required: true, minlength: 5, maxlength: 500,
-        placeholder: 'Lost phone, identity checked by video call', hint: 'Kept in the audit log. The person is told by email.',
-      }) : undefined,
-    });
+    this.focusAfterUpdate(review ? reviewField(review) : menuTrigger(userActionsId));
   }
 
-  private sessions(user: UserRecord) {
-    return table('Sessions', ['Method', 'Started', 'Expires', 'Actions'], user.sessions.map(session => [
-      methodLabel(session.method), when(session.auth_time * 1000), when(session.expires_at), html`
-        <button class="fd-btn" type="button" data-variant="outline"
-          aria-label=${'Revoke session ' + session.sid} ?disabled=${this.pending || Boolean(this.review)}
-          @click=${() => this.setReview({ action: 'revoke-session', sid: session.sid })}>Revoke</button>`,
-    ]), ['No sessions', 'Signed-in sessions appear here.'], { emptyOnly: true });
+  private revoke(user: UserRecord, session: UserRecord['sessions'][number]) {
+    const id = sessionMenuId(session);
+    const current = () => this.isConnected && this.view.params.id === user.id;
+    this.holds.start(id, {
+      title: 'Revoking session',
+      description: 'Started ' + when(session.auth_time * 1000),
+      run: send => api<{ delivery?: { message?: string } }>(apiPath(user.id) + '/revoke-session', { method: 'POST', body: { sid: session.sid }, ...send }),
+      failed: error => { if (current()) this.mutationError(error); },
+      done: async result => {
+        if (!current()) return;
+        overlays.toast({ title: 'Session revoked', description: result.delivery?.message, tone: 'success' });
+        await this.reload();
+      },
+    }, () => { if (current()) this.focusAfterUpdate(menuTrigger(id)); });
   }
 
-  private reviewButton(action: Review['action']) {
-    return html`<button class="fd-btn" data-variant="outline" type="button" ?disabled=${this.pending || Boolean(this.review)}
-      @click=${() => this.setReview({ action })}>${labels[action]}</button>`;
-  }
-
-  private merge(user: UserRecord, event: SubmitEvent) {
-    event.preventDefault();
-    const survivor = new FormData(event.currentTarget as HTMLFormElement).get('surviving_id') as string;
-    void navigate('/admin/users/' + segment(user.id) + '/merge?' + new URLSearchParams({ surviving_id: survivor }));
-  }
-
-  private details(user: UserRecord) {
-    const review = this.review;
-    const confirmation = (action: Review['action']) => review?.action === action
-      ? this.confirm(user, review) : nothing;
-    return html`
-      <div class="fd-stack" data-gap="6">
-        ${card('User record', userRecord(user))}
-        ${card('Sessions', html`${this.sessions(user)}${confirmation('revoke-session')}`)}
-        ${card('Two-step verification', html`
-          ${setting('Verification methods', verificationMethods(user), this.reviewButton('reset-mfa'), true)}
-          ${confirmation('reset-mfa')}`, 'Reset removes authenticators and passkeys so the person can enrol again.')}
-        ${card('Merge into another user', html`
-          <form class="fd-form" method="get" @submit=${(event: SubmitEvent) => this.merge(user, event)}>
-            ${fieldWithAction('surviving_id', 'Surviving user ID', undefined, html`
-              <input class="fd-input fd-grow" id="surviving_id" name="surviving_id" data-mono required autocomplete="off" spellcheck="false">`, html`
-              <button class="fd-btn" type="submit" data-variant="outline" ?disabled=${this.pending || Boolean(review)}>Review merge</button>`)}
-          </form>`, 'Merging deletes this user.')}
-        ${card('Sign-in access', html`
-          ${user.status === 'blocked' ? setting('Sign-in is blocked', '', html`
-            <button class="fd-btn" type="button" data-variant="outline" ?disabled=${this.pending || Boolean(review)}
-              @click=${() => this.act(user, 'unblock')}>Unblock user</button>`)
-            : setting('Block sign-in', 'Ends every session and agent grant.', this.reviewButton('block'), true)}
-          ${confirmation('block')}
-        `)}
-        ${card('Delete user', html`
-          ${setting('Permanently delete this user', 'Ends every session and agent grant.', this.reviewButton('delete'), true)}
-          ${confirmation('delete')}
-        `)}
-      </div>`;
+  private actions(user: UserRecord) {
+    const blocked = user.status === 'blocked';
+    return rowMenu(userActionsId, 'More actions for ' + user.email, [
+      blocked ? { label: labels.unblock, run: () => this.act(user, 'unblock') }
+        : { label: labels.block, run: () => this.select('block') },
+      ...(user.verification_methods.length ? [{ label: labels['reset-mfa'], run: () => this.select('reset-mfa') }] : []),
+      { label: labels.merge, run: () => this.select('merge') },
+      { label: labels.delete, danger: true, run: () => this.select('delete') },
+    ], this.pending || user.sessions.some(session => this.holds.has(sessionMenuId(session))) || Boolean(this.review));
   }
 
   protected override render() {
-    return corePage(this.data?.email ?? 'User detail', 'Sessions, status and sign-in methods.',
-      this.content(user => this.details(user)), { back, busy: this.pending || (!this.data && !this.failure) });
+    const user = this.data;
+    return corePage(user?.email ?? 'User detail', user ? 'Created ' + when(user.created) : '',
+      this.content(record => recordLayout(html`
+        ${this.review ? userConfirmation(record, this.review, this.pending, () => this.select(),
+          (action, body) => this.act(record, action, body)) : nothing}
+        ${userSessions(record, id => this.holds.has(id), session => this.revoke(record, session), this.pending || Boolean(this.review))}
+        ${linkedIdentities(record)}
+      `, userFacts(record))), {
+        back, busy: this.pending || (!user && !this.failure), actions: user ? this.actions(user) : undefined, pad: user ? 'none' : undefined,
+        meta: user ? html`${status(user.status, undefined, 'pill')}
+          ${user.verification_methods.length ? status('Two-step verification on', 'success', 'pill') : nothing}` : undefined,
+      });
   }
 }
 

@@ -1,30 +1,36 @@
-import { html, type TemplateResult } from 'lit';
+import { html, nothing } from 'lit';
+import { icon } from '../../../lib/icon';
 import { eventLabel } from '../audit-events';
 import { card } from '../../page-layout';
-import { cap, empty, keyValues, link, mono, status, table, when } from '../realm-ui';
+import { status } from '../core-view';
+import { recordFacts } from '../record-layout';
+import { cap, link, mono, table, when } from '../realm-ui';
 import type { Workspace } from './types';
 
 export const products = (values: string[]) => values.length ? html`${values.map((name, i) => html`${i ? ', ' : ''}${mono(name)}`)}` : 'None';
-export const summary = (workspace: Workspace) => keyValues([
-  ['Workspace ID', mono(workspace.id)], ['Kind', cap(workspace.kind)],
-  ['Status', status(cap(workspace.status), workspace.editable ? 'success' : 'neutral')],
+export const kind = (workspace: Workspace) => cap(workspace.kind) + ' workspace';
+export const workspaceStatus = (workspace: Workspace) => status(workspace.status, workspace.status === 'active' ? 'success' : 'neutral', 'pill');
+export const holdReason = 'Apps must release their holds first.';
+
+export const summary = (workspace: Workspace) => recordFacts([
+  ['Workspace ID', mono(workspace.id)], ['Kind', cap(workspace.kind)], ['Status', workspaceStatus(workspace)],
+  ['Holds', workspace.holds.length ? html`
+    <div class="fd-reason">
+      <ul class="fd-stack" data-gap="1">
+        ${workspace.holds.map(hold => html`<li>${mono(hold.client_id)} · ${hold.reason}</li>`)}
+      </ul>
+      ${workspace.editable ? html`<p class="fd-reason-text" id="im-workspace-hold-reason">
+        ${icon('lock')}<span><span class="fd-reason-why">${holdReason}</span></span>
+      </p>` : nothing}
+    </div>` : 'None'],
+  ['Registered resources', workspace.resources.length ? html`<ul class="fd-stack" data-gap="1">
+    ${workspace.resources.map(resource => html`<li>${mono(resource.resource)} · ${mono(resource.client_id)}</li>`)}
+  </ul>` : 'None'],
 ]);
 
-export const optionalTable = (label: string, headers: string[], rows: (TemplateResult | string)[][], description: string) =>
-  rows.length ? table(label, headers, rows) : empty('No ' + label.toLowerCase(), description);
-
-const noActivity = (message: string) => html`<p class="fd-muted">${message}</p>`;
-
-export const activity = (workspace: Workspace) => html`
-  ${card('Resources', workspace.resources.length
-    ? table('Registered resources', ['Resource', 'Client ID'], workspace.resources.map(row => [mono(row.resource), mono(row.client_id)]))
-    : noActivity('No registered resources.'))}
-  ${card('Holds', workspace.holds.length
-    ? table('Holds', ['Client ID', 'Reason'], workspace.holds.map(row => [mono(row.client_id), row.reason]))
-    : noActivity('No holds.'))}
-  ${card('Audit', workspace.audit.length ? html`
-    ${table('Audit events', ['Event', 'Actor', 'Time'], workspace.audit.map(row =>
-      [eventLabel(row.event), row.actor ? mono(row.actor) : '—', when(row.created)]))}
-    <div class="fd-row">${link('/admin/audit?' + new URLSearchParams({ target: workspace.id }), 'View audit log')}</div>
-  ` : noActivity('No audit events.'))}
-`;
+export const activity = (workspace: Workspace) => card('Recent activity', html`
+  ${table('Audit events', ['Event', 'Actor', 'Time'], workspace.audit.map(row =>
+    [eventLabel(row.event), row.actor ? mono(row.actor) : '—', when(row.created)]),
+    ['No audit events', 'Recent changes to this workspace appear here.'], { emptyOnly: true })}
+  <div class="fd-row">${link('/admin/audit?' + new URLSearchParams({ target: workspace.id }), 'View audit log')}</div>
+`);

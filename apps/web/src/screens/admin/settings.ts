@@ -3,6 +3,7 @@ import { card, codeBlock, setting } from '../page-layout';
 import { advanced } from './core-fields';
 import { AdminRealmScreen } from './realm-screen';
 import { cap, keyValues, mono, status, when } from './realm-ui';
+import { recordSkeleton } from '../loading';
 
 type QueueStatus = { pending: number; oldest: number | null };
 
@@ -22,6 +23,7 @@ const queues = [['Logout events', 'human'], ['Agent revocations', 'agent'], ['Us
 const turnstileTone = { on: 'success', off: 'neutral', misconfigured: 'danger' } as const;
 
 class RealmSettingsScreen extends AdminRealmScreen<Settings> {
+  protected readonly skeleton = recordSkeleton;
   protected heading = 'Configuration';
   protected override get description() { return 'Read-only deployment configuration.'; }
   protected endpoint() { return '/admin/api/settings'; }

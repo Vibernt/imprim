@@ -1,22 +1,32 @@
-import { html, nothing } from 'lit';
-import { api, ApiError } from '../../../lib/api';
+import { html, nothing, type PropertyValues } from 'lit';
+import { ApiError } from '../../../lib/api';
 import { navigate } from '../../../lib/router';
+import { HeldRows } from '../../held';
+import { menuTrigger } from '../../row-menu';
 import { AdminRealmScreen } from '../realm-screen';
 import { backLink, failed, formData, mono, notice } from '../realm-ui';
-import { closeWorkspace, workspaceDetail } from './detail';
+import { closeWorkspace, workspaceActions, workspaceDetail } from './detail';
 import { createForm } from './forms';
 import { workspaceList } from './list';
-import { root, workspacePath, type Action, type Submit, type WorkspacePage } from './types';
+import { memberRoleId } from './members';
+import { kind, workspaceStatus } from './summary';
+import { root, workspacePath, type Controls, type Submit, type WorkspacePage } from './types';
+import { apiRoot, formBody, titles, writeWorkspace } from './writes';
+import { recordSkeleton, type LoadingPreset } from '../../loading';
 
-const apiRoot = '/admin/api/workspaces';
-const titles: Record<Action, string> = {
-  create: 'Workspace created', rename: 'Name saved', products: 'Products saved', invite: 'Invitation sent',
-  'revoke-invitation': 'Invitation revoked', role: 'Role saved', 'remove-member': 'Member removed', close: 'Workspace closed',
-};
-
+type Review = { rename: true } | { member: string };
 class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
-  static override properties = { ...AdminRealmScreen.properties, invitationError: { state: true } };
-  declare private invitationError: { endpoint: string; description: string } | undefined;
+  static override properties = { review: { state: true }, invitationError: { state: true } };
+  declare private review: Review | undefined;
+  declare private invitationError: string | undefined;
+  private readonly holds = new HeldRows(() => this.requestUpdate());
+
+  protected get skeleton(): readonly LoadingPreset[] {
+    if (this.workspaceId) return recordSkeleton;
+    if (this.creating) return [{ name: 'form', options: { count: 4 } }];
+    return [{ name: 'table', options: { rows: 5, cols: 4 } }];
+  }
+
   private get workspaceId() { return this.view.params.id; }
   private get closing() { return this.view.route.path.endsWith('/close'); }
   private get creating() { return !this.workspaceId && this.view.query.get('create') === '1'; }
@@ -32,12 +42,21 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
   protected override get description() {
     if (this.closing) return 'Review the effects of closing this workspace.';
     if (this.creating) return 'Create a team and choose its first owner.';
-    return this.workspaceId ? 'Manage membership, products and access.' : 'Teams and personal workspaces in this realm.';
+    if (this.workspace) return kind(this.workspace);
+    return this.workspaceId ? '' : 'Teams and personal workspaces in this realm.';
   }
 
   protected endpoint() {
     if (this.workspaceId) return apiRoot + '/' + encodeURIComponent(this.workspaceId) + (this.closing ? '/close' : '');
     return apiRoot + (this.creating ? '' : '?' + this.view.query);
+  }
+
+  protected override willUpdate(changed: PropertyValues) {
+    if (changed.has('view')) {
+      this.review = undefined;
+      this.invitationError = undefined;
+    }
+    super.willUpdate(changed);
   }
 
   protected override back() {
@@ -46,45 +65,80 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
     return this.workspaceId || this.creating ? backLink(root, 'Workspaces') : nothing;
   }
 
+  protected override meta() {
+    return this.workspace && !this.closing ? workspaceStatus(this.workspace) : nothing;
+  }
+
+  protected override contentPadding() {
+    return this.workspace && !this.closing ? 'none' as const : nothing;
+  }
+
   protected override actions() {
+    const workspace = this.workspace;
+    if (workspace?.editable && !this.closing) {
+      return workspaceActions(workspace, this.pending, () => this.select({ rename: true }, 'workspace-name'));
+    }
     return this.data?.enabled && !this.workspaceId && !this.creating ? html`
       <a class="fd-btn" data-variant="primary" href=${root + '?create=1'}>Create workspace</a>` : nothing;
+  }
+
+  private focusAfterUpdate(id: string) {
+    void this.updateComplete.then(() => this.querySelector<HTMLElement>(`#${CSS.escape(id)}`)?.focus());
+  }
+
+  private select(review: Review | undefined, focus: string) {
+    this.review = review;
+    this.focusAfterUpdate(focus);
   }
 
   private submit: Submit = async (action, event) => {
     if (event.defaultPrevented) return;
     event.preventDefault();
     if (this.pending) return;
-    this.invitationError = undefined;
-    const form = formData(event);
+    const form = event.currentTarget as HTMLFormElement;
+    const fields = formData(event);
+    const current = this.view;
+    if (action === 'create' || action === 'invite') this.invitationError = undefined;
     this.pending = true;
-    const endpoint = action === 'create' ? apiRoot : apiRoot + '/' + encodeURIComponent(this.workspaceId) + '/' + action;
     try {
-      const body: Record<string, unknown> = action === 'products'
-        ? { add: form.getAll('add_product'), remove: form.getAll('remove_product') }
-        : Object.fromEntries(form);
-      if (action === 'create') body.products = JSON.parse(String(form.get('products')));
-      if (action === 'close') body.confirm = String(body.confirm).trim();
-      const { workspace_id } = await api<{ workspace_id: string }>(endpoint, { method: 'POST', body });
-      if (!this.isConnected) return;
+      const { workspace_id } = await writeWorkspace(this.workspaceId, action, formBody(action, fields));
+      if (!this.isConnected || this.view !== current) return;
       notice(titles[action]);
       if (action === 'create' || action === 'close') await navigate(workspacePath(workspace_id));
-      else await this.load();
+      else {
+        if (action === 'rename' || action === 'role') this.review = undefined;
+        if (action === 'invite' || action === 'products') form.reset();
+        await this.load(false);
+      }
     } catch (error) {
-      if (!this.isConnected) return;
-      if (error instanceof ApiError && error.error === 'no_sign_in_address') {
-        this.invitationError = { endpoint, description: error.description };
+      if (!this.isConnected || this.view !== current) return;
+      if ((action === 'create' || action === 'invite') && error instanceof ApiError && error.error === 'no_sign_in_address') {
+        this.invitationError = error.description;
         return;
       }
       const saved = error instanceof ApiError && error.error === 'workspace_invitation_email_failed' && error.details.workspace_id;
       if (saved) {
         notice('Invitation email failed', error instanceof Error ? error.message : undefined, 'danger');
         if (action === 'create') await navigate(workspacePath(saved));
-        else await this.load();
+        else { form.reset(); await this.load(false); }
       } else failed(error);
     } finally {
       this.pending = false;
     }
+  };
+
+  private hold: Controls['hold'] = (id, title, action, body, trigger = menuTrigger(id)) => {
+    const workspace = this.workspaceId;
+    const current = () => this.isConnected && this.workspaceId === workspace && !this.closing;
+    this.holds.start(workspace + ':' + id, {
+      title, run: send => writeWorkspace(workspace, action, body, send),
+      done: async () => {
+        if (!current()) return;
+        notice(action === 'products' ? 'Product removed' : titles[action]);
+        await this.load(false);
+      },
+      failed: error => { if (current()) failed(error); },
+    }, () => { if (current()) this.focusAfterUpdate(trigger); });
   };
 
   protected content(data: WorkspacePage) {
@@ -92,11 +146,16 @@ class WorkspacesScreen extends AdminRealmScreen<WorkspacePage> {
       <p class="fd-callout-title">Shared workspaces are off</p>
       <p class="fd-callout-body">Set ${mono('workspaces')} to ${mono('on')} in this realm’s configuration to enable them.</p>
     </div></div>`;
-    const inviteEndpoint = this.creating ? apiRoot : apiRoot + '/' + encodeURIComponent(this.workspaceId) + '/invite';
-    const error = this.invitationError?.endpoint === inviteEndpoint ? this.invitationError.description : undefined;
     if ('workspace' in data) return this.closing ? closeWorkspace(data.workspace, this.pending, this.submit)
-      : html`${workspaceDetail(data.workspace, this.pending, this.submit, error)}`;
-    if (this.creating) return createForm(this.pending, this.submit, error);
+      : workspaceDetail(data.workspace, {
+        pending: this.pending, submit: this.submit, hold: this.hold, renaming: Boolean(this.review && 'rename' in this.review),
+        invitationError: this.invitationError,
+        role: this.review && 'member' in this.review ? this.review.member : undefined,
+        busy: id => this.holds.has(data.workspace.id + ':' + id),
+        openRole: member => this.select({ member }, memberRoleId(member)),
+        cancel: menu => this.select(undefined, menuTrigger(menu)),
+      });
+    if (this.creating) return createForm(this.pending, this.submit, this.invitationError);
     return workspaceList(data, this.view.query.get('status') ?? '', this.view.query.get('before'));
   }
 }

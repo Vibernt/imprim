@@ -2,6 +2,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { overlays } from 'fire-design';
 import { icon } from '../../lib/icon';
+import { auditDates } from './audit-dates';
 import { text } from './core-fields';
 import { eventLabel, eventLabels } from './audit-events';
 
@@ -20,6 +21,7 @@ function chip(id: string, label: string, value: string, controls: TemplateResult
   </div>
   <div class="fd-popover" id=${id} popover aria-label=${'Filter by ' + label.toLowerCase()}>
     <form class="fd-stack" data-gap="3" method="get" @submit=${(event: SubmitEvent) => {
+      if (event.defaultPrevented) return;
       event.preventDefault();
       overlays.closePopover(id);
       apply(new FormData(event.currentTarget as HTMLFormElement));
@@ -49,9 +51,7 @@ export function auditFilters(query: URLSearchParams, change: Change) {
           ${sortedEvents.map(([key, label]) => html`<option value=${key} ?selected=${event === key}>${label}</option>`)}
         </select></label>
       </div>`, data => change({ event: field(data, 'event') }), () => change({ event: '' }))}
-    ${chip('audit-time-filter', 'Time range', range, html`
-      ${text({ id: 'audit-from', label: 'From (UTC)', name: 'from', type: 'date', value: from })}
-      ${text({ id: 'audit-to', label: 'Through (UTC)', name: 'to', type: 'date', value: to })}`,
+    ${chip('audit-time-filter', 'Time range', range, auditDates(from, to),
       data => change({ from: field(data, 'from'), to: field(data, 'to') }), () => change({ from: '', to: '' }))}
     ${chip('audit-subject-filter', 'Subject', subject, html`
       ${text({ id: 'audit-actor', label: 'Actor ID', name: 'actor', value: actor, mono: true })}

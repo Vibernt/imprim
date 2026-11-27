@@ -1,6 +1,6 @@
 # Imprim account and admin interface
 
-This app uses Fire 0.13.2, Lit light DOM, Vite and TypeScript. [The Web specification](../../docs/WEB.md) defines the interface and API conventions.
+This app uses Fire 0.14.0, Lit light DOM, Vite and TypeScript. [The Web specification](../../docs/WEB.md) defines the interface and API conventions.
 
 ## Current migration
 

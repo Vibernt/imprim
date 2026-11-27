@@ -49,7 +49,7 @@ export const eventLabels: Record<string, string> = {
   magic_delivery_failed: 'Sign-in email delivery failed',
   mfa_factor_added: 'Verification method added',
   mfa_factor_removed: 'Verification method removed',
-  mfa_verified: 'Second factor verified',
+  mfa_verified: 'Two-step verification completed',
   oidc_key_unreadable: 'Signing key could not be read',
   passkey_added: 'Passkey added',
   passkey_removed: 'Passkey removed',

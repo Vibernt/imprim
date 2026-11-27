@@ -14,7 +14,12 @@ export class ApiError extends Error {
 const unsafe = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const csrfCookie = '__Host-vi_csrf=';
 
-export async function api<T>(path: string, options: { method?: string; body?: object } = {}): Promise<T> {
+export interface Send {
+  /** Let the request outlive the page: a held action committed on pagehide must still reach the server. */
+  keepalive?: boolean;
+}
+
+export async function api<T>(path: string, options: { method?: string; body?: object } & Send = {}): Promise<T> {
   const url = new URL(path, location.origin);
   if (url.origin !== location.origin) throw new TypeError('The API URL must be same-origin.');
   const method = (options.method ?? 'GET').toUpperCase();
@@ -25,7 +30,9 @@ export async function api<T>(path: string, options: { method?: string; body?: ob
     if (csrf) headers.set('x-csrf-token', csrf.slice(csrfCookie.length));
   }
 
-  const response = await fetch(url, { method, credentials: 'same-origin', headers, body: JSON.stringify(options.body) });
+  const response = await fetch(url, {
+    method, credentials: 'same-origin', headers, body: JSON.stringify(options.body), keepalive: options.keepalive ?? false,
+  });
   if (response.ok) return response.json() as Promise<T>;
 
   const problem = await response.json().catch(() => null) as { error?: string; error_description?: string; workspace_id?: string } | null;

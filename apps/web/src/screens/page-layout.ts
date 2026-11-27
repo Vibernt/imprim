@@ -3,13 +3,14 @@ import { keyed } from 'lit/directives/keyed.js';
 
 type OptionalMarkup = TemplateResult | typeof nothing;
 
-export function pageHead(title: string, description = '', back: OptionalMarkup = nothing, actions: OptionalMarkup = nothing) {
+export function pageHead(title: string, description = '', back: OptionalMarkup = nothing, actions: OptionalMarkup = nothing, meta: OptionalMarkup = nothing) {
   return html`<section class="fd-band" data-pad="sm">
     <div class="fd-page-head">
       <div class="fd-page-head-text">
         ${back === nothing ? nothing : html`<div class="fd-row">${back}</div>`}
         <h1 class="fd-page-head-title">${title}</h1>
         ${description ? html`<p class="fd-page-head-desc">${description}</p>` : nothing}
+        ${meta === nothing ? nothing : html`<div class="fd-row" data-wrap data-gap="2">${meta}</div>`}
       </div>
       ${actions === nothing ? nothing : html`<div class="fd-page-head-actions">${actions}</div>`}
     </div>

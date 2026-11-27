@@ -12,7 +12,8 @@ export const clientPath = (id: string) => '/admin/clients/' + (id === 'new' ? '%
 export const userPath = (id: string) => '/admin/users/' + segment(id);
 export const cap = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 const tones: Record<string, string> = { active: 'success', blocked: 'danger', deleted: 'neutral', disabled: 'neutral', pending: 'warning', expired: 'danger' };
-export const status = (value: string, tone = tones[value]) => html`<span class="fd-status" data-tone=${tone ?? nothing}>${cap(value)}</span>`;
+export const status = (value: string, tone = tones[value], variant?: 'pill') => html`
+  <span class="fd-status" data-tone=${tone ?? nothing} data-variant=${variant ?? nothing}>${cap(value)}</span>`;
 export const when = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 
 export { table } from './list-view';
@@ -44,9 +45,9 @@ export function confirmPhrase(options: {
     event.preventDefault();
     if (options.pending) return;
     const data = new FormData(event.currentTarget as HTMLFormElement);
-    const phrase = data.get('confirm');
-    if (phrase === options.phrase) {
-      options.submit(phrase, data);
+    const typed = String(data.get('confirm') ?? '');
+    if (typed === options.phrase) {
+      options.submit(options.phrase, data);
     } else {
       const input = (event.currentTarget as HTMLFormElement).elements.namedItem('confirm') as HTMLInputElement;
       input.setCustomValidity('Type the text exactly as shown.');

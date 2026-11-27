@@ -1,9 +1,8 @@
 import { html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { icon } from '../../../lib/icon';
-import { t } from '../../../lib/i18n';
 import { href, navigate } from '../../../lib/router';
-import { cap, confirmPhrase, mono, status, table, when } from '../core-view';
+import { cap } from '../core-view';
 
 export const path = '/admin/signups';
 const statuses = ['pending', 'approved', 'declined', 'expired'] as const;
@@ -14,10 +13,7 @@ export interface SignupRow {
   app_name: string | null; provider: 'google' | 'github' | null; status: Status; created: number; reason: string | null;
 }
 
-const methodLabel = (row: SignupRow) => row.provider === 'google' ? 'Google' : row.provider === 'github' ? 'GitHub' : t('Email');
-
-export const actionId = (id: string, action: Decision) => `signup-${id}-${action}`;
-export const confirmationId = 'signup-confirm-email';
+export const methodLabel = (row: SignupRow) => row.provider === 'google' ? 'Google' : row.provider === 'github' ? 'GitHub' : 'Email';
 
 export function statusFilter(value: string) {
   const active = value !== 'pending';
@@ -34,42 +30,4 @@ export function statusFilter(value: string) {
         href=${href(value === 'pending' ? path : path + '?status=' + value)}>${cap(value)}</a>`)}
     </div>
   </div></div>`);
-}
-
-function confirmation(row: SignupRow, action: Decision, pending: boolean, cancel: () => void,
-  submit: (body: object) => void) {
-  return html`<div class="fd-column" data-size="sm">
-    <p class="fd-muted">${t('Sign-up method: {method}', { method: methodLabel(row) })}</p>
-    ${confirmPhrase({ id: confirmationId, phrase: row.email, label: 'Type the email to confirm',
-      action: cap(action) + ' request', pending, variant: action === 'approve' ? 'primary' : 'danger', cancel,
-      submit: (_, data) => submit(action === 'decline' ? { reason: data.get('reason') } : {}),
-      fields: action === 'decline' ? html`<div class="fd-field">
-        <label class="fd-field-label" for="signup-decline-reason">Reason for administrators (optional)</label>
-        <textarea id="signup-decline-reason" class="fd-textarea" name="reason" maxlength="500" rows="2"></textarea>
-      </div>` : undefined })}
-  </div>`;
-}
-
-export function signupTable(rows: SignupRow[], filter: string, selection: { id: string; action: Decision } | undefined,
-  pending: boolean, select: (id: string, action: Decision) => void, cancel: () => void,
-  submit: (id: string, action: Decision, body: object) => void) {
-  const isPending = filter === 'pending';
-  const selected = rows.find(row => row.id === selection?.id && row.status === 'pending');
-  return html`${table('Sign-up requests', ['Email', 'Workspace name', 'Product / app', t('Sign-up method'), 'Requested',
-    ...(isPending ? ['Actions'] : ['Status'])], rows.map(row => [
-      row.email, row.workspace_name,
-      html`<div class="fd-table-two"><span>${mono(row.product)}</span><span class="fd-table-sub">${row.app_name ?? row.client_id}</span></div>`,
-      methodLabel(row), when(row.created),
-      isPending ? html`<div class="fd-row" data-wrap data-gap="2">
-        <button id=${actionId(row.id, 'approve')} class="fd-btn" type="button" data-variant="outline"
-          ?disabled=${pending} @click=${() => select(row.id, 'approve')}>Approve</button>
-        <button id=${actionId(row.id, 'decline')} class="fd-btn" type="button" data-variant="secondary"
-          ?disabled=${pending} @click=${() => select(row.id, 'decline')}>Decline</button>
-      </div>` : html`<div class="fd-table-two">
-        ${status(row.status, row.status === 'approved' ? 'success' : undefined)}
-        ${row.reason ? html`<span class="fd-table-sub">${row.reason}</span>` : nothing}
-      </div>`,
-    ]), ['No requests in this status', 'Choose another status or check again later.'])}
-    ${selected && selection ? confirmation(selected, selection.action, pending, cancel,
-      body => submit(selected.id, selection.action, body)) : nothing}`;
 }

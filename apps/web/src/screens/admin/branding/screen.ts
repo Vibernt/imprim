@@ -4,7 +4,7 @@ import { forms } from 'fire-design';
 import { keyed } from 'lit/directives/keyed.js';
 import { api } from '../../../lib/api';
 import { icon } from '../../../lib/icon';
-import { card, setting } from '../../page-layout';
+import { setting } from '../../page-layout';
 import { AdminRealmScreen } from '../realm-screen';
 import { failed, formData, notice } from '../realm-ui';
 import { collect, copyFields, languageFields, nameFields } from './fields';
@@ -12,13 +12,15 @@ import { openLookPreview } from './look';
 import { signatureFields } from './signature';
 import { encodeFile, logoFields } from './logos';
 import type { Asset, BrandResponse, Branding, Look } from './types';
-import { sections, specimen, type Section } from './view';
+import { brandingTabs, specimen, type Section } from './view';
+import type { LoadingPreset } from '../../loading';
 
 class BrandingScreen extends AdminRealmScreen<BrandResponse> {
+  protected readonly skeleton: readonly LoadingPreset[] = [{ name: 'form', options: { count: 5 } }];
   static override properties = {
-    section: { state: true }, assetDraft: { state: true }, lookPending: { state: true }, look: { state: true }, reset: { state: true }, previewCopy: { state: true },
+    assetDraft: { state: true }, lookPending: { state: true }, look: { state: true }, reset: { state: true }, previewCopy: { state: true },
   };
-  declare private section: Section;
+  private section: Section = 'look';
   declare private assetDraft: Branding;
   declare private lookPending: boolean;
   declare private reset: number;
@@ -32,7 +34,6 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
 
   constructor() {
     super();
-    this.section = 'look';
     this.assetDraft = {};
     this.look = {};
     this.reset = 0;
@@ -153,25 +154,20 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
       languages: languageFields(branding),
       words: html`<p class="fd-muted">Leave a field empty to use the built-in words in that language.</p>${copyFields(branding)}`,
     };
-    return keyed(this.reset, html`<div class="fd-stack" data-gap="6">
-      <nav class="fd-row" data-wrap data-gap="2" aria-label="Branding">
-        ${sections.map(([id, label, glyph]) => html`<button class="fd-btn" data-variant=${this.section === id ? 'outline' : 'ghost'} type="button"
-          aria-pressed=${this.section === id} @click=${() => { this.section = id; }}>${icon(glyph)}<span>${label}</span></button>`)}
-      </nav>
-      <form class="fd-form" data-size="full" method="post" novalidate @submit=${this.save} @input=${this.updatePreview}>
-        <div class="fd-grid" data-cols="2" data-gap="6">
-          <fieldset class="fd-stack" data-gap="4" ?disabled=${this.pending}>
-            <legend class="fd-sr-only">Branding</legend>
-            ${sections.map(([id, label]) => html`<div ?hidden=${this.section !== id}>${card(label, panels[id])}</div>`)}
-          </fieldset>
-          <div>${specimen({ ...this.assetDraft, ...this.previewCopy }, this.view.session.realm.display_name)}</div>
-        </div>
-        <div class="fd-form-actions" data-variant="sticky">
-          <button type="button" class="fd-btn" data-variant="ghost" ?disabled=${this.pending || this.lookPending}
-            @click=${this.discard}>Discard changes</button>
-          <button type="submit" class="fd-btn" data-variant="primary" ?disabled=${this.pending || this.lookPending}>Save branding</button>
-        </div>
-      </form>
+    return keyed(this.reset, html`<div class="fd-split">
+      <div class="fd-split-main">
+        <form class="fd-form" data-size="full" method="post" novalidate @submit=${this.save} @input=${this.updatePreview}>
+          ${brandingTabs(this.section, panels, section => { this.section = section; }, this.pending)}
+          <div class="fd-form-actions" data-variant="sticky">
+            <button type="button" class="fd-btn" data-variant="ghost" ?disabled=${this.pending || this.lookPending}
+              @click=${this.discard}>Discard changes</button>
+            <button type="submit" class="fd-btn" data-variant="primary" ?disabled=${this.pending || this.lookPending}>Save branding</button>
+          </div>
+        </form>
+      </div>
+      <aside class="fd-panel" aria-label="Sign-in preview">
+        <div class="fd-panel-body">${specimen({ ...this.assetDraft, ...this.previewCopy }, this.view.session.realm.display_name)}</div>
+      </aside>
     </div>`);
   }
 }

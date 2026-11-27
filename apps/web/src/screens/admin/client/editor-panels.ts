@@ -23,12 +23,13 @@ export const secretPanel = (secret: string, dismiss: () => void) => card('Copy t
   </div>`, 'Store it in your app’s secrets. It is shown once.');
 
 export function rotationConfirmation(client: Client, pending: boolean, cancel: () => void, rotate: (convert: boolean) => void) {
-  return card('Confirm secret rotation',
-    confirmPhrase({
+  return html`
+    <p class="fd-small">Needs a sign-in in the last 10 minutes.</p>
+    ${confirmPhrase({
       id: 'confirm-client-rotation', phrase: client.id, label: 'Type the client ID', action: 'Rotate secret', pending,
       cancel, submit: (_, form) => rotate(form.get('make_confidential') === 'true'),
       fields: client.confidential ? undefined : checkbox('make_confidential', 'Make this public client confidential', false, 'true', true),
-    }), 'Rotating stops the current secret. Needs a sign-in in the last 10 minutes.');
+    })}`;
 }
 
 export const deliveryStatus = (delivery: Delivery) => html`

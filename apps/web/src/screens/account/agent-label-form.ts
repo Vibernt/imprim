@@ -17,13 +17,3 @@ export function agentLabelForm(grantId: string, label: string | null, pending: b
     </div>
   </form>`;
 }
-
-export function confirmRevokeAgent(id: string, name: string, pending: boolean, revoke: () => void, cancel: () => void) {
-  return html`<div class="fd-stack" data-gap="2">
-    <p class="fd-small">${t('Revoke access for {name}?', { name })}</p>
-    <div class="fd-row" data-wrap>
-      <button class="fd-btn" data-variant="ghost" type="button" id=${`agent-revoke-cancel-${id}`} ?disabled=${pending} @click=${cancel}>${t('Cancel')}</button>
-      <button class="fd-btn" data-variant="danger" type="button" ?disabled=${pending} @click=${revoke}>${t('Revoke')}</button>
-    </div>
-  </div>`;
-}

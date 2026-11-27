@@ -5,6 +5,7 @@ import { FireLight } from '../../lib/fire-light';
 import { icon } from '../../lib/icon';
 import { href, type View } from '../../lib/router';
 import { pageHead } from '../page-layout';
+import { loading, type LoadingPreset } from '../loading';
 
 const { toast } = overlays;
 const redirecting = (error: unknown) => error instanceof ApiError && error.redirecting;
@@ -25,6 +26,7 @@ export abstract class AdminScreen<T> extends FireLight {
   private read = 0;
   private path?: string;
 
+  protected abstract readonly skeleton: readonly LoadingPreset[];
   protected abstract requestPath(view: View): string;
 
   protected override willUpdate(changed: PropertyValues) {
@@ -68,13 +70,18 @@ export abstract class AdminScreen<T> extends FireLight {
       toast({ title: typeof success === 'string' ? success : success(result), description: delivery?.message, tone: 'success' });
     } catch (error) {
       if (this.isConnected && read === this.read && !redirecting(error)) {
-        if (this.inlineSaveErrors) this.saveError = describe(error);
-        else toast({ title: 'Change could not be saved', description: describe(error), tone: 'danger' });
+        this.mutationError(error);
       }
     } finally {
       if (current === this.path) this.pending = false;
     }
   }
+
+  protected mutationError = (error: unknown) => {
+    if (!this.isConnected || redirecting(error)) return;
+    if (this.inlineSaveErrors) this.saveError = describe(error);
+    else toast({ title: 'Change could not be saved', description: describe(error), tone: 'danger' });
+  };
 
   protected saveErrorNotice() {
     return this.saveError ? html`
@@ -90,20 +97,19 @@ export abstract class AdminScreen<T> extends FireLight {
         <p class="fd-empty-text">${this.failure}</p>
         <div class="fd-empty-actions"><button class="fd-btn" type="button" @click=${this.reload}>Try again</button></div>
       </div>`;
-    return html`
-      <div role="status"><span class="fd-sr-only">Loading</span><span class="fd-spinner" aria-hidden="true"></span></div>`;
+    return loading(this.skeleton, { status: 'Loading', late: 'Still loading. This is taking longer than usual.' });
   }
 }
 
 export function corePage(title: string, description: string, content: TemplateResult, options: {
-  back?: { path: string; label: string }; actions?: TemplateResult; busy?: boolean;
+  back?: { path: string; label: string }; actions?: TemplateResult | typeof nothing; busy?: boolean; meta?: TemplateResult; pad?: 'none';
 } = {}) {
   return html`
-    <main class="fd-page">
+    <main class="fd-page" id="main" tabindex="-1">
       <div class="fd-frame">
         ${pageHead(title, description, options.back ? html`
-          <a class="fd-back" href=${href(options.back.path)}>${icon('arrow-left')}<span>${options.back.label}</span></a>` : nothing, options.actions)}
-        <section class="fd-band" data-grow aria-busy=${options.busy ?? false}>${content}</section>
+          <a class="fd-back" href=${href(options.back.path)}>${icon('arrow-left')}<span>${options.back.label}</span></a>` : nothing, options.actions, options.meta)}
+        <section class="fd-band" data-grow data-pad=${options.pad ?? nothing} aria-busy=${options.busy ?? false}>${content}</section>
       </div>
     </main>`;
 }

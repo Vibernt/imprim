@@ -63,11 +63,6 @@ export function workspaceTable(label: string, columns: Column[], rows: TemplateR
   </div>`;
 }
 
-export function skeletonRows(columns: Column[]) {
-  return Array.from({ length: 3 }, () => html`<tr data-skeleton aria-hidden="true">
-    ${columns.map(() => html`<td><span class="fd-table-skeleton" data-size="md"></span></td>`)}</tr>`);
-}
-
 export function tableStatus(columns: number, message: string, retry?: () => void, title?: string) {
   return html`<tr class="fd-table-state" data-state=${retry ? 'error' : nothing}><td colspan=${columns}>
     <div class="fd-table-empty" data-tone=${retry ? 'danger' : nothing} role=${retry ? 'alert' : nothing}>

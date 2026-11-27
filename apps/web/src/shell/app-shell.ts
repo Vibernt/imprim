@@ -62,6 +62,7 @@ export class AppShell extends FireLight implements Outlet {
     const navigation = admin ? 'Admin console' : t('Your account');
     const section = typeof view.route.title === 'function' ? view.route.title(view) : view.route.title;
     return html`
+      <a class="fd-skip" href="#main">${admin ? 'Skip to content' : t('Skip to content')}</a>
       <div class="fd-app" data-sidebar="expanded" @im-signup-decided=${this.refreshSignups}>
         <aside class="fd-sidebar" aria-label=${navigation}>
           <div class="fd-sidebar-head">

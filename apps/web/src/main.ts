@@ -21,8 +21,11 @@ async function start(): Promise<void> {
     await startRouter({ routes: visibleRoutes, session, outlet, base: import.meta.env.BASE_URL,
       title: (title) => `${title} · ${session.realm.display_name}` });
   } catch (error) {
-    if (!(error instanceof ApiError && error.redirecting)) outlet.startupFailed = true;
+    if (error instanceof ApiError && error.redirecting) return;
+    outlet.startupFailed = true;
+    await outlet.updateComplete;
   }
+  document.querySelector('.fd-skeleton-app')?.remove();
 }
 
 void start();

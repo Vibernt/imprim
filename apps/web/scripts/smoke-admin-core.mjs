@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { sha256 } from '../../server/src/lib/crypto.mjs';
 import { ensureUser } from '../../server/src/services/admission.mjs';
 import { issueSession } from '../../server/src/auth/session.mjs';
+import { detailConfirmation, dismissRowConfirm, enterConfirmationPhrase, openAction, finishHold, postsTo, undoHold } from './smoke-actions.mjs';
 
 const button = (page, name) => page.getByRole('button', { name, exact: true });
 const heading = (page, name) => page.getByRole('heading', { name, exact: true });
@@ -24,7 +25,7 @@ async function fits(page) {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), new URL(page.url()).pathname);
 }
 
-export async function stacked(table, action) {
+export async function stacked(table, action, size = null) {
     await action.waitFor();
     assert.equal(await table.getAttribute('data-stack'), '');
     assert.ok(await table.evaluate(el => {
@@ -33,7 +34,7 @@ export async function stacked(table, action) {
     }), 'the phone table stacks without horizontal scrolling');
     const box = await action.boundingBox();
     assert.ok(box.x >= 0 && box.x + box.width <= 375, 'the action fits in the phone viewport');
-    assert.equal(await action.getAttribute('data-size'), null, 'the action uses the normal Fire size');
+    assert.equal(await action.getAttribute('data-size'), size, 'the action uses the expected Fire size');
 }
 
 function clients(open) {
@@ -137,6 +138,12 @@ function clients(open) {
         await go(page, server, '/admin/clients/smoke-client');
         await heading(page, 'Back-channel delivery').waitFor();
         await page.getByRole('table', { name: 'Back-channel events' }).getByText('Receiver busy').waitFor();
+        const rotations = postsTo(page, '/admin/api/clients/smoke-client/rotate-secret');
+        await button(page, 'Review secret rotation').click();
+        const rotation = page.locator('section[aria-labelledby="client-secret-title"] form.fd-confirm-inline');
+        await rotation.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(rotations.length, 0);
+        await page.waitForFunction(() => document.activeElement?.id === 'im-review-rotation');
         await button(page, 'Review secret rotation').click();
         const convert = page.getByRole('checkbox', { name: 'Make this public client confidential' });
         assert.equal(await convert.getAttribute('required'), '');
@@ -164,6 +171,7 @@ function usersAndAudit(open) {
         const survivor = await ensureUser(server.env, 'survivor@example.com');
         const { session } = await issueSession(server.env, source, 'email');
         db.prepare("UPDATE users SET display_name='Example Source',locale='es' WHERE id=?").run(source.id);
+        db.prepare("INSERT INTO recovery_codes(user_id,hash,created) VALUES(?,'smoke-unused-code',0)").run(source.id);
         const insertUser = db.prepare("INSERT INTO users(id,email,realm_id,created) VALUES(?,?,'default',0)");
         const insertAudit = db.prepare("INSERT INTO audit(event,actor,target,detail,created,realm_id) VALUES('browser_test','operator',?,'{}',?,'default')");
         for (let i = 0; i < 51; i++) {
@@ -183,41 +191,72 @@ function usersAndAudit(open) {
         await page.getByRole('link', { name: source.email }).click();
         await heading(page, source.email).waitFor();
         await fits(page);
-        const facts = page.locator('.fd-kv-item');
+        const main = page.locator('.fd-split-main');
+        const side = page.locator('.fd-split > .fd-panel');
+        const facts = side.locator('.fd-kv-item');
         assert.deepEqual(await facts.locator('.fd-kv-key').allTextContents(), [
-            'Email', 'Name', 'Status', 'Verified', 'Created', 'Locale', 'Sign-in methods', 'Linked identities',
-            'Two-step verification', 'Agent grants', 'User ID',
+            'User ID', 'Name', 'Verified', 'Locale', 'Sign-in methods', 'Two-step verification', 'Agent grants',
         ]);
+        assert.match(await page.locator('.fd-page-head-desc').textContent(), /^Created .* UTC$/);
+        await page.locator('.fd-page-head-text .fd-status[data-variant="pill"]').filter({ hasText: 'Two-step verification on' }).waitFor();
+        await side.getByRole('button', { name: 'Copy user id' }).waitFor({ state: 'attached' });
+        assert.ok((await side.boundingBox()).y >= (await main.boundingBox()).y + (await main.boundingBox()).height);
         await facts.getByText('Example Source', { exact: true }).waitFor();
         await facts.getByText('es', { exact: true }).waitFor();
         assert.equal(await page.locator('details').filter({ hasText: 'Raw record' }).getAttribute('open'), null);
-        assert.equal(await page.getByText('Merging deletes this user.', { exact: true }).isVisible(), true);
+        await main.getByRole('heading', { name: 'Linked identities', exact: true }).waitFor();
+        await main.getByText('No linked identities', { exact: true }).waitFor();
         const sessions = page.getByRole('table', { name: 'Sessions', exact: true });
         await sessions.getByText('Email link', { exact: true }).waitFor();
-        assert.deepEqual(await sessions.locator('th').allTextContents(), ['Method', 'Started', 'Expires', 'Actions']);
-        await stacked(sessions, button(page, 'Revoke session ' + session.sid));
+        assert.deepEqual((await sessions.locator('th').allTextContents()).map(text => text.trim()), ['Method', 'Started', 'Expires', 'Actions']);
+        const sessionTrigger = sessions.getByRole('button', { name: /^More actions for Email link session/ });
+        await stacked(sessions, sessionTrigger, 'sm');
 
-        const confirmUser = async name => {
-            await button(page, name).click();
+        const chooseUser = (email, action) => openAction(page, 'More actions for ' + email, action);
+        const confirmUser = async (name, field = 'confirm-user-action') => {
+            await chooseUser(source.email, name);
             const phrase = page.getByLabel('Type the user’s email');
-            await page.waitForFunction(() => document.activeElement?.id === 'confirm-user-action');
+            await page.waitForFunction(id => document.activeElement?.id === id, field);
             await phrase.fill(source.email);
         };
-        await button(page, 'Revoke session ' + session.sid).click();
-        await page.getByLabel('Type the user’s email').fill(source.email);
-        await page.locator('form[data-fd-confirm-inline]').getByRole('button', { name: 'Revoke session', exact: true }).click();
+        const sessionPosts = postsTo(page, '/admin/api/users/' + source.id + '/revoke-session');
+        const revoke = async () => {
+            await sessionTrigger.click();
+            await sessions.getByRole('menuitem', { name: 'Revoke', exact: true }).click();
+        };
+        await revoke();
+        const sessionRow = sessions.getByRole('row').filter({ hasText: 'Email link' });
+        await undoHold(page, sessionRow, sessionTrigger, sessionPosts);
+        assert.equal(db.prepare('SELECT count(*) n FROM sessions WHERE sid=?').get(session.sid).n, 1);
+        await revoke();
+        await finishHold(page);
         await toast(page, 'Session revoked');
+        assert.deepEqual(sessionPosts, [{ sid: session.sid }]);
         assert.equal(db.prepare('SELECT count(*) n FROM sessions WHERE sid=?').get(session.sid).n, 0);
-        await confirmUser('Reset two-factor');
+        const resetPosts = postsTo(page, '/admin/api/users/' + source.id + '/reset-mfa');
+        await confirmUser('Reset two-step verification', 'reason');
+        await main.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(resetPosts.length, 0);
+        await page.waitForFunction(() => document.activeElement?.id === 'im-more-user-actions');
+        await confirmUser('Reset two-step verification', 'reason');
         await page.getByLabel('Reason').fill('Identity verified by call');
-        await page.locator('form[data-fd-confirm-inline]').getByRole('button', { name: 'Reset two-factor' }).click();
-        await toast(page, 'Two-factor reset');
+        await page.locator('form[data-fd-confirm-inline]').getByRole('button', { name: 'Reset two-step verification' }).click();
+        await toast(page, 'Two-step verification reset');
+        const access = button(page, 'More actions for ' + source.email);
+        await access.click();
+        assert.equal(await page.getByRole('menuitem', { name: 'Reset two-step verification' }).count(), 0);
+        await page.keyboard.press('Escape');
+        const blocks = postsTo(page, '/admin/api/users/' + source.id + '/block');
+        await confirmUser('Block user');
+        await main.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(blocks.length, 0);
         await confirmUser('Block user');
         await page.locator('form[data-fd-confirm-inline]').getByRole('button', { name: 'Block user' }).click();
         await toast(page, 'User blocked');
-        await button(page, 'Unblock user').click();
+        await chooseUser(source.email, 'Unblock user');
         await toast(page, 'User unblocked');
 
+        await confirmUser('Merge into another user', 'surviving_id');
         await page.getByLabel('Surviving user ID').fill(survivor.id);
         await button(page, 'Review merge').click();
         await heading(page, 'Merge ' + source.email + '?').waitFor();
@@ -229,7 +268,11 @@ function usersAndAudit(open) {
         await button(page, 'Merge users').click();
         await heading(page, survivor.email).waitFor();
         assert.equal(db.prepare('SELECT merged_into FROM users WHERE id=?').get(source.id).merged_into, survivor.id);
-        await button(page, 'Delete user').click();
+        const deletes = postsTo(page, '/admin/api/users/' + survivor.id + '/delete');
+        await chooseUser(survivor.email, 'Delete user');
+        await main.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(deletes.length, 0);
+        await chooseUser(survivor.email, 'Delete user');
         const deletion = page.locator('form[data-fd-confirm-inline]');
         await deletion.getByLabel('Type the user’s email').fill(survivor.email);
         await deletion.getByRole('button', { name: 'Delete user' }).click();
@@ -270,8 +313,8 @@ function usersAndAudit(open) {
         assert.equal(await audit.getByText('browser_test', { exact: true }).count(), 0);
         const utc = new Date().toISOString().slice(0, 10);
         await button(page, 'Time range').click();
-        await page.getByLabel('From (UTC)').fill(utc);
-        await page.getByLabel('Through (UTC)').fill(utc);
+        await page.getByRole('textbox', { name: 'From (UTC)', exact: true }).fill(utc);
+        await page.getByRole('textbox', { name: 'Through (UTC)', exact: true }).fill(utc);
         await button(page, 'Apply').click();
         await page.waitForURL(/from=.*&to=/);
         await audit.getByText('Users merged', { exact: true }).waitFor();
@@ -292,7 +335,7 @@ function services(open) {
         const tabbar = page.locator('.fd-tabbar');
         await tabbar.getByRole('button', { name: 'More' }).click();
         const more = page.locator('#im-mobile-nav');
-        await more.getByRole('link', { name: 'Services' }).waitFor();
+        await more.getByRole('link', { name: 'Service clients' }).waitFor();
         assert.equal(await more.getByRole('link', { name: 'Signing keys' }).count(), 0);
         assert.equal(await more.getByRole('link', { name: 'Realms' }).count(), 0);
         await page.keyboard.press('Escape');
@@ -307,18 +350,77 @@ function services(open) {
         await button(page, 'Create service client').click();
         await toast(page, 'Service client created');
         await fits(page);
-        await stacked(page.getByRole('table', { name: 'Service clients' }), button(page, 'Edit deployer'));
-        await button(page, 'Edit deployer').click();
+        const serviceTable = page.getByRole('table', { name: 'Service clients' });
+        await stacked(serviceTable, button(serviceTable, 'More actions for Deployer'), 'sm');
+        const serviceAction = action => openAction(serviceTable, 'More actions for Deployer', action);
+        await serviceAction('Edit');
         await page.getByRole('radio', { name: 'Disabled', exact: true }).check();
         await button(page, 'Save service client').click();
         await toast(page, 'Service client saved');
         assert.equal(db.prepare("SELECT status FROM service_clients WHERE id='deployer'").get().status, 'disabled');
-        await button(page, 'Delete deployer').click();
-        assert.equal(await button(page, 'Delete service client').isDisabled(), true);
-        await page.getByLabel('Type the service client ID').fill('deployer');
-        await button(page, 'Delete service client').click();
+        const deletions = postsTo(page, '/admin/api/services/deployer/delete');
+        const serviceRow = serviceTable.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Deployer', exact: true }) });
+        const confirmation = detailConfirmation(serviceRow);
+        await dismissRowConfirm(page, confirmation, await serviceAction('Delete'), deletions);
+        await dismissRowConfirm(page, confirmation, await serviceAction('Delete'), deletions, 'Escape');
+        await serviceAction('Delete');
+        const confirm = await enterConfirmationPhrase(confirmation, 'Type the service client ID', 'Delete service client', 'deployer', deletions);
+        await confirm.click();
         await heading(page, 'No service clients yet').waitFor();
+        assert.equal(deletions.length, 1);
         assert.equal(db.prepare("SELECT count(*) n FROM service_clients WHERE id='deployer'").get().n, 0);
+    });
+
+    test('a stale service client deletion keeps the typed row question open with the Worker error', async t => {
+        const path = '/admin/api/services/deployer/delete';
+        const { page, server } = await open(t, { role: 'realm', expectedNotFound: [path] });
+        const db = server.env.DB.db;
+        db.prepare(`INSERT INTO service_clients(id,realm_id,app_id,name,owner_email,jwks,scopes,resource_prefixes,created,updated)
+            VALUES('deployer','default','app','Deployer','ops@example.com','{"keys":[]}','[]','[]',0,0)`).run();
+        await go(page, server, '/admin/services');
+        const table = page.getByRole('table', { name: 'Service clients' });
+        const row = table.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Deployer', exact: true }) });
+        const openQuestion = () => openAction(row, 'More actions for Deployer', 'Delete');
+        const trigger = await openQuestion();
+        const question = detailConfirmation(row);
+        const posts = postsTo(page, path);
+        const submit = await enterConfirmationPhrase(question, 'Type the service client ID', 'Delete service client', 'deployer', posts);
+        db.prepare("DELETE FROM service_clients WHERE id='deployer'").run();
+
+        const release = Promise.withResolvers();
+        await page.route(url => url.pathname === path, async route => {
+            await release.promise;
+            await route.continue();
+        });
+        const response = page.waitForResponse(reply => new URL(reply.url()).pathname === path && reply.request().method() === 'POST');
+        try {
+            await submit.click();
+            await question.and(page.locator('[aria-busy="true"]')).waitFor();
+            assert.equal(await submit.getAttribute('aria-disabled'), 'true');
+            await page.keyboard.press('Escape');
+            await submit.press('Enter');
+            assert.equal(await question.isVisible(), true);
+        } finally {
+            release.resolve();
+        }
+        assert.equal((await response).status(), 404);
+        const error = question.getByRole('alert').filter({ hasText: 'Service client not found.' });
+        await error.waitFor();
+        assert.equal(await question.isVisible(), true);
+        assert.equal(await row.isVisible(), true);
+        assert.equal(await question.getByLabel('Type the service client ID', { exact: true }).inputValue(), 'deployer');
+        await submit.locator('xpath=self::*[not(@aria-disabled="true")]').waitFor();
+        assert.equal(await submit.evaluate(button => document.activeElement === button), true);
+        assert.equal(posts.length, 1);
+        await question.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await question.waitFor({ state: 'hidden' });
+        assert.equal(await trigger.evaluate(button => document.activeElement === button), true);
+        assert.equal(posts.length, 1);
+        await openQuestion();
+        await question.waitFor();
+        assert.equal(await error.isVisible(), false);
+        assert.equal(await question.getByRole('textbox', { name: 'Type the service client ID', exact: true }).inputValue(), '');
+        assert.equal(await submit.isDisabled(), true);
     });
 }
 

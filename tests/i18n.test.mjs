@@ -69,12 +69,12 @@ test('tHtml escapes the translation and the values; only numbered tags become ma
     } finally { catalogues.delete('xx'); }
 });
 test('plurals follow each language\'s rules; English keeps its own forms', () => {
-    assert.equal(tPlural(env('en'), 1, '{count} passkey', '{count} passkeys'), '1 passkey');
-    assert.equal(tPlural(env('en'), 3, '{count} passkey', '{count} passkeys'), '3 passkeys');
-    const de = catalogues.get('de')['{count} passkeys'];
+    assert.equal(tPlural(env('en'), 1, '{count} unused code', '{count} unused codes'), '1 unused code');
+    assert.equal(tPlural(env('en'), 3, '{count} unused code', '{count} unused codes'), '3 unused codes');
+    const de = catalogues.get('de')['{count} unused codes'];
     assert.equal(typeof de, 'object');
-    assert.equal(tPlural(env('de'), 1, '{count} passkey', '{count} passkeys'), de.one.replace('{count}', '1'));
-    assert.equal(tPlural(env('fr'), 0, '{count} passkey', '{count} passkeys'), catalogues.get('fr')['{count} passkeys'].one.replace('{count}', '0'), 'French counts 0 as one');
+    assert.equal(tPlural(env('de'), 1, '{count} unused code', '{count} unused codes'), de.one.replace('{count}', '1'));
+    assert.equal(tPlural(env('fr'), 0, '{count} unused code', '{count} unused codes'), catalogues.get('fr')['{count} unused codes'].one.replace('{count}', '0'), 'French counts 0 as one');
 });
 test('errors keep their English id and values, so the boundary can translate them', () => {
     const error = new AppError(400, 'weak_password', 'Use {min} to {max} characters. Long passphrases are best.', { min: 12, max: 128 });

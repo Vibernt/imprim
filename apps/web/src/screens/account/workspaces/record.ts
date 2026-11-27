@@ -3,14 +3,17 @@ import { focusQuiet } from 'fire-design';
 import { ApiError } from '../../../lib/api';
 import { t } from '../../../lib/i18n';
 import { href, type View } from '../../../lib/router';
+import { HeldRows } from '../../held';
+import { loading, recordSkeleton } from '../../loading';
 import { pageHead } from '../../page-layout';
+import { menuTrigger } from '../../row-menu';
 import { AccountScreen, post, success } from '../account-screen';
 import { confirmAction, inviteForm, renameForm, values } from './forms';
 import { invitationTable, memberTable } from './tables';
-import { apiRoot, back, kindLabel, memberColumns, memberSegment, notFound, products, readWorkspace, root, skeletonRows,
+import { apiRoot, back, kindLabel, memberColumns, memberSegment, notFound, products, readWorkspace, root,
   tableStatus, workspaceTable, type RecordPage } from './view';
 
-type Active = { mode: 'rename' | 'leave'; trigger: string } | { mode: 'role' | 'remove'; sub: string; trigger: string };
+type Active = { mode: 'rename' | 'leave'; trigger: string } | { mode: 'role'; sub: string; trigger: string };
 
 const band = (id: string, title: string, body: TemplateResult) => html`
   <section class="fd-band fd-stack" data-pad="sm" data-gap="3" aria-labelledby=${id}>
@@ -18,6 +21,8 @@ const band = (id: string, title: string, body: TemplateResult) => html`
   </section>`;
 
 class ScreenAccountWorkspace extends AccountScreen<RecordPage | { notFound: true }> {
+  protected readonly skeleton = recordSkeleton;
+  private readonly holds = new HeldRows(() => this.requestUpdate());
   static override properties = { ...AccountScreen.properties, view: { attribute: false }, active: { state: true }, inviteError: { state: true } };
   declare view: View;
   declare private active: Active | undefined;
@@ -48,8 +53,12 @@ class ScreenAccountWorkspace extends AccountScreen<RecordPage | { notFound: true
     const trigger = this.active?.trigger;
     this.active = undefined;
     await this.updateComplete;
-    if (trigger) this.querySelector<HTMLElement>('#' + trigger)?.focus();
+    if (trigger) this.focusTrigger(trigger);
   };
+
+  private focusTrigger(id: string) {
+    this.querySelector<HTMLElement>('#' + CSS.escape(id))?.focus();
+  }
 
   private async save(action: string, body: object, title: string) {
     const path = this.path;
@@ -63,11 +72,29 @@ class ScreenAccountWorkspace extends AccountScreen<RecordPage | { notFound: true
     });
     if (!saved || !this.isConnected || this.path !== path) return;
     await this.cancel();
-    if (action.endsWith('/remove')) {
-      const heading = this.querySelector<HTMLElement>('#im-workspace-members');
-      if (heading) focusQuiet(heading);
-    }
   }
+
+  private hold(row: string, action: string, title: string, notice: string, email: string, section: string) {
+    if (this.pending) return;
+    const path = this.path;
+    const current = () => this.isConnected && this.path === path;
+    if (this.active?.trigger === menuTrigger(row)) this.active = undefined;
+    this.holds.start(path + '/' + row, {
+      title, description: email, run: send => post(path + '/' + action, {}, send), failed: this.mutationError,
+      done: async () => {
+        if (!current()) return;
+        success(notice);
+        await this.load(false);
+      },
+    }, async () => {
+      await this.updateComplete;
+      if (current()) this.focusTrigger(menuTrigger(row));
+    });
+    const heading = this.querySelector<HTMLElement>('#' + section);
+    if (heading) focusQuiet(heading);
+  }
+
+  private isHeld = (row: string) => this.holds.has(this.path + '/' + row);
 
   private invite(body: object, form?: HTMLFormElement) {
     const path = this.path;
@@ -117,24 +144,27 @@ class ScreenAccountWorkspace extends AccountScreen<RecordPage | { notFound: true
     const rename = owner ? html`<button class="fd-btn" id="im-workspace-rename" type="button" data-variant="outline"
       ?disabled=${this.pending} aria-expanded=${this.active?.mode === 'rename'}
       @click=${() => this.showAction({ mode: 'rename', trigger: 'im-workspace-rename' })}>${t('Rename')}</button>` : nothing;
-    const busy = this.pending, loading = !data && !this.loadError;
-    return html`<main class="fd-page" aria-busy=${busy || loading}><div class="fd-frame">
+    const busy = this.pending, loadingPage = !data && !this.loadError;
+    return html`<main class="fd-page" id="main" tabindex="-1" aria-busy=${busy || loadingPage}><div class="fd-frame">
       ${pageHead(title, data ? kindLabel(data.workspace.kind) : '', back(), rename)}
       ${owner && this.active?.mode === 'rename' && data ? html`<section class="fd-band" data-pad="sm" aria-label=${t('Rename')}>
         ${renameForm(data.workspace.name, busy, event => {
           event.preventDefault();
           void this.save('rename', values(event), t('Name saved'));
         }, this.cancel)}</section>` : nothing}
-      ${loading ? html`<span class="fd-sr-only" role="status">${t('Loading workspace')}</span>` : nothing}
-      ${band('im-workspace-members', t('Members'), data && !this.loadError ? memberTable(data, this.view.session.sub,
+      ${loadingPage ? html`<section class="fd-band" data-pad="sm">
+        ${loading(this.skeleton, { status: t('Loading workspace'), late: t('Still loading. This is taking longer than usual.') })}
+      </section>` : band('im-workspace-members', t('Members'), data && !this.loadError ? memberTable(data, this.view.session.sub,
         this.view.query.get('after'), busy, {
-          active: this.active?.mode === 'role' || this.active?.mode === 'remove' ? this.active : undefined,
-          choose: (mode, sub, trigger) => { void this.showAction({ mode, sub, trigger }); },
+          active: this.active?.mode === 'role' ? this.active.sub : undefined,
+          choose: (sub, trigger) => { void this.showAction({ mode: 'role', sub, trigger }); },
           cancel: this.cancel,
-          save: (mode, sub, body = {}) => { void this.save('members/' + memberSegment(sub) + '/' + mode, body,
-            mode === 'role' ? t('Role saved') : t('Member removed')); }
-        }) : workspaceTable(t('Members'), memberColumns(), this.loadError
-          ? tableStatus(3, this.loadError, () => this.load(), t('The page did not load')) : skeletonRows(memberColumns())))}
+          save: (sub, body) => { void this.save('members/' + memberSegment(sub) + '/role', body, t('Role saved')); },
+          remove: (member, row) => this.hold(row, 'members/' + memberSegment(member.sub) + '/remove',
+            t('Removing member'), t('Member removed'), member.email, 'im-workspace-members'),
+          isHeld: this.isHeld,
+        }) : workspaceTable(t('Members'), memberColumns(),
+          tableStatus(3, this.loadError ?? '', () => this.load(), t('The page did not load'))))}
       ${data && !this.loadError ? html`
         ${team && data.invitations ? band('im-workspace-invite', t('Invite someone'), inviteForm(owner, busy, event => {
           event.preventDefault();
@@ -142,7 +172,8 @@ class ScreenAccountWorkspace extends AccountScreen<RecordPage | { notFound: true
         }, this.inviteError)) : nothing}
         ${team && data.invitations ? band('im-workspace-invitations', t('Open invitations'),
           invitationTable(data.invitations, owner, busy, body => this.invite(body),
-            id => { void this.save('invitations/' + encodeURIComponent(id) + '/revoke', {}, t('Invitation revoked')); })) : nothing}
+            (invite, row) => this.hold(row, 'invitations/' + encodeURIComponent(invite.invitation_id) + '/revoke',
+              t('Revoking invitation'), t('Invitation revoked'), invite.email, 'im-workspace-invitations'), this.isHeld)) : nothing}
         ${band('im-workspace-products', t('Products'), products(data.workspace.products))}
         ${team ? this.danger(data) : nothing}
       ` : nothing}
