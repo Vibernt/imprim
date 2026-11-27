@@ -1,14 +1,17 @@
 // Browser side of the passkey ceremonies (served as /assets/passkey.js; CSP script-src 'self'). Its messages are
 // translated per language (/assets/passkey.js?lang=de; i18n localizeScript).
 import { msg, localizeScript } from '../i18n/index.mjs';
+import { showSignInRefusal } from '../pages/sign-in-refusal.mjs';
 const MESSAGES = [msg('The passkey step didn’t finish. Try again.'), msg('Passkey added. Save these recovery codes now. Each works once, and they are not shown again: ')];
 export const passkeyScriptFor = locale => localizeScript(passkeyScript, locale, MESSAGES);
 export const passkeyScript = `
+(()=>{
+${showSignInRefusal}
 const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
 const unb64=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));
 const csrf=()=>(document.cookie.match(/(?:^|; )__Host-vi_csrf=([^;]+)/)||[])[1]||'';
 const say=text=>{const m=document.getElementById('message');if(!m)return;m.textContent=text;const box=document.getElementById('message-box');if(box)box.hidden=!text;};
-async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-csrf-token':csrf()},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error_description||'The passkey step didn’t finish. Try again.');return j;}
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-csrf-token':csrf()},body:JSON.stringify(body)});if(url==='/v1/auth/passkey/verify'&&body.purpose==='login'&&await showSignInRefusal(r))return null;const j=await r.json();if(!r.ok)throw new Error(j.error_description||'The passkey step didn’t finish. Try again.');return j;}
 async function assertWith(extra){
  const o=(await post('/v1/auth/passkey/options',extra)).publicKey;
  const c=await navigator.credentials.get({publicKey:{...o,challenge:unb64(o.challenge),allowCredentials:o.allowCredentials.map(x=>({...x,id:unb64(x.id)}))}});
@@ -17,7 +20,7 @@ async function assertWith(extra){
 }
 function wire(id,run){const b=document.getElementById(id);if(!b)return;if(!window.PublicKeyCredential){b.hidden=true;return;}
  b.addEventListener('click',async e=>{e.preventDefault();b.disabled=true;try{await run(b);}catch(error){say(error.message);b.disabled=false;}});}
-wire('passkey-sign-in',async b=>{location.assign((await assertWith({purpose:'login',request_id:b.dataset.requestId})).redirect);});
+wire('passkey-sign-in',async b=>{const result=await assertWith({purpose:'login',request_id:b.dataset.requestId});if(result)location.assign(result.redirect);});
 wire('passkey-mfa',async b=>{location.assign((await assertWith({purpose:'mfa',request_id:b.dataset.requestId||undefined,next:b.dataset.next||undefined})).redirect);});
 wire('passkey-add',async b=>{
  const o=(await post('/account/passkeys/options',{})).publicKey;
@@ -28,4 +31,5 @@ wire('passkey-add',async b=>{
  form.elements.namedItem('id').value=added.id;
  const name=form.elements.namedItem('name');name.value=added.name;
  b.hidden=true;form.hidden=false;name.focus();name.select();
-});`;
+});
+})();`;

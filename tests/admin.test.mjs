@@ -89,7 +89,12 @@ test('audit cursor/filter and user search/detail; settings are read-only', async
 });
 
 test('normal app magic login does not elevate an administrator', async t => {
-    const w = await world(t), signed = await login(w, t, 'admin@example.com');
+    const w = await world(t);
+    w.env.DB.db.exec("UPDATE admins SET role='realm' WHERE email='admin@example.com'");
+    const signed = await login(w, t, 'admin@example.com');
+    assert.ok(signed.code);
+    assert.equal(w.env.DB.db.prepare('SELECT admin_until FROM sessions').get().admin_until, null);
+    assert.equal((await w.call('/admin', { headers: { accept: 'text/html', cookie: signed.cookie } })).status, 403);
     assert.equal((await w.call('/admin/api/clients', { headers: { cookie: signed.cookie } })).status, 403);
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='admin_sign_in'").get().n, 0);
 });

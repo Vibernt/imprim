@@ -3,6 +3,31 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-27.3
+
+No migration.
+
+- **Realm administrators can use their realm's apps.** Only a `platform` administrator's address is kept out of app
+  sign-in, admission and self-serve sign-up, because a platform administrator can change every realm's roster and
+  keys. A `realm` administrator signs in to that realm's apps like anyone else, under the app's own admission rules;
+  the console still needs its own administrator sign-in and second factor. A platform address that proves control
+  (a clicked link, a password, a passkey, Google, GitHub or a registry provider) sees "This address manages {realm},
+  so it can't sign in to apps. Use another address." An email-link request stays neutral and sends nothing.
+- **Invite-only apps say so.** Where an app admits by invitation and self-serve sign-up is not available, the sign-in
+  and check-email pages say "{app} is invite-only for now. Use the address you were invited with, or ask the person
+  who invited you." and "Create an account" is not offered. A Google, GitHub or registry sign-in that is refused
+  says why: not invited (the "No {app} account yet" page where sign-up is available), an administrator address, or
+  account unavailable.
+- **Refused sign-ins leave a trace.** Every refused sign-in and every email-link request that sends no link logs one
+  `sign_in_refused` line with a reason (`not_invited`, `admin_address`, `account_unavailable`, `invalid_credentials`,
+  `rate_limited`, `turnstile_failed`, `link_skipped`), the method, app and realm, and a masked address with its
+  SHA-256 hash. Those past rate limiting and Turnstile also write a `sign_in_refused` audit row, shown in the
+  console's Audit log as "Sign-in refused".
+- **Operator commands.** `scripts/operator.mjs` writes reviewable SQL, with the same audit rows the app writes, to
+  invite or uninvite an address for an app, add or remove a realm administrator, and set an app's sign-up policy
+  (`--version` of the reviewed client). Adding a platform administrator whose address already uses an app in that
+  realm fails unless `--allow-app-user` is given; `scripts/realm.mjs` does the same check.
+
 ## 2026-11-27.2
 
 No migration. The account and console screens only; no server or API change.

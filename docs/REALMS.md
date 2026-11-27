@@ -91,6 +91,12 @@ role comes from the D1 roster, never from a committed variable.
 | `realm` | Clients, users, sessions, service clients, branding and audit of that realm |
 | `platform` | Everything a realm admin can, plus create and edit realms, manage any realm's admin roster, and rotate or revoke the signing keys of the realm they signed in to |
 
+A `realm` administrator uses the realm's apps and self-serve sign-up under the same admission rules as anyone
+else. Their app session has no admin scope. A session from the administrator sign-in can authorize an app if
+the person and sign-in method meet the app's rules. A `platform` roster address is barred from app sign-in,
+admission and self-serve sign-up in that realm. The roster is per realm, including when the same address is
+listed elsewhere.
+
 Changing realm config is platform-only, because a config names Worker secrets: a realm admin must not be able to
 point their realm at another brand's credentials. The one exception is `branding`, which a realm admin saves from
 the Branding page. Every admin write needs a sign-in within ten minutes. The roster
@@ -117,6 +123,9 @@ is re-checked inside each write's transaction.
    ```bash
    node scripts/realm.mjs realm.json > realm.sql
    ```
+
+   For a `platform` entry, the SQL checks that the address has no app admission or workspace membership in that
+   realm. See [Operator commands](OPERATIONS.md#operator-commands) for the explicit override.
 
    A platform admin can do the same through `POST /admin/api/realms` and `POST /admin/api/realms/<id>/admins`.
 4. Apply it:

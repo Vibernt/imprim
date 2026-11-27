@@ -6,7 +6,8 @@ import { redirect } from '../lib/http.mjs';
 import { getClient, registeredUri } from './clients.mjs';
 import { requireMethod } from './sign-in-methods.mjs';
 import { sessionByHash } from '../auth/session.mjs';
-import { admitSession, admissionGuard } from '../services/admission.mjs';
+import { admitSession, admissionGuard, appSignInBarred } from '../services/admission.mjs';
+import { recordSignInRefusal, signInRefusal } from '../auth/sign-in-refusals.mjs';
 import { mfaGate } from '../auth/mfa.mjs';
 import { useLocale } from '../i18n/index.mjs';
 import { offerWorkspaceAccess } from '../workspaces/access-offer.mjs';
@@ -34,6 +35,7 @@ export async function pendingRequest(env, request, id) {
     useLocale(env, { client, uiLocales: row.ui_locales });
     if (row.agent_client_id) await validateAgentRequest(env, row);
     else registeredUri(client, row.redirect_uri);
+    if (env.SIGN_IN_ATTEMPT) env.SIGN_IN_ATTEMPT.clientId = client.id;
     return { row, client };
 }
 export function authorizationResponse(env, row, values, responseCookies = []) {
@@ -63,13 +65,25 @@ export async function completeAuthorization(env, request, id, session, responseC
     requireMethod(client, session.method, session.google_hd, true);
     invariant(await sessionByHash(env, session.hash), 'access_denied', 'Account unavailable.', 403);
     requireAuthorizationSession(row, session);
+    const report = async reason => {
+        if (!env.SIGN_IN_ATTEMPT) await recordSignInRefusal(env, reason, {
+            method: session.method, clientId: client.id, email: session.email, audit: true
+        });
+    };
+    if (await appSignInBarred(env, session.email)) {
+        await report('admin_address');
+        throw signInRefusal('admin_address', session.email);
+    }
     try {
         await admitSession(env, client, session);
     } catch (error) {
-        if (interactive && error instanceof AppError && error.code === 'access_denied') {
-            const step = await offerWorkspaceJoin(env, pending, session.user_id) ? 'workspace-join'
+        if (error instanceof AppError && error.code === 'access_denied') {
+            const step = !interactive ? null : await offerWorkspaceJoin(env, pending, session.user_id) ? 'workspace-join'
                 : await offerWorkspaceAccess(env, pending, session) ? 'workspace-access' : null;
             if (step) return redirect(`${env.ISSUER}/${step}?request_id=${encodeURIComponent(row.id)}`, responseCookies);
+            await report('not_invited');
+            error.signInReason = 'not_invited';
+            error.signInEmail = session.email;
         }
         throw error;
     }

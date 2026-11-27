@@ -2,7 +2,7 @@ import { localeOf } from '../i18n/index.mjs';
 import { invariant } from '../lib/errors.mjs';
 import { realmId } from '../realms/realm.mjs';
 import { signupAccessGuard, signupBrowserChecks, signupGuard, signupOwnershipGuard, signupSettingsGuard,
-    signupProviderAccountGuard, signupProviderMethodGuard } from './signup-guards.mjs';
+    signupAccountRoleGuard, signupProviderMethodGuard } from './signup-guards.mjs';
 import { signupProviderGuard } from './signup-identity.mjs';
 import { notifySignupAdmins } from './signup-email.mjs';
 import { signupName } from './signup.mjs';
@@ -21,10 +21,9 @@ export async function recordSignupRequest(env, pending, signup, hostedDomain) {
     const workspaceName = signupName(email, workspace_name);
     const activeAccount = signupGuard(`NOT EXISTS(SELECT 1 FROM users WHERE realm_id=? AND email=?
         AND (status<>'active' OR merged_into IS NOT NULL))`, [realm, email], 'access_denied', 'Account unavailable.', 403);
-    const providerChecks = provider ? [signupProviderAccountGuard(env, email),
-        signupProviderMethodGuard(env, client, provider, hostedDomain), signupProviderGuard(env, signup)] : [];
+    const providerChecks = provider ? [signupProviderMethodGuard(env, client, provider, hostedDomain), signupProviderGuard(env, signup)] : [];
     const guards = [signupSettingsGuard(env, client, 'approval'), ...signupBrowserChecks(env, pending, email, now),
-        activeAccount, ...providerChecks, signupOwnershipGuard(env, client, email), signupAccessGuard(env, client, email, now)];
+        activeAccount, signupAccountRoleGuard(env, email), ...providerChecks, signupOwnershipGuard(env, client, email), signupAccessGuard(env, client, email, now)];
     const conditions = guards.map(guard => `(${guard.sql})`);
     const args = guards.flatMap(guard => guard.args);
     const [insert, verdict] = await env.DB.batch([

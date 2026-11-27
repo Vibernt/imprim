@@ -29,6 +29,43 @@ to your role. Sign-up requests awaiting a decision are counted in the sidebar. R
 in the editor. Set its HTTPS back-channel URL and activate it to enable sign-in and receive the client secret.
 Audit can filter by event, UTC date range, actor and target. [Control plane](CONTROL_PLANE.md)
 
+## Operator commands
+
+`scripts/operator.mjs` generates SQL offline. Confirm the database and realm, review each output file, then apply
+it as one D1 batch with `wrangler d1 execute <db> --remote --file out.sql`. Each operation must affect one row
+or the batch fails, including its audit write. Successful operations use actor `operator-cli` and audit detail
+`source: "operator-cli"`.
+
+```bash
+node scripts/operator.mjs invite acme notes person@example.com > out.sql
+node scripts/operator.mjs uninvite acme notes person@example.com > out.sql
+node scripts/operator.mjs admins add acme ops@example.com realm > out.sql
+node scripts/operator.mjs admins add acme platform@example.com platform > out.sql
+node scripts/operator.mjs admins remove acme ops@example.com > out.sql
+node scripts/operator.mjs client signup-policy acme notes invited --version 12 > out.sql
+```
+
+`invite` creates or renews a 30-day app invitation. `uninvite` removes it. The audit events are
+`invitation_registered` and `invitation_revoked`. Both have a null target and record `source: "operator-cli"`.
+An invitation does not grant access by itself, and removing it
+does not remove an existing admission. Client policies are `open` and `invited`. Domain rules are set through
+`allowed_domains` on the app.
+
+For `client signup-policy`, read the current version with the rest of the policy you intend to change.
+
+```sql
+SELECT signup_policy, version FROM clients WHERE realm_id='acme' AND id='notes';
+```
+
+Pass the reviewed non-negative integer as `--version <n>`. A stale version fails the assertion. A successful
+update increments the version and records `admin_client_update` with `signup_policy` in the changed fields.
+
+`admins add` sets or changes a role and records `admin_roster_set`. `admins remove` records `admin_roster_remove`.
+Before adding a platform administrator, both `scripts/operator.mjs` and `scripts/realm.mjs` assert that the
+address has no app admission or workspace membership in that realm. If you intend to bar an existing app user,
+add `--allow-app-user` after `platform` or after the `realm.json` argument. Both commands write a warning to
+stderr and include it in the SQL.
+
 ## Keys and rotation
 
 Each realm has two rings of signing keys: ES256 (P-256), which signs everything by default, and RS256 (RSA 2048), which
@@ -114,6 +151,7 @@ Watch for:
 | `oidc_key_unreadable` | Logs and audit | A sealed key could not be opened ([incident](#incidents)) |
 | `turnstile_unavailable`, `turnstile_degraded` | Logs and audit | Siteverify is down; email links go to existing active users only |
 | `magic_delivery_failed`, `notice_failed` | Logs and audit | Email sending is failing |
+| `sign_in_refused` | Logs and audit | A sign-in was refused or an email-link request sent no link. The audit log shows **Sign-in refused** and its reason. |
 | `event_queue_deferred` | Logs | The queue refused a send; the cron will retry |
 | `code_replay`, `agent_code_replay`, `agent_refresh_reuse` | Audit | A code or refresh token was used twice |
 | `backchannel_expired` | Audit | An app missed an event for 24 hours |
@@ -121,6 +159,31 @@ Watch for:
 
 Cloudflare rate-limit bindings count per location, not globally. The D1 budgets (per recipient, per address and
 for agent actions) are separate and persistent. A missing rate binding fails the request; there is no fallback.
+
+Search the structured logs by `type=sign_in_refused`, `realm_id`, `client_id`, `method` and `reason`.
+`not_invited` means the app's admission rules did not grant access. `admin_address` means the realm's platform
+roster barred the address. `account_unavailable` covers unusable accounts and provider conflicts.
+`invalid_credentials` covers a wrong password, an account without a password, or an unknown email in password
+sign-in. It appears only in logs, and the existing `password_failed` audit event still records the attempt.
+`rate_limited` and `turnstile_failed` also appear only in logs. `link_skipped` covers other unsent links, including a
+mail delivery failure, an invalid email-link request or an address outside the standalone console roster.
+Requests stopped before a valid address or a browser-bound client is known log `null` for the unknown fields.
+An audited refusal targets the app when there is one. It has no actor and stores the reason, method, client ID,
+masked email and hash in its detail.
+
+To find events for a candidate address, hash it locally after lowercasing, with no trailing newline. Search for
+that digest in the logs or audit export. The digest is a match key and cannot be decoded into an address.
+
+```bash
+node -e 'const { createHash } = require("node:crypto"); console.log(createHash("sha256").update(process.argv[1].toLowerCase()).digest("hex"))' person@example.com
+```
+
+```sql
+SELECT created, target, detail FROM audit
+WHERE realm_id='acme' AND event='sign_in_refused'
+  AND json_extract(detail,'$.email_hash')='<hex digest>'
+ORDER BY id DESC;
+```
 
 Useful queries, run with `wrangler d1 execute <database> --remote --env <env> --command "<sql>"`:
 

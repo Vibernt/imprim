@@ -9,6 +9,9 @@ import { liveActorSession } from './actor.mjs';
 import { liveWorkspaceJoin, workspaceJoinRequestGuard } from './join-policy.mjs';
 import { setWorkspaceProducts } from './model.mjs';
 import { joinableTeamWorkspaces } from './queries.mjs';
+import { appAddressAllowedSql, appSignInBarred } from '../services/admission.mjs';
+import { recordSignInRefusal } from '../auth/sign-in-refusals.mjs';
+import { platformAddressPage } from '../pages/sign-in-refusal.mjs';
 
 export async function workspaceJoin(request, env) {
     const post = request.method === 'POST';
@@ -23,6 +26,12 @@ export async function workspaceJoin(request, env) {
     requireMethod(client, session.method, session.google_hd, true);
     invariant(state?.product && state.product === client.product && await liveWorkspaceJoin(env, pending),
         'access_denied', 'Workspace join is unavailable for this sign-in request.', 403);
+    if (await appSignInBarred(env, session.email)) {
+        await recordSignInRefusal(env, 'admin_address', {
+            method: session.method, clientId: client.id, email: session.email, audit: true
+        });
+        return platformAddressPage(env, pending);
+    }
     if (!post) {
         const workspaces = await joinableTeamWorkspaces(env, realmId(env), session.user_id, client.product, state.workspace_ids.length, state.workspace_ids);
         const products = [...new Set(workspaces.flatMap(workspace => workspace.products))];
@@ -48,6 +57,12 @@ export async function workspaceJoin(request, env) {
     const claim = env.DB.prepare(`UPDATE auth_requests SET workspace_join=json_remove(workspace_join,'$.product','$.workspace_ids') WHERE id=?`)
         .bind(row.id);
     await setWorkspaceProducts(env, client, { user: { id: session.user_id }, session }, id,
-        { add: [client.product], remove: [] }, { guard: { sql: `EXISTS(SELECT 1 FROM auth_requests WHERE ${guard.sql})`, args: guard.args }, claim });
+        { add: [client.product], remove: [] }, {
+            guard: {
+                sql: `EXISTS(SELECT 1 FROM auth_requests WHERE ${guard.sql}) AND
+                    ${appAddressAllowedSql('?', '(SELECT email FROM users WHERE id=?)')}`,
+                args: [...guard.args, realmId(env), session.user_id]
+            }, claim
+        });
     return completeAuthorization(env, request, row.id, session);
 }

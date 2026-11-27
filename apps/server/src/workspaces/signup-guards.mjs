@@ -1,7 +1,7 @@
 import { enabledSignupModeSql, signupModeIsSql, signupOff, signupSettingsSql } from '../auth/signup-policy.mjs';
 import { msg } from '../i18n/index.mjs';
 import { realmId } from '../realms/realm.mjs';
-import { appPolicySql, domainOf } from '../services/admission.mjs';
+import { appAddressAllowedSql, appPolicySql, domainOf } from '../services/admission.mjs';
 import { openWorkspaceInvitationSql, reachesProductSql } from './access.mjs';
 
 export const signupGuard = (sql, args, code, message, status = 409) => ({ sql, args, code, message, status });
@@ -63,7 +63,7 @@ export function signupProviderMethodGuard(env, client, provider, hostedDomain) {
     msg('Sign-in method or hosted domain is not allowed for this app.'), 403);
 }
 
-export function signupProviderAccountGuard(env, email) {
-    return signupGuard('NOT EXISTS(SELECT 1 FROM admins WHERE realm_id=? AND email=?)',
+export function signupAccountRoleGuard(env, email) {
+    return signupGuard(appAddressAllowedSql('?', '?'),
         [realmId(env), email], 'access_denied', 'Account unavailable.', 403);
 }

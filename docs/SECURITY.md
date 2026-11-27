@@ -20,6 +20,7 @@ Identity crosses browser, app, provider, email and agent boundaries. A valid ide
 | Refresh theft/replay | Agent refresh hashes rotate atomically. Correctly bound reuse revokes the entire grant, except one retry within 10 seconds of a lost response, which leaves the lost replacement as a reuse trap. Wrong client/resource cannot spend another grant. A replayed code revokes what it issued. |
 | Claimed agent identity | A client ID string authenticates nothing, and neither does the allowlist. Device and loopback consents label the host "claimed, not verified" and warn about remote phishing (RFC 8628 §5.4). The device grant must be declared. Agents that publish keys are authenticated with `private_key_jwt` on every token request. |
 | Cross-app admission | Admission is per (user, client). An account created through one app is not admitted to an invited app. Domain admission needs mailbox proof (email link, or Google `hd`); GitHub never auto-links by email. |
+| Administrator sign-in | The realm roster gives `realm` administrators ordinary app access under each app's rules. `platform` administrators can change every realm's roster and manage signing keys, so their roster addresses stay out of app sign-in, admission and self-serve sign-up in the realms that list them. Console access still requires a scoped administrator email-link session and a fresh second factor. |
 | Shared egress denial | Discovery and JWKS are unlimited and memoised; `/token`, `/userinfo` and `/v1/invitations` are limited per authenticated client. Address budgets key on the IPv6 /64. |
 | Cross-workspace token use | One canonical registered resource per grant; JWT `aud` is exact. The app verifies that audience and local membership on each request. |
 | Silent remote logout | Human logout requires confirmation and CSRF POST. Agent revocation uses a distinct signed queue event with stable `jti`; the app deduplicates it. |
@@ -33,6 +34,10 @@ Content Security Policy allows Turnstile's origin only on the sign-in page that 
 ## Logs and reporting
 
 Worker errors log structured type/path/code without tokens. Audit records include sign-in, code replay, mail delivery failure, degraded Turnstile, unreadable keys and agent grant activity. Audit has append-only D1 triggers. Wrangler disables invocation logs because OAuth callbacks carry query credentials. Operators should inspect actual Cloudflare log settings and retention before deployment. Do not include tokens, raw email links, client secrets or provider credentials in an issue.
+
+Sign-in refusals use a masked email and a SHA-256 digest of the normalized address. Email-link requests use
+neutral copy so a typed address does not reveal roster membership, account status or whether Imprim sent a link.
+Rate-limit and Turnstile failures do not create refusal audit rows. [Monitoring and logs](OPERATIONS.md#monitoring-and-logs)
 
 Report a suspected vulnerability privately through GitHub's private vulnerability reporting on the repository (see [SECURITY.md](https://github.com/Vibernt/imprim/blob/main/SECURITY.md)), never in a public issue. Include affected route, time, expected and observed behavior, and redacted request IDs or audit events.
 

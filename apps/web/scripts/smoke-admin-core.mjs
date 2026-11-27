@@ -38,6 +38,24 @@ export async function stacked(table, action, size = null) {
 }
 
 function clients(open) {
+    test('the audit console labels and filters sign-in refusals and shows the reason', async t => {
+        const { page, server } = await open(t, { role: 'realm', width: 375 });
+        const db = server.env.DB.db;
+        db.exec(`UPDATE clients SET branding='{"name":"Notes"}' WHERE id='app';`);
+        const detail = JSON.stringify({ reason: 'not_invited', method: 'email', client_id: 'app',
+            email: 'p***@example.com', email_hash: await sha256('person@example.com') });
+        db.prepare("INSERT INTO audit(event,target,detail,created,realm_id) VALUES('sign_in_refused','app',?,?,'default')")
+            .run(detail, Date.now());
+        await go(page, server, '/admin/audit');
+        await page.getByRole('button', { name: 'Event type', exact: true }).click();
+        await page.locator('#audit-event').selectOption({ label: 'Sign-in refused' });
+        await page.getByRole('button', { name: 'Apply', exact: true }).click();
+        await page.waitForURL(url => url.searchParams.get('event') === 'sign_in_refused');
+        const row = page.getByRole('row').filter({ hasText: 'not_invited' });
+        await row.getByText('Sign-in refused', { exact: true }).waitFor();
+        await row.getByText('Notes', { exact: true }).waitFor();
+        await row.getByText(detail, { exact: true }).waitFor();
+    });
     test('Lit clients register and edit Fire fields, rotate a public client, and show each secret once', async t => {
         const { page, server } = await open(t, { role: 'realm', expectedBadRequest: '/admin/api/clients/smoke-client/activate' });
         const db = server.env.DB.db;

@@ -8,6 +8,7 @@ import { checkPolicy } from './policy.mjs';
 import { limitAgentAddress } from '../auth/rate-limit.mjs';
 import { matchRedirect } from './uris.mjs';
 import { parseUiLocales, useLocale } from '../i18n/index.mjs';
+import { liveSignupEnabled } from '../auth/signup-policy.mjs';
 export async function authorizeAgent(request, env, query) {
     // /authorize can fetch an agent's metadata document anonymously, so it spends the same budget as registration (S10).
     await limitAgentAddress(env, request, 'authorize', 60);
@@ -33,7 +34,9 @@ export async function beginAgentSignIn(request, env, values, context, deviceHash
         values.code_challenge || '', values.scope, await sha256(browser), Date.now() + 1800000, values.client_id, values.resource, deviceHash, values.prompt === 'login' ? 'login' : null, uiLocales).run();
     const session = values.prompt === 'login' ? null : await getSession(request, env);
     if (session && allowsMethod(context.app, session.method, session.google_hd, true)) return redirect(`${env.ISSUER}/agent/consent?request_id=${id}`, responseCookies);
-    return signInPage(env, id, responseCookies, context.app);
+    return signInPage(env, id, responseCookies, context.app, {
+        inviteOnly: context.app.signup_policy === 'invited' && !await liveSignupEnabled(env, context.app)
+    });
 }
 export async function validateAgentRequest(env, row, session) {
     const context = await checkPolicy(env, { client_id: row.agent_client_id, app_id: row.client_id, resource: row.resource, scope: row.scope }, session);

@@ -4,7 +4,7 @@ import { realmId } from '../realms/realm.mjs';
 import { newUserStatement } from '../services/admission.mjs';
 import { mailboxClaimStatements } from '../services/access.mjs';
 import { writeGuardFailed } from '../account/write-guard.mjs';
-import { signupAccessGuard, signupBrowserChecks, signupGuard, signupProviderAccountGuard,
+import { signupAccessGuard, signupBrowserChecks, signupGuard, signupAccountRoleGuard,
     signupProviderMethodGuard, signupSettingsGuard } from './signup-guards.mjs';
 import { signupProviderEffects, signupProviderGuard } from './signup-identity.mjs';
 
@@ -36,7 +36,7 @@ export async function completeAdmittedProviderSignup(env, pending, signup, mode)
     const account = await signupAccount(env, email, now);
     const access = signupAccessGuard(env, client, email, now);
     const checks = [...signupBrowserChecks(env, pending, email, now), signupSettingsGuard(env, client, mode),
-        signupProviderMethodGuard(env, client, provider), signupProviderAccountGuard(env, email),
+        signupProviderMethodGuard(env, client, provider), signupAccountRoleGuard(env, email),
         account.guard, signupProviderGuard(env, signup), { ...access, sql: `NOT (${access.sql})` }];
     const conditions = checks.map(check => '(' + check.sql + ')');
     const args = checks.flatMap(check => check.args);

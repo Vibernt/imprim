@@ -4,12 +4,11 @@
 import { randomToken, sha256, challengeOf, safeEqual, b64url, from64 } from '../lib/crypto.mjs';
 import { tokenShape, uniqueParams, redirect, readBody } from '../lib/http.mjs';
 import { invariant } from '../lib/errors.mjs';
-import { cookies, issueSession, getSession } from '../auth/session.mjs';
-import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
+import { pendingRequest } from '../oidc/requests.mjs';
 import { requireMethod } from '../oidc/sign-in-methods.mjs';
-import { providerIdentity } from '../auth/provider-identity.mjs';
+import { claimProviderState } from '../auth/provider-state.mjs';
+import { completeProviderCallback } from '../auth/provider-callback.mjs';
 import { normalizeEmail } from '../services/admission.mjs';
-import { audit } from '../services/audit.mjs';
 export const UPSTREAM_COOKIE = '__Host-vi_up';
 const STATE_MS = 600000;
 // The problem is technical and stays English; the person sees it after the provider's name.
@@ -125,11 +124,9 @@ export async function providerCallback(request, env, id) {
         return redirect(`${callbackUrl(env, id)}?${forward}`);
     }
     const values = uniqueParams(new URL(request.url).searchParams);
-    const browser = cookies(request)[UPSTREAM_COOKIE];
     invariant(tokenShape(values.state), 'invalid_grant', 'Invalid sign-in state.', 401);
-    const row = await env.DB.prepare('DELETE FROM oauth_states WHERE hash=? AND provider=? RETURNING *').bind(await sha256(values.state), id).first();
-    invariant(row && tokenShape(browser) && row.expires_at > Date.now() && await safeEqual(await sha256(browser), row.browser_hash),
-        'invalid_grant', 'Sign-in state expired, used, or from another browser.', 401);
+    const row = await claimProviderState(env, request, id, UPSTREAM_COOKIE, values.state);
+    invariant(row, 'invalid_grant', 'Sign-in state expired, used, or from another browser.', 401);
     invariant(!values.error && typeof values.code === 'string' && /^[\x21-\x7e]{1,4096}$/.test(values.code), 'invalid_grant', 'Sign-in cancelled or invalid.', 401);
     const { client } = await pendingRequest(env, request, row.request_id);
     requireMethod(client, id);
@@ -152,10 +149,7 @@ export async function providerCallback(request, env, id) {
     // unvouched Microsoft email is weaker still and never satisfies an invitation (nOAuth).
     const domain = email.split('@')[1], pinned = /^[0-9a-f-]{36}$/.test(provider.tenant || '');
     const authoritative = (provider.trusted_domains || []).includes(domain) && (provider.type === 'microsoft' ? pinned : verified);
-    const current = await pendingRequest(env, request, row.request_id);
-    requireMethod(current.client, id);
-    const user = await providerIdentity(env, current.client, id, { providerId: claims.sub, email, login: null, authoritative, verified: verified || authoritative }, await getSession(request, env), current);
-    const signed = await issueSession(env, user, id);
-    await audit(env, 'sign_in', user.id, { method: id });
-    return completeAuthorization(env, request, row.request_id, signed.session, [...signed.cookies, stateCookie(provider, '', 0)]);
+    return completeProviderCallback(request, env, row,
+        { providerId: claims.sub, email, login: null, authoritative, verified: verified || authoritative },
+        stateCookie(provider, '', 0));
 }

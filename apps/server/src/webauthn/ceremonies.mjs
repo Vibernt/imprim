@@ -6,10 +6,12 @@ import { invariant } from '../lib/errors.mjs';
 import { randomToken, sha256, b64url, from64 } from '../lib/crypto.mjs';
 import { cookies, BROWSER_COOKIE, getSession, requireCsrf, assertOrigin, issueSession, sessionByHash } from '../auth/session.mjs';
 import { verifyRegistration, verifyAssertion } from './verify.mjs';
-import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
+import { pendingRequest, requireAuthorizationAccount, completeAuthorization } from '../oidc/requests.mjs';
 import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
 import { requireMethod } from '../oidc/sign-in-methods.mjs';
-import { admitted, isAdmin } from '../services/admission.mjs';
+import { accountUnavailable, admitted, appSignInBarred } from '../services/admission.mjs';
+import { reportSignInRefusal, signInRefusal } from '../auth/sign-in-refusals.mjs';
+import { platformAddressPage } from '../pages/sign-in-refusal.mjs';
 import { confirmedFactors, mfaStatement, forgetDevices, recoveryStatements, FRESH_MFA_MS, clearOrphanedRecovery } from '../auth/mfa.mjs';
 import { safeNext } from '../auth/mfa-challenge.mjs';
 import { attempt, clearFailures, mfaFailureKey } from '../auth/rate-limit.mjs';
@@ -105,6 +107,7 @@ export async function assertionOptions(request, env) {
     assertOrigin(request, env);
     const body = await readBody(request), party = rp(env);
     if (body.purpose === 'mfa') {
+        env.SIGN_IN_ATTEMPT = null;
         const session = await getSession(request, env);
         invariant(session, 'login_required', 'Sign in first.', 401);
         await requireCsrf(request, env, session, body.csrf);
@@ -127,28 +130,35 @@ async function useCredential(env, body, userId = null) {
     if (body.userHandle) invariant(body.userHandle === b64url(new TextEncoder().encode(credential.user_id)), 'invalid_grant', 'Passkey user mismatch.', 400);
     return credential;
 }
+async function updateCredentialUse(env, credential, counter) {
+    // The counter moves forward atomically: a concurrent replay of the same assertion loses.
+    const moved = await env.DB.prepare('UPDATE webauthn_credentials SET sign_count=?,last_used=? WHERE id=? AND sign_count=?')
+        .bind(counter, Date.now(), credential.id, credential.sign_count).run();
+    invariant(moved.meta.changes === 1, 'invalid_grant', 'This passkey was just used. Try again.', 400);
+}
 export async function assertionVerify(request, env, ctx) {
     assertOrigin(request, env);
     const body = await readBody(request), party = rp(env);
     const purpose = body.purpose === 'mfa' ? 'mfa' : 'login';
     let session = null;
     if (purpose === 'mfa') {
+        env.SIGN_IN_ATTEMPT = null;
         session = await getSession(request, env);
         invariant(session, 'login_required', 'Sign in first.', 401);
         await requireCsrf(request, env, session, body.csrf);
         invariant(await attempt(env, mfaFailureKey(session.user_id)), 'rate_limit', 'Too many attempts. Wait fifteen minutes.', 429);
     }
     const { challenge, row } = await claimChallenge(env, request, purpose, body.clientDataJSON);
+    const pending = purpose === 'login' ? await pendingRequest(env, request, row.request_id) : null;
+    if (pending) requireMethod(pending.client, 'passkey');
     if (purpose === 'mfa') invariant(row.user_id === session.user_id, 'invalid_grant', 'This passkey request belongs to another session.', 400);
     // Discoverable sign-in identifies the account by the authenticator's userHandle, which must be present (§7.2 step 6).
     if (purpose === 'login') invariant(typeof body.userHandle === 'string' && body.userHandle, 'invalid_grant', 'This passkey did not identify an account.', 400);
     const credential = await useCredential(env, body, session?.user_id);
     const result = await verifyAssertion(body, credential, { challenge, origin: party.origin, rpId: party.id });
-    // The counter moves forward atomically: a concurrent replay of the same assertion loses.
-    const moved = await env.DB.prepare('UPDATE webauthn_credentials SET sign_count=?,last_used=? WHERE id=? AND sign_count=?').bind(result.counter, Date.now(), credential.id, credential.sign_count).run();
-    invariant(moved.meta.changes === 1, 'invalid_grant', 'This passkey was just used. Try again.', 400);
     const amr = amrFor(result.backupEligible);
     if (purpose === 'mfa') {
+        await updateCredentialUse(env, credential, result.counter);
         await clearFailures(env, mfaFailureKey(session.user_id));
         await env.DB.batch([mfaStatement(env, session, amr), env.DB.prepare("INSERT INTO audit(event,actor,detail,created,realm_id) VALUES('mfa_verified',?,'{\"type\":\"passkey\"}',?,?)").bind(session.user_id, Date.now(), env.REALM.id)]);
         const current = await sessionByHash(env, session.hash);
@@ -161,12 +171,19 @@ export async function assertionVerify(request, env, ctx) {
     }
     // Passwordless sign-in: the passkey with user verification is possession plus PIN or biometric, so it also
     // satisfies a second-factor policy.
-    const pending = await pendingRequest(env, request, row.request_id);
-    requireMethod(pending.client, 'passkey');
-    const user = await env.DB.prepare("SELECT * FROM users WHERE id=? AND realm_id=? AND status='active' AND merged_into IS NULL").bind(credential.user_id, realmId(env)).first();
-    invariant(user && !await isAdmin(env, user.email), 'access_denied', 'Account unavailable.', 403);
-    invariant(await admitted(env, pending.client, user.email, 'provider') ||
-        await canSignInForWorkspaceJoin(env, pending, { userId: user.id }), 'access_denied', 'Account unavailable.', 403);
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id=? AND realm_id=?').bind(credential.user_id, realmId(env)).first();
+    env.SIGN_IN_ATTEMPT.email = user?.email;
+    env.SIGN_IN_ATTEMPT.audit = true;
+    if (user && await appSignInBarred(env, user.email)) {
+        await reportSignInRefusal(env, 'admin_address');
+        return platformAddressPage(env, pending);
+    }
+    if (!user || accountUnavailable(user)) throw signInRefusal('account_unavailable', user?.email);
+    if (!await admitted(env, pending.client, user.email, 'provider') &&
+        !await canSignInForWorkspaceJoin(env, pending, { userId: user.id }))
+        throw signInRefusal('not_invited', user.email);
+    requireAuthorizationAccount(pending.row, user.id);
+    await updateCredentialUse(env, credential, result.counter);
     const signed = await issueSession(env, user, 'passkey');
     await env.DB.prepare('UPDATE sessions SET mfa_at=?,amr=? WHERE hash=?').bind(Date.now(), JSON.stringify([...amr, 'mfa']), signed.session.hash).run();
     await audit(env, 'sign_in', user.id, { method: 'passkey' });

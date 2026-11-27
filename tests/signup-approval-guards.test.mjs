@@ -15,6 +15,14 @@ async function setup(t) {
     return { w, db, admin, id, approve: `signups/${id}/approve`, decline: `signups/${id}/decline` };
 }
 
+test('a pending sign-up cannot be approved after the applicant becomes a platform administrator', async t => {
+    const { db, admin, approve, id } = await setup(t);
+    db.prepare("INSERT INTO admins VALUES('default',?,'platform',0,NULL)").run(person);
+    await refused(await admin.post(approve), 409, 'conflict');
+    assert.equal(db.prepare('SELECT status FROM signup_requests WHERE id=?').get(id).status, 'pending');
+    for (const table of ['workspaces', 'client_admissions', 'workspace_event_outbox']) assert.equal(count(db, table), 0);
+});
+
 test('sign-up admin API requires a realm admin, confirmed second factor, fresh authentication, CSRF and Origin', async t => {
     const { w, db, admin, approve, decline } = await setup(t);
     const user = await ensureUser(w.env, 'member@example.net');

@@ -28,7 +28,8 @@ test('ordinary Google GET returns the no-account page with a usable signup view 
     assert.doesNotMatch(html, /\sstyle=|<style|\/fire\/js\//);
     assert.doesNotMatch(response.headers.get('set-cookie'), /vi_session/);
     unchanged(w.db, before);
-    assert.equal(count(w.db, 'audit'), auditCount);
+    assert.equal(count(w.db, 'audit'), auditCount + 1);
+    assert.equal(w.db.prepare("SELECT json_extract(detail,'$.reason') AS reason FROM audit WHERE event='sign_in_refused'").get().reason, 'not_invited');
     assert.equal(w.db.prepare('SELECT last_seen FROM sessions').get().last_seen, 0);
     assert.equal(count(w.db, 'oauth_states'), 0);
 
@@ -41,13 +42,17 @@ test('ordinary Google GET returns the no-account page with a usable signup view 
     assert.match(page.headers.get('content-security-policy'), /form-action 'self' https:\/\/accounts\.google\.com https:\/\/github\.com;/);
 });
 
-test('ordinary provider refusals keep Account unavailable when app sign-up is unavailable', async t => {
+test('ordinary provider refusal explains an invitation is needed when app sign-up is unavailable', async t => {
     const w = await signupWorld(t, { appSignup: 'off' });
     githubProfile(t, w);
     const flow = await startProvider(w, 'github', { signup: false });
     const response = await providerCallback(w, flow);
-    assert.equal(response.status, 403);
-    assert.equal((await response.json()).error_description, 'Account unavailable.');
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /person@example\.com isn&#39;t invited to Notes/);
+    assert.match(html, /Notes is invite-only for now/);
+    assert.ok(html.includes(`href="/login?request_id=${flow.request_id}"`));
+    assert.doesNotMatch(html, /Create an account|\/fire\/js\/|\sstyle=/);
     unchanged(w.db);
     assert.equal(w.mails.length, 0);
 });

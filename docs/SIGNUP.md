@@ -23,6 +23,14 @@ workspace name of up to 120 characters after trimming. An empty name uses the em
 Addresses with existing app access or a current workspace invitation get an ordinary sign-in link with the same
 neutral response.
 
+When an app's `signup_policy` is `invited` and self-serve sign-up is unavailable, sign-in and check-email pages
+explain that the app is invite-only and ask the person to use the invited address or contact the person who
+invited them. Check-email stays neutral about delivery. When sign-up is available, an uninvited person can
+request a workspace and the sign-in page offers **Create an account**.
+
+Realm administrators can sign up under the same admission rules as other people. A platform roster address
+cannot sign up or sign in to the realm's apps, and an email-link request for it stays neutral.
+
 The sign-up link verifies the mailbox. It works once, within 15 minutes, in the browser that started the request.
 In `open` mode, verification creates the account and workspace and resumes authorization.
 
@@ -45,10 +53,12 @@ through ordinary sign-in. When app policy already accepts the address but a weak
 user, the email link proves the mailbox and completes ordinary sign-in. It links the provider and applies the
 app's existing admission rules.
 
-If ordinary Google or GitHub sign-in fails solely for missing app access and that provider offers sign-up, the
-app-branded page offers **Create an account** and **Sign in another way**. The first opens the sign-up view.
-The person starts a fresh provider round trip from there. This page keeps the authorization request open and
-creates no account, session or provider link.
+If Google, GitHub or a registry provider authenticates the person and the app requires an invitation, the page
+says that their address isn't invited and offers **Sign in another way**. When self-serve sign-up is available,
+the **No {app} account yet** page offers **Create an account**, which opens the sign-up view in the same browser.
+The person starts a fresh sign-up from there. A proven platform address gets an app-branded page asking for
+another address. Blocked or merged accounts and conflicting provider identities receive **Account unavailable.**
+These pages create no account, admission, session or provider link.
 
 ## Approval
 

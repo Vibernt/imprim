@@ -13,6 +13,13 @@ export async function adminRole(env, email) {
     return row?.role ?? null;
 }
 export const isAdmin = async (env, email) => Boolean(await adminRole(env, email));
+export const appSignInBarred = async (env, email) => await adminRole(env, email) === 'platform';
+// Trusted SQL expressions only. Used by the writes that must recheck the roster atomically.
+export const appAddressAllowedSql = (realm, email) => `NOT EXISTS(SELECT 1 FROM admins
+    WHERE realm_id=${realm} AND email=${email} AND role='platform')`;
+export const accountUnavailable = user => Boolean(user && (user.status !== 'active' || user.merged_into));
+export const userByEmail = (env, email) => env.DB.prepare('SELECT * FROM users WHERE realm_id=? AND email=?')
+    .bind(realmId(env), email).first();
 export const domainOf = email => email.split('@')[1];
 // How strongly the current sign-in proves control of the mailbox (S4):
 //   email  - a magic link reached the mailbox;
@@ -41,9 +48,10 @@ export const appPolicySql = email => `(c.signup_policy='open'
     OR (?<>'claim' AND EXISTS(SELECT 1 FROM invitations i WHERE i.client_id=c.id AND i.email=${email} AND i.expires_at>?)))`;
 // Only participating apps accept workspace access. A cached workspace admission is not proof of current membership.
 export async function admitted(env, client, email, proof = 'mailbox') {
-    const user = await env.DB.prepare('SELECT * FROM users WHERE realm_id=? AND email=?').bind(realmId(env), email).first();
-    if (user && (user.status !== 'active' || user.merged_into)) return false;
+    const user = await userByEmail(env, email);
+    if (accountUnavailable(user)) return false;
     if (!client) return isAdmin(env, email); // Bootstrap operator login, without registering an RP.
+    if (await appSignInBarred(env, email)) return false;
     if (user && await appAdmission(env, client, user.id)) return true;
     if (await policyAdmits(env, client, email, proof)) return true;
     return sharedClient(client) && workspaceAdmits(env, client, user?.id ?? null, email, proof);
@@ -71,14 +79,18 @@ const currentAdmission = (env, client, userId) => env.DB.prepare(`SELECT a.sourc
     .bind(userId, client.id).first();
 
 async function writeAdmission(env, client, subject, proof, shared) {
+    if (await appSignInBarred(env, subject.email)) return false;
     const existing = await currentAdmission(env, client, subject.user_id);
     // Keep the original source. A live workspace admission can also accept invitations to new workspaces.
     if (existing && (!shared || existing.source === 'app' || existing.allowed !== 1)) return existing.allowed === 1;
     if (shared) return writeSharedAdmission(env, client, subject, proof, Boolean(existing));
     if (!await policyAdmits(env, client, subject.email, proof)) return false;
-    const result = await env.DB.prepare(`INSERT INTO client_admissions(user_id,client_id,created) VALUES(?,?,?)
-        ON CONFLICT(user_id,client_id) DO NOTHING`).bind(subject.user_id, client.id, Date.now()).run();
-    return result.meta.changes === 1 || (await currentAdmission(env, client, subject.user_id))?.allowed === 1;
+    const result = await env.DB.prepare(`INSERT INTO client_admissions(user_id,client_id,created)
+        SELECT u.id,?,? FROM users u WHERE u.id=? AND u.realm_id=? AND u.email=?
+        AND u.status='active' AND u.merged_into IS NULL AND ${appAddressAllowedSql('u.realm_id', 'u.email')}
+        ON CONFLICT(user_id,client_id) DO NOTHING`).bind(client.id, Date.now(), subject.user_id, realmId(env), subject.email).run();
+    return result.meta.changes === 1 || !await appSignInBarred(env, subject.email) &&
+        (await currentAdmission(env, client, subject.user_id))?.allowed === 1;
 }
 
 async function writeSharedAdmission(env, client, subject, proof, hasWorkspaceAdmission) {
@@ -93,6 +105,7 @@ async function writeSharedAdmission(env, client, subject, proof, hasWorkspaceAdm
             (${workspaceClientSql('c')} AND ${reachesProductSql('c.realm_id', 'c.product', 'u.id')}) AS workspace_access
         FROM clients c JOIN users u ON u.realm_id=c.realm_id
         WHERE c.id=? AND c.realm_id=? AND u.id=? AND u.email=? AND u.status='active' AND u.merged_into IS NULL
+        AND ${appAddressAllowedSql('u.realm_id', 'u.email')}
         )
         INSERT INTO client_admissions(user_id,client_id,created,source)
         SELECT user_id,client_id,?,CASE WHEN app_access THEN 'app' ELSE 'workspace' END
@@ -102,7 +115,9 @@ async function writeSharedAdmission(env, client, subject, proof, hasWorkspaceAdm
     const verify = env.DB.prepare(`SELECT 1 FROM users u WHERE u.id=? AND u.realm_id=? AND u.email=?
         AND u.status='active' AND u.merged_into IS NULL AND ${guard.sql}`)
         .bind(subject.user_id, realm, subject.email, ...guard.args);
-    const result = await env.DB.batch([...invitations, record, verify]).catch(error => {
+    const rosterGuard = env.DB.prepare(`INSERT INTO admin_assertions(ok) VALUES(${appAddressAllowedSql('?', '?')})`)
+        .bind(realm, subject.email);
+    const result = await env.DB.batch([rosterGuard, ...invitations, record, verify]).catch(error => {
         invariant(!String(error.message).includes('admin_assertions'), 'conflict', 'A workspace invitation changed. Sign in again.', 409);
         throw error;
     });
@@ -111,7 +126,9 @@ async function writeSharedAdmission(env, client, subject, proof, hasWorkspaceAdm
 // SQL fence for credential issuance: `user` is the SQL expression naming the user id.
 export const admissionGuard = (user, clientId) => ({
     sql: `EXISTS(SELECT 1 FROM client_admissions a JOIN clients c ON c.id=a.client_id
-        WHERE a.user_id=${user} AND a.client_id=? AND (${liveAdmissionSql}))`,
+        JOIN users admitted_user ON admitted_user.id=a.user_id AND admitted_user.realm_id=c.realm_id
+        WHERE a.user_id=${user} AND a.client_id=? AND (${liveAdmissionSql})
+        AND ${appAddressAllowedSql('c.realm_id', 'admitted_user.email')})`,
     args: [clientId]
 });
 // `verified` is true only with mailbox proof. An account a provider created on its say-so stays unverified until an

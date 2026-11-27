@@ -5,8 +5,8 @@ import { invariant } from '../lib/errors.mjs';
 import { cookies, BROWSER_COOKIE, assertOrigin, issueSession } from './session.mjs';
 import { requireTurnstile } from './turnstile.mjs';
 import { limitEmail, limitDegradedAddress } from './rate-limit.mjs';
-import { admitted, ensureUser, normalizeEmail, isAdmin, admitSession } from '../services/admission.mjs';
-import { pendingRequest, completeAuthorization } from '../oidc/requests.mjs';
+import { accountUnavailable, admitted, appSignInBarred, ensureUser, normalizeEmail, isAdmin, admitSession, userByEmail } from '../services/admission.mjs';
+import { pendingRequest, requireAuthorizationAccount, completeAuthorization } from '../oidc/requests.mjs';
 import { requireMethod } from '../oidc/sign-in-methods.mjs';
 import { audit } from '../services/audit.mjs';
 import { claimMailbox } from '../services/access.mjs';
@@ -18,10 +18,13 @@ import { completeAdmittedProviderSignup } from '../workspaces/signup-account.mjs
 import { submitSignupApproval } from '../workspaces/signup-requests.mjs';
 import { checkEmailCookie } from './check-email-state.mjs';
 import { canSignInForWorkspaceJoin } from '../workspaces/join-policy.mjs';
+import { reportSignInRefusal, signInRefusal } from './sign-in-refusals.mjs';
+import { platformAddressPage } from '../pages/sign-in-refusal.mjs';
 
 export async function requestMagic(request, env, ctx) {
     assertOrigin(request, env);
     const body = await readBody(request), email = normalizeEmail(body.email);
+    env.SIGN_IN_ATTEMPT.email = email;
     const browser = cookies(request)[BROWSER_COOKIE];
     invariant(tokenShape(browser), 'browser_binding', 'Open the sign-in page first.', 403);
     const pending = body.request_id ? await pendingRequest(env, request, body.request_id) : null;
@@ -38,27 +41,28 @@ export async function requestMagic(request, env, ctx) {
         invariant(await limitDegradedAddress(env, request), 'rate_limit', 'Too many requests.', 429);
     }
     // Return before admission and delivery so eligible/ineligible addresses have the same public response path.
-    ctx.waitUntil(deliverMagic(env, request, email, browser, pending, challenge.mode, purpose, name).catch(async error => {
-        console.error(JSON.stringify({ type: 'magic_delivery_failed', code: error.code || 'delivery_failed' }));
-        await audit(env, 'magic_delivery_failed', null, { code: error.code || 'delivery_failed' });
+    ctx.waitUntil(deliverMagic(env, request, email, browser, pending, challenge.mode, purpose, name).catch(async () => {
+        console.error(JSON.stringify({ type: 'magic_delivery_failed', code: 'delivery_failed' }));
+        await reportSignInRefusal(env, 'link_skipped');
+        await audit(env, 'magic_delivery_failed', null, { code: 'delivery_failed' });
     }));
     return json({ accepted: true }, purpose === 'signup' ? 202 : 200, body.browser_page === true
         ? { 'set-cookie': checkEmailCookie(pending?.row.id || '', body.email) } : {});
 }
 async function deliverMagic(env, request, email, browser, pending, challengeMode, purpose, name) {
-    if (!await limitEmail(env, email, request, challengeMode === 'degraded')) return;
-    if (!pending && !await isAdmin(env, email)) return;
+    if (!await limitEmail(env, email, request, challengeMode === 'degraded')) return reportSignInRefusal(env, 'rate_limited');
+    env.SIGN_IN_ATTEMPT.audit = challengeMode !== 'degraded';
+    if (!pending && !await isAdmin(env, email)) return reportSignInRefusal(env, 'link_skipped');
+    if (pending && await appSignInBarred(env, email)) return reportSignInRefusal(env, 'admin_address');
+    const existing = await userByEmail(env, email);
+    if (accountUnavailable(existing)) return reportSignInRefusal(env, 'account_unavailable');
     if (challengeMode === 'degraded') {
-        const existing = await env.DB.prepare("SELECT id FROM users WHERE realm_id=? AND email=? AND status='active' AND merged_into IS NULL").bind(realmId(env), email).first();
-        if (!existing) return;
+        if (!existing) return reportSignInRefusal(env, 'turnstile_failed');
     }
     const allowed = await admitted(env, pending?.client, email);
     if (purpose === 'signup' && allowed) purpose = 'sign_in';
     if (!allowed && !(purpose === 'sign_in' && await canSignInForWorkspaceJoin(env, pending, { email }))) {
-        if (purpose !== 'signup' || challengeMode === 'degraded') return;
-        const unavailable = await env.DB.prepare(`SELECT 1 FROM users WHERE realm_id=? AND email=?
-            AND (status<>'active' OR merged_into IS NOT NULL)`).bind(realmId(env), email).first();
-        if (unavailable) return;
+        if (purpose !== 'signup' || challengeMode === 'degraded') return reportSignInRefusal(env, 'not_invited');
     }
     await deliverMagicLink(env, pending, await sha256(browser), {
         email, purpose, workspace_name: purpose === 'signup' ? name : null
@@ -74,6 +78,15 @@ export async function verifyMagic(request, env, ctx) {
     invariant(row && await safeEqual(row.browser_hash, await sha256(browser)), 'invalid_grant', 'Link is expired, used, or belongs to another browser.', 401);
     const pending = row.request_id ? await pendingRequest(env, request, row.request_id) : null;
     if (pending) requireMethod(pending.client, row.purpose === 'password' ? 'password' : 'email');
+    env.SIGN_IN_ATTEMPT.email = row.email;
+    env.SIGN_IN_ATTEMPT.audit = Boolean(pending);
+    if (pending && await appSignInBarred(env, row.email)) {
+        await reportSignInRefusal(env, 'admin_address');
+        return platformAddressPage(env, pending);
+    }
+    const existing = await userByEmail(env, row.email);
+    if (accountUnavailable(existing)) throw signInRefusal('account_unavailable', row.email);
+    if (pending) requireAuthorizationAccount(pending.row, existing?.id);
     let user;
     if (row.purpose === 'signup') {
         const mode = await requireLiveSignup(env, pending);
@@ -87,7 +100,7 @@ export async function verifyMagic(request, env, ctx) {
             user = await completeOpenSignup(env, pending, row);
         }
     } else {
-        user = await verifiedUser(env, pending, row);
+        user = await verifiedUser(env, pending, row, existing);
     }
     const signed = await issueSession(env, user, 'email', null, !pending);
     await audit(env, 'sign_in', user.id, { method: 'email' });
@@ -104,11 +117,10 @@ export async function verifyMagic(request, env, ctx) {
     return result;
 }
 
-async function verifiedUser(env, pending, row) {
-    invariant(await admitted(env, pending?.client, row.email) ||
-        (row.purpose === 'sign_in' && await canSignInForWorkspaceJoin(env, pending, { email: row.email })),
-        'access_denied', 'Account unavailable.', 403);
-    const existing = await env.DB.prepare('SELECT * FROM users WHERE realm_id=? AND email=?').bind(realmId(env), row.email).first();
+async function verifiedUser(env, pending, row, existing) {
+    if (!await admitted(env, pending?.client, row.email) &&
+        !(row.purpose === 'sign_in' && await canSignInForWorkspaceJoin(env, pending, { email: row.email })))
+        throw signInRefusal('not_invited', row.email);
     if (existing?.status === 'active' && !existing.merged_into) await claimMailbox(env, existing);
     return ensureUser(env, row.email);
 }

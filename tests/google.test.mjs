@@ -74,7 +74,7 @@ for (const kind of ['wrong cookie', 'missing cookie', 'wrong browser', 'expired 
     assert.ok([401,403].includes((await googleCallback(w, flow, changes, jar)).status));
     assert.equal(fake.calls.length, 0); assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM sessions').get().n, 0);
 });
-for (const kind of ['invited unknown', 'blocked', 'deleted', 'merged', 'admin', 'linked admin', 'linked elsewhere']) test(`Google refuses ${kind} neutrally`, async t => {
+for (const kind of ['invited unknown', 'blocked', 'deleted', 'merged', 'admin', 'linked admin', 'linked elsewhere']) test(`Google classifies a refusal for ${kind}`, async t => {
     const w = await world(t, kind === 'invited unknown' ? 'invited' : 'open'), fake = fakeGoogle(t, w, kind === 'admin' ? { email: 'admin@example.com' } : {});
     if (['blocked','deleted','merged','linked admin','linked elsewhere'].includes(kind)) {
         w.env.DB.db.prepare('INSERT INTO users(id,email,status,created) VALUES(?,?,?,0)').run('owner', kind === 'linked admin' ? 'admin@example.com' : 'person@example.com', ['blocked','deleted'].includes(kind) ? kind : 'active');
@@ -82,8 +82,11 @@ for (const kind of ['invited unknown', 'blocked', 'deleted', 'merged', 'admin', 
         if (kind === 'linked elsewhere') w.env.DB.db.exec("INSERT INTO users(id,email,created) VALUES('elsewhere','elsewhere@example.com',0)");
         w.env.DB.db.prepare("INSERT INTO user_identities(provider,provider_id,user_id,created) VALUES('google','google-42',?,0)").run(kind === 'linked elsewhere' ? 'elsewhere' : 'owner');
     }
-    const response = await googleCallback(w, await fake.start()); assert.equal(response.status, 403);
-    assert.equal((await response.json()).error_description, 'Account unavailable.');
+    const response = await googleCallback(w, await fake.start());
+    const platform = kind.includes('admin'), informational = platform || kind === 'invited unknown';
+    assert.equal(response.status, informational ? 200 : 403);
+    if (informational) assert.match(await response.text(), platform ? /This address manages Vibernt/ : /is invite-only for now/);
+    else assert.equal((await response.json()).error_description, 'Account unavailable.');
     assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM sessions').get().n, 0);
     if (kind === 'invited unknown') assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM users').get().n, 0);
 });
@@ -94,13 +97,24 @@ for (const admission of ['invitation', 'allowlisted domain', 'admitted existing 
     if (admission === 'admitted existing account') w.env.DB.db.exec("INSERT INTO users(id,email,created) VALUES('old','person@example.com',0); INSERT INTO client_admissions(user_id,client_id,created) VALUES('old','app',0)");
     assert.equal((await googleCallback(w, await fake.start())).status, 303);
 });
+test('Google signs a realm admin into the app as an ordinary session', async t => {
+    const w = await world(t);
+    w.env.DB.db.exec("INSERT INTO admins VALUES('default','person@example.com','realm',0,NULL)");
+    const fake = fakeGoogle(t, w), response = await googleCallback(w, await fake.start());
+    assert.equal(response.status, 303);
+    assert.ok(new URL(response.headers.get('location')).searchParams.get('code'));
+    assert.equal(w.env.DB.db.prepare("SELECT admin_until FROM sessions WHERE method='google'").get().admin_until, null);
+});
 test('Google invited policy refuses an existing account the app never admitted (S3)', async t => {
     const w = await world(t, 'invited'), fake = fakeGoogle(t, w, { iss: 'accounts.google.com' });
     w.env.DB.db.exec("INSERT INTO users(id,email,created) VALUES('old','person@example.com',0)");
-    assert.equal((await googleCallback(w, await fake.start())).status, 403);
+    const response = await googleCallback(w, await fake.start());
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /is invite-only for now/);
+    assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM client_admissions').get().n, 0);
 });
 // Google is authoritative for an address only on gmail.com or when its signed hd equals the address's domain (S4).
-for (const [name, overrides, status] of [['hd matches', {}, 303], ['no hd', { hd: undefined }, 403], ['other hd', { hd: 'other.example' }, 403], ['gmail.com', { email: 'person@gmail.com', hd: undefined }, 303]])
+for (const [name, overrides, status] of [['hd matches', {}, 303], ['no hd', { hd: undefined }, 200], ['other hd', { hd: 'other.example' }, 200], ['gmail.com', { email: 'person@gmail.com', hd: undefined }, 303]])
     test(`Google domain admission and auto-link require an authoritative mailbox: ${name}`, async t => {
         const w = await world(t, 'invited'), fake = fakeGoogle(t, w, { iss: 'accounts.google.com', ...overrides });
         const email = overrides.email || 'person@example.com';
@@ -108,6 +122,7 @@ for (const [name, overrides, status] of [['hd matches', {}, 303], ['no hd', { hd
         w.env.DB.db.prepare("INSERT INTO users(id,email,created) VALUES('old',?,0)").run(email);
         const response = await googleCallback(w, await fake.start());
         assert.equal(response.status, status, await response.clone().text());
+        if (status === 200) assert.match(await response.text(), /is invite-only for now/);
         assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM user_identities WHERE user_id='old'").get().n, status === 303 ? 1 : 0);
     });
 test('Google subject stays linked when verified email changes to an unclaimed address', async t => {

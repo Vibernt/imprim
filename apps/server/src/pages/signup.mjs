@@ -6,8 +6,9 @@ import { pendingRequest } from '../oidc/requests.mjs';
 import { page } from './layout.mjs';
 import { attrs, button, escapeHtml, field, heading, linkButton, orDivider, result } from './ui.mjs';
 
-import { signupProviderNames } from '../auth/signup-policy.mjs';
+import { liveSignupEnabled, signupProviderNames } from '../auth/signup-policy.mjs';
 import { providerMark } from './provider-marks.mjs';
+import { inviteOnlyText } from './sign-in-refusal.mjs';
 
 export const signupProviderOrigins = Object.freeze({ google: 'https://accounts.google.com', github: 'https://github.com' });
 
@@ -58,9 +59,12 @@ export async function checkEmailPage(request, env, id) {
     const email = checkEmailAddress(request, id || '');
     const description = email ? t(env, 'If {email} can sign in here, a link is on its way.', { email })
         : t(env, 'If this address can sign in here, a link arrives within a minute.');
+    const client = pending?.client;
+    const inviteNote = client?.signup_policy === 'invited' && !await liveSignupEnabled(env, client)
+        ? `<p class="fd-screen-note">${escapeHtml(inviteOnlyText(env, brandingFor(env, client).name || env.REALM.display_name))}</p>` : '';
     return page(t(env, 'Check your email'), result('mail', 'accent', t(env, 'Check your email'), description) +
-        `<p class="fd-screen-note">${escapeHtml(t(env, 'Open it in this browser. The link works once and expires in 15 minutes.'))}</p>
-<a class="fd-link" href="${escapeHtml(id ? signInAgainHref(id) : '/login')}">${escapeHtml(t(env, 'Use a different email'))}</a>`, { client: pending?.client });
+        inviteNote + `<p class="fd-screen-note">${escapeHtml(t(env, 'Open it in this browser. The link works once and expires in 15 minutes.'))}</p>
+<a class="fd-link" href="${escapeHtml(id ? signInAgainHref(id) : '/login')}">${escapeHtml(t(env, 'Use a different email'))}</a>`, { client });
 }
 
 export async function pendingSignupPage(request, env, id) {

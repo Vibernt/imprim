@@ -858,4 +858,9 @@ export default Object.freeze({
     "No products yet": "Aucun produit pour le moment",
     "Joined": "Date d’arrivée",
     "More": "Plus",
+    "{app} is invite-only for now. Use the address you were invited with, or ask the person who invited you.": "{app} est accessible uniquement sur invitation pour le moment. Utilisez l’adresse à laquelle vous avez été invité ou contactez la personne qui vous a invité.",
+    "This address manages {realm}, so it can't sign in to apps. Use another address.": "Cette adresse administre {realm} et ne peut donc pas se connecter aux applications. Utilisez une autre adresse.",
+    "{email} isn't invited to {app}": "{email} n’a pas reçu d’invitation pour {app}",
+    "Sign-in refused": "Connexion refusée",
+    "App invitation revoked": "Invitation à l’application révoquée",
 });

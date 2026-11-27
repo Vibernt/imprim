@@ -32,9 +32,9 @@ function chip(id: string, label: string, value: string, controls: TemplateResult
   </div>`;
 }
 
-const sortedEvents = Object.entries(eventLabels).sort((a, b) => a[1].localeCompare(b[1], 'en'));
-
 export function auditFilters(query: URLSearchParams, change: Change) {
+  const sortedEvents = Object.keys(eventLabels).map(key => ({ key, label: eventLabel(key) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
   const event = query.get('event') ?? '', from = query.get('from') ?? '', to = query.get('to') ?? '';
   const actor = query.get('actor') ?? '', target = query.get('target') ?? '';
   const subject = [actor && 'Actor: ' + actor, target && 'Target: ' + target].filter(Boolean).join(', ');
@@ -48,7 +48,7 @@ export function auditFilters(query: URLSearchParams, change: Change) {
         <label class="fd-select"><select name="event" id="audit-event">
           <option value="">All events</option>
           ${event && !Object.hasOwn(eventLabels, event) ? html`<option selected>${event}</option>` : nothing}
-          ${sortedEvents.map(([key, label]) => html`<option value=${key} ?selected=${event === key}>${label}</option>`)}
+          ${sortedEvents.map(({ key, label }) => html`<option value=${key} ?selected=${event === key}>${label}</option>`)}
         </select></label>
       </div>`, data => change({ event: field(data, 'event') }), () => change({ event: '' }))}
     ${chip('audit-time-filter', 'Time range', range, auditDates(from, to),

@@ -73,19 +73,30 @@ test('a password is set only after an email link proves the mailbox, then sign-i
     assert.ok(!JSON.stringify(row).includes(GOOD));
     assert.equal(w.env.DB.db.prepare("SELECT count(*) n FROM audit WHERE event='password_set'").get().n, 1);
 });
-test('password sign-in succeeds; wrong password, unknown email and no password give the same answer', async t => {
+test('wrong password, unknown email and no password give the same response and log invalid credentials', async t => {
     const { w } = await passwordWorld(t);
-    await setPassword(w);
+    const db = w.env.DB.db;
+    assert.equal((await setPassword(w)).saved.status, 303);
     const ok = await signIn(w);
     assert.equal(ok.response.status, 200, await ok.response.clone().text());
     assert.ok(new URL((await ok.response.json()).redirect).searchParams.get('code'));
-    w.env.DB.db.exec("INSERT INTO users(id,realm_id,email,email_verified,created) VALUES('nopw','default','nopw@example.com',1,0)");
-    const answers = [];
+    const { id } = db.prepare("SELECT id FROM users WHERE email='person@example.com'").get();
+    db.exec("INSERT INTO users(id,realm_id,email,email_verified,created) VALUES('nopw','default','nopw@example.com',1,0)");
+    const logs = t.mock.method(console, 'log', () => {});
+    const expectedLogs = [];
     for (const [password, email] of [['wrong password here', 'person@example.com'], [GOOD, 'nobody@example.com'], [GOOD, 'nopw@example.com']]) {
         const { response } = await signIn(w, password, email);
-        answers.push([response.status, (await response.json()).error_description]);
+        assert.equal(response.status, 401);
+        assert.equal(response.headers.get('set-cookie'), null);
+        assert.deepEqual(await response.json(), { error: 'invalid_grant', error_description: 'Email or password is incorrect.' });
+        expectedLogs.push({ type: 'sign_in_refused', reason: 'invalid_credentials', method: 'password', client_id: 'app',
+            email: email[0] + '***@example.com', email_hash: createHash('sha256').update(email).digest('hex'), realm_id: 'default' });
     }
-    assert.deepEqual(answers, Array(3).fill([401, 'Email or password is incorrect.']));
+    assert.deepEqual(logs.mock.calls.map(({ arguments: [line] }) => JSON.parse(line)), expectedLogs);
+    assert.deepEqual(db.prepare("SELECT event,actor,target,detail,realm_id FROM audit WHERE event IN ('sign_in_refused','password_failed') ORDER BY id")
+        .all().map(row => ({ ...row })), [id, null, 'nopw'].map(actor => ({
+        event: 'password_failed', actor, target: null, detail: '{}', realm_id: 'default'
+    })));
 });
 test('password sign-in is refused where the app does not offer it, from another origin, or without a request', async t => {
     const { w } = await passwordWorld(t, ['email']);
@@ -158,13 +169,45 @@ test('an unverified account cannot set a password, and mailbox proof removes any
     await claimMailbox(w.env, w.env.DB.db.prepare("SELECT * FROM users WHERE id='u1'").get());
     assert.equal(w.env.DB.db.prepare('SELECT count(*) n FROM user_passwords').get().n, 0);
 });
-test('administrator addresses cannot sign in with a password', async t => {
+test('a realm administrator can sign in with a password but a platform administrator must prove it before seeing the refusal', async t => {
     const { w } = await passwordWorld(t);
-    w.env.DB.db.exec("INSERT INTO users(id,realm_id,email,email_verified,created) VALUES('adm','default','admin@example.com',1,0)");
+    const db = w.env.DB.db;
+    db.exec("INSERT INTO users(id,realm_id,email,email_verified,created) VALUES('adm','default','admin@example.com',1,0)");
     const { hashPassword } = await import('../apps/server/src/auth/password-hash.mjs');
     const h = await hashPassword(GOOD);
-    w.env.DB.db.prepare("INSERT INTO user_passwords VALUES('adm',?,?,?,?,0,0)").run(h.algorithm, h.iterations, h.salt, h.hash);
-    assert.equal((await signIn(w, GOOD, 'admin@example.com')).response.status, 401);
+    db.prepare("INSERT INTO user_passwords VALUES('adm',?,?,?,?,0,0)").run(h.algorithm, h.iterations, h.salt, h.hash);
+    const incorrect = await signIn(w, 'wrong password', 'admin@example.com');
+    assert.equal(incorrect.response.status, 401);
+    assert.doesNotMatch(await incorrect.response.text(), /manages/);
+    const { flow, response } = await signIn(w, GOOD, 'admin@example.com');
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /This address manages Vibernt, so it can&#39;t sign in to apps/);
+    assert.ok(html.includes(`href="/login?request_id=${flow.request_id}"`));
+    assert.equal(db.prepare('SELECT count(*) n FROM sessions').get().n, 0);
+    assert.equal(db.prepare('SELECT count(*) n FROM client_admissions').get().n, 0);
+    db.exec("UPDATE admins SET role='realm' WHERE email='admin@example.com'");
+    const realmAdmin = await signIn(w, GOOD, 'admin@example.com');
+    assert.ok(new URL((await realmAdmin.response.json()).redirect).searchParams.get('code'));
+    assert.equal(db.prepare('SELECT admin_until FROM sessions').get().admin_until, null);
+});
+test('promoting a realm administrator bars completion of an outstanding app password setup', async t => {
+    const { w } = await passwordWorld(t), db = w.env.DB.db;
+    db.exec("UPDATE admins SET role='realm' WHERE email='admin@example.com'");
+    const flow = await begin(w);
+    await w.post('/v1/auth/magic/request', { request_id: flow.request_id, email: 'admin@example.com', purpose: 'password',
+        turnstile: crypto.randomUUID() }, flow.cookie);
+    await w.drain();
+    const token = w.mails.at(-1).text.match(/#token=([A-Za-z0-9_-]+)/)[1];
+    const verified = await w.post('/v1/auth/magic/verify', { token }, flow.cookie);
+    const jar = [flow.cookie, cookieJar(verified)].join('; '), csrf = jar.match(/__Host-vi_csrf=([^;]+)/)[1];
+    db.exec("UPDATE admins SET role='platform' WHERE email='admin@example.com'");
+    assert.equal((await form(w, '/account/password', { request_id: flow.request_id, csrf: 'wrong', password: GOOD }, jar)).status, 403);
+    const response = await form(w, '/account/password', { request_id: flow.request_id, csrf, password: GOOD }, jar);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /This address manages Vibernt/);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM user_passwords').get().n, 0);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM codes').get().n, 0);
 });
 test('the sign-in page offers password, link and set-password actions only where the app allows them', async t => {
     const { w } = await passwordWorld(t);

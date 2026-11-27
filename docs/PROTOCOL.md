@@ -185,7 +185,7 @@ must equal the issuer. Credentials are discoverable and need user verification (
   needs `userHandle`.
 - **Recovery codes:** the first factor of any kind comes with them; removing the last factor voids them.
 - **Sign-in:** a passkey sign-in counts as multi-factor: `amr` is `hwk` (or `swk` for a synced passkey), `user` and
-  `mfa`, and `acr` is MFA. Administrators sign in by email link and use passkeys only as their second factor.
+  `mfa`, and `acr` is MFA. The administrator console requires email-link sign-in and accepts passkeys as the second factor.
 - **Second factor:** at `/mfa`, a passkey sits beside authenticator apps.
 - **Adding and removing:** adding one follows the rule for any factor (a fresh sign-in, or a fresh second factor when
   one exists). Removing one needs a fresh second factor. Each change is audited and emailed.
@@ -263,7 +263,9 @@ Email links live 15 minutes. The token appears only in the fragment of `/login#t
 and is sent only after a Sign in click. A link that fails (expired, used, another browser) shows the sign-in form again. Link prefetch GETs cannot consume it. Verification checks Origin, browser
 binding, single use, current account state and current admission; invitation expiry/revocation applies at verification.
 `browser_response:true` makes verification return `{redirect}` plus session cookies instead of a 303, allowing the
-page to navigate without fetch following a cross-origin redirect.
+page to navigate without fetch following a cross-origin redirect. A platform roster refusal after proof returns
+an app-branded `200 text/html` page from email-link verification, password sign-in or passkey verification.
+The page links back to the current browser-bound request and issues no session.
 
 When [self-serve sign-up](SIGNUP.md) is enabled, the hosted page can send `purpose: "signup"` for a pending
 app authorization request. The neutral response is `202` with `{accepted:true}`. Already eligible addresses get
@@ -288,9 +290,11 @@ follow-up link. If current app policy admits the address after mailbox confirmat
 link completes ordinary email sign-in. Approval links an unclaimed identity when creating the workspace. If another account claimed
 it after the request was recorded, the approval audit records `provider_link_skipped: true`.
 
-The GET starts are for sign-in. An otherwise eligible provider callback refused solely for missing app access
-can render the branded no-account page when that provider offers sign-up. Its Create an account link opens
-`/login?request_id=…&view=signup`. The provider profile is discarded and a fresh round trip starts from the form.
+The GET starts are for sign-in. A provider callback refused solely for missing app access renders a branded
+invitation-required page after authenticating the address. When the app offers self-serve sign-up, it shows the
+no-account page. Its **Create an account** link opens `/login?request_id=…&view=signup`. The provider profile is
+discarded and a fresh round trip starts from the form. These pages and the platform-address refusal return 200.
+Account conflicts and unavailable accounts continue to return 403.
 
 Schema `0034_provider_signup.sql` stores OAuth purpose and workspace name in `oauth_states` and optional Google
 or GitHub identity metadata on `magic_links` and `signup_requests`. Older OAuth states default to `sign_in`.
@@ -304,8 +308,10 @@ applies again on SSO, at agent consent and in the `/token` transaction. A refuse
 to the client's redirect URI, including under `prompt=none`.
 Open clients allow new verified users. Blocked/deleted/merged users always fail. Invitations do not grant app access.
 An admin in the realm's D1 roster can sign in by email at `/login` before any app is registered. Standalone login is
-restricted to that roster; entries are compared case-insensitively. GitHub and Google cannot authenticate administrator
-emails, either the provider email or an existing linked account email.
+restricted to that roster; entries are compared case-insensitively. A `realm` roster entry grants no special app
+access or administrator scope to an app session. A `platform` entry bars app sign-in, admission and self-serve
+sign-up in that realm. Provider sign-in checks both the authenticated address and the linked account address.
+An administrator email-link session can authorize an app if it meets the app's method and admission rules.
 
 GitHub's stable numeric id is the identity key, not login/email. First linking uses only a verified primary email;
 a linked numeric id retains its original user after a provider email change to an unclaimed address. A verified
@@ -344,8 +350,8 @@ or when the same browser already holds a session for that user. GitHub never aut
 existing account signs in by email link first, then continues with GitHub in the same browser. Linking never changes
 the subject; an established Google subject retains its owner across unclaimed email changes. Conflicts with an
 existing email owner, concurrent links to someone else, and blocked/deleted/merged accounts fail without a session.
-First sign-in follows the same invited/open policy as email and GitHub; refused admission returns the neutral
-`Account unavailable.` error and creates no session. See [Google's validation guidance](https://developers.google.com/identity/openid-connect/openid-connect).
+First sign-in follows the same invited/open policy as email and GitHub and creates no session on refusal.
+See [Google's validation guidance](https://developers.google.com/identity/openid-connect/openid-connect).
 
 Session token and CSRF token are random and hash-stored. Cookies: `__Host-vi_session` (HttpOnly) and `__Host-vi_csrf`
 (JS-readable), Secure, Path=/, SameSite=Lax, 30 days, no Domain. Mutations using the identity session require exact
@@ -355,6 +361,12 @@ Configured Turnstile validates success, hostname, action `sign_in`, and records 
 Siteverify outages enter an audited existing-user-only mode with stricter rate limits; new sign-ups remain blocked.
 Invalid challenges and secret errors fail. Request delivery failures are audited; the public
 magic request remains neutral and does not claim delivery.
+
+The `sign_in_refused` audit event targets the app and stores `reason`, `method`, `client_id`, `email` (masked)
+and `email_hash` (hex SHA-256 of the normalized address). The structured log adds `realm_id`. Only refusals
+after the applicable limits and bot checks passed are audited. `rate_limited`, `turnstile_failed` and
+`invalid_credentials` are log-only. Invalid credentials still produce the `password_failed` audit event.
+See [Operations](OPERATIONS.md#monitoring-and-logs) for the reason codes.
 
 ## Logout and errors
 

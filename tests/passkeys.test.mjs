@@ -54,6 +54,33 @@ test('a verified passkey can start a hosted join for an owner without an app adm
     assert.equal(new URL((await response.json()).redirect).pathname, joinPath);
     assert.equal(db.prepare("SELECT count(*) AS n FROM client_admissions WHERE client_id='app'").get().n, 0);
 });
+test('a realm administrator can use a passkey, and promotion to platform bars it without updating the credential', async t => {
+    const w = await world(t), db = w.env.DB.db;
+    db.exec("INSERT INTO admins VALUES('default','person@example.com','realm',0,NULL)");
+    const { device } = await registered(w, t);
+    const attempt = async () => {
+        const flow = await begin(w);
+        const { publicKey } = await (await w.post('/v1/auth/passkey/options', { request_id: flow.request_id }, flow.cookie)).json();
+        return { flow, assertion: await device.get(publicKey) };
+    };
+    const allowed = await attempt();
+    const signIn = ({ flow, assertion }, cookie = flow.cookie, headers = {}) =>
+        w.post('/v1/auth/passkey/verify', assertion, cookie, headers);
+    assert.ok(new URL((await (await signIn(allowed)).json()).redirect).searchParams.get('code'));
+    assert.deepEqual(db.prepare('SELECT DISTINCT admin_until FROM sessions').all().map(row => row.admin_until), [null]);
+    const credential = db.prepare('SELECT sign_count,last_used FROM webauthn_credentials').get();
+    db.exec("UPDATE admins SET role='platform' WHERE email='person@example.com'; DELETE FROM sessions; DELETE FROM codes;");
+    const barred = await attempt();
+    assert.equal((await signIn(barred, (await begin(w)).cookie)).status, 400);
+    assert.equal((await signIn(barred, barred.flow.cookie, { origin: 'https://other.example.com' })).status, 403);
+    const refused = await signIn(barred);
+    assert.equal(refused.status, 200);
+    assert.match(await refused.text(), /This address manages Vibernt/);
+    assert.equal((await signIn(barred)).status, 400);
+    assert.deepEqual(db.prepare('SELECT sign_count,last_used FROM webauthn_credentials').get(), credential);
+    assert.equal(db.prepare('SELECT count(*) n FROM sessions').get().n, 0);
+    assert.equal(db.prepare('SELECT count(*) n FROM codes').get().n, 0);
+});
 test('assertions are refused for a wrong origin, no user verification, a reused challenge or a counter that goes back', async t => {
     const w = await world(t);
     const { device } = await registered(w, t);

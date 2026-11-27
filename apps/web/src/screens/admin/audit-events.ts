@@ -1,3 +1,5 @@
+import { t } from '../../lib/i18n';
+
 export const eventLabels: Record<string, string> = {
   account_deleted: 'Account deleted',
   admin_asset_upload: 'Brand asset uploaded',
@@ -39,6 +41,7 @@ export const eventLabels: Record<string, string> = {
   email_changed: 'Email address changed',
   event_dispatch_failed: 'Event delivery failed',
   invitation_registered: 'App invitation registered',
+  invitation_revoked: 'App invitation revoked',
   logout_dispatch_failed: 'Sign-out event delivery failed',
   mailbox_claimed: 'Email ownership verified',
   machine_client_requested: 'Machine client requested',
@@ -61,6 +64,7 @@ export const eventLabels: Record<string, string> = {
   recovery_codes_regenerated: 'Recovery codes replaced',
   sessions_revoked: 'Sessions revoked',
   sign_in: 'Signed in',
+  sign_in_refused: 'Sign-in refused',
   sign_out: 'Signed out',
   signup_email_failed: 'Sign-up email delivery failed',
   signup_request_declined: 'Sign-up request declined',
@@ -84,4 +88,8 @@ export const eventLabels: Record<string, string> = {
   workspace_signup: 'Workspace created at sign-up',
 };
 
-export const eventLabel = (code: string) => Object.hasOwn(eventLabels, code) ? eventLabels[code] : code;
+export function eventLabel(code: string) {
+  if (code === 'sign_in_refused') return t('Sign-in refused');
+  if (code === 'invitation_revoked') return t('App invitation revoked');
+  return Object.hasOwn(eventLabels, code) ? eventLabels[code] : code;
+}

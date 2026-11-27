@@ -266,6 +266,7 @@ const rejectWorkspace = (request, code, status) => assert.rejects(request, {
 test('a workspace invitation from alpha admits a beta member and delivers versioned events to all shared apps', async t => {
     const w = await fixture(t);
     const { alpha, beta, 'beta-console': console } = w.apps;
+    w.env.DB.db.exec("UPDATE admins SET role='realm' WHERE email='admin@example.com'");
     const betaAdmin = await appGuest(w, beta, 'admin@example.com');
     const fields = { name: teamName, products: ['beta'], firstOwnerEmail: ownerEmail };
     await rejectWorkspace(beta.createWorkspace({ ...fields, ...actor(betaAdmin) }), 'access_denied', 403);

@@ -43,7 +43,7 @@ async function configure(w, id, provider, methods = [id]) {
     w.env.DB.db.prepare('UPDATE clients SET sign_in_methods=? WHERE id=?').run(JSON.stringify(methods), 'app');
     forgetRealms(w.env);
 }
-async function signIn(w, id, { code = 'good-code', method = 'GET', fake } = {}) {
+async function signIn(w, id, { code = 'good-code', method = 'GET', fake, beforeCallback } = {}) {
     const flow = await begin(w);
     const start = await w.call(`/v1/auth/provider/${id}/start?request_id=${flow.request_id}`, { headers: { cookie: flow.cookie } });
     assert.equal(start.status, 303, await start.clone().text());
@@ -51,6 +51,7 @@ async function signIn(w, id, { code = 'good-code', method = 'GET', fake } = {}) 
     fake.state.authorize = authorize.searchParams;
     const jar = [flow.cookie, cookieJar(start)].join('; ');
     const params = { code, state: authorize.searchParams.get('state') };
+    await beforeCallback?.(params, start);
     let callback;
     if (method === 'POST') {
         // A real browser sends only SameSite=None cookies on Apple's cross-site POST.
@@ -74,6 +75,29 @@ test('an authoritative registry provider can offer a hosted join for an owner wi
     assert.equal(callback.status, 303, await callback.clone().text());
     assert.equal(new URL(callback.headers.get('location')).pathname, joinPath);
     assert.equal(db.prepare('SELECT count(*) AS n FROM client_admissions').get().n, 0);
+});
+test('registry provider refusals use the same categories and a foreign browser cannot spend the state', async t => {
+    const w = await world(t, 'invited'), db = w.env.DB.db;
+    w.env.ACME_SECRET = 'test-secret';
+    const fake = await fakeProvider(t);
+    await configure(w, 'acme', acme);
+    const { callback, params, jar } = await signIn(w, 'acme', { fake, beforeCallback: async (query, start) => {
+        const foreign = await begin(w);
+        const cookie = [foreign.cookie, cookieJar(start)].join('; ');
+        const response = await w.call('/login/provider/acme/callback?' + new URLSearchParams(query), { headers: { cookie } });
+        assert.equal(response.status, 401);
+        assert.equal(fake.state.tokenRequests.length, 0);
+    } });
+    assert.equal(callback.status, 200);
+    assert.match(await callback.text(), /person@example\.com isn&#39;t invited to Vibernt/);
+    assert.equal((await w.call('/login/provider/acme/callback?' + new URLSearchParams(params), { headers: { cookie: jar } })).status, 401);
+    fake.state.claims = { email: 'admin@example.com' };
+    const platform = await signIn(w, 'acme', { fake });
+    assert.equal(platform.callback.status, 200);
+    assert.match(await platform.callback.text(), /This address manages Vibernt/);
+    assert.equal(db.prepare('SELECT count(*) AS n FROM sessions').get().n, 0);
+    assert.deepEqual(db.prepare("SELECT json_extract(detail,'$.reason') AS reason FROM audit WHERE event='sign_in_refused' ORDER BY id").all()
+        .map(row => row.reason), ['not_invited', 'admin_address']);
 });
 test('a generic OIDC provider signs in with PKCE, state and nonce; its email is a provider claim, not mailbox proof', async t => {
     const w = await world(t); w.env.ACME_SECRET = 'shh';

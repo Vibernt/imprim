@@ -49,6 +49,7 @@ import { workspaceApi, workspaceApiPath } from './workspaces/api.mjs';
 import { workspaceJoin } from './workspaces/join.mjs';
 import { workspaceAccess } from './workspaces/hosted-access.mjs';
 import { switchAccount } from './auth/switch-account.mjs';
+import { reportSignInError, signInAttempt } from './auth/sign-in-refusals.mjs';
 const PROVIDER_START = /^\/v1\/auth\/provider\/([a-z][a-z0-9-]{1,39})\/start$/, PROVIDER_CALLBACK = /^\/login\/provider\/([a-z][a-z0-9-]{1,39})\/callback$/;
 async function route(request, env, ctx, url) {
     if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return admin(request, env, ctx);
@@ -181,6 +182,7 @@ export async function handleRequest(request, base, ctx) {
         env = { ...realmEnv(base, await realmFor(base, url.origin)), REQUEST: describeDevice(request), CTX: ctx, SEEN: {} };
         // The page language, from the realm and Accept-Language; handlers add the app, ui_locales and the person.
         startLocale(env, request, url);
+        env.SIGN_IN_ATTEMPT = signInAttempt(request.method, url.pathname);
         const limiter = limiterFor(request.method, url.pathname);
         if (limiter) await limitAddress(env, request, limiter);
         const response = await route(request, env, ctx, url);
@@ -192,6 +194,11 @@ export async function handleRequest(request, base, ctx) {
         response.headers.set('strict-transport-security', 'max-age=31536000');
         return isShellResponse(response) ? response : await withBrand(response, env);
     } catch (error) {
+        try {
+            await reportSignInError(env, error);
+        } catch {
+            console.error(JSON.stringify({ type: 'sign_in_refusal_audit_failed', code: 'internal_error' }));
+        }
         const known = error instanceof AppError;
         const logPath = accountWorkspaceApiPath(url.pathname) ? '/v1/account/workspaces' : url.pathname;
         if (!known) console.error(JSON.stringify({ type: 'request_failed', path: logPath, code: 'internal_error' }));

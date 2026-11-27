@@ -100,7 +100,9 @@ test('GitHub links an existing account from a browser already signed in to it; s
 test('GitHub verified email does not satisfy an allowed domain (S4)', async t => {
     const w = await world(t, 'invited'); github(t);
     w.env.DB.db.exec(`UPDATE clients SET allowed_domains='["example.com"]'`);
-    assert.equal((await callback(w, await start(w))).status, 403);
+    const response = await callback(w, await start(w));
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /isn&#39;t invited to Vibernt/);
     assert.equal(w.env.DB.db.prepare('SELECT count(*) AS n FROM users').get().n, 0);
 });
 for (const kind of ['admin email', 'linked admin', 'blocked', 'deleted', 'invited unknown']) test(`GitHub refuses ${kind}`, async t => {
@@ -110,7 +112,11 @@ for (const kind of ['admin email', 'linked admin', 'blocked', 'deleted', 'invite
         w.env.DB.db.prepare('INSERT INTO users(id,email,status,created) VALUES(?,?,?,0)').run('old', kind === 'linked admin' ? 'admin@example.com' : 'person@example.com', kind === 'linked admin' ? 'active' : kind);
         w.env.DB.db.exec("INSERT INTO user_identities(provider,provider_id,user_id,created) VALUES('github','42','old',0)");
     }
-    assert.equal((await callback(w, await start(w))).status, 403);
+    const response = await callback(w, await start(w));
+    const platform = kind.includes('admin'), informational = platform || kind === 'invited unknown';
+    assert.equal(response.status, informational ? 200 : 403);
+    if (informational) assert.match(await response.text(), platform ? /This address manages Vibernt/ : /is invite-only for now/);
+    else assert.equal((await response.json()).error_description, 'Account unavailable.');
     assert.equal(w.env.DB.db.prepare('SELECT count(*) AS n FROM sessions').get().n, 0);
 });
 test('GitHub exchange failure consumes state and never creates an account', async t => {

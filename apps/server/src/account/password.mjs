@@ -9,6 +9,15 @@ import { accountPage } from '../pages/shell.mjs';
 import { heading, field, hidden, button, callout, actions } from '../pages/ui.mjs';
 import { t } from '../i18n/index.mjs';
 import { passwordStatus, requirePasswordEmail, savePassword } from './password-service.mjs';
+import { appSignInBarred } from '../services/admission.mjs';
+import { recordSignInRefusal } from '../auth/sign-in-refusals.mjs';
+import { platformAddressPage } from '../pages/sign-in-refusal.mjs';
+
+async function platformRefusal(env, pending, session) {
+    if (!pending || !await appSignInBarred(env, session.email)) return null;
+    await recordSignInRefusal(env, 'admin_address', { method: 'password', clientId: pending.client.id, email: session.email, audit: true });
+    return platformAddressPage(env, pending);
+}
 function form(env, request, session, values, password, saved, pending) {
     const current = password.current_password_required
         ? field({ id: 'current_password', label: t(env, 'Current password'), type: 'password', name: 'current_password', autocomplete: 'current-password', required: true }) : '';
@@ -30,11 +39,15 @@ export async function passwordPage(request, env, ctx) {
     if (request.method === 'GET') {
         const query = uniqueParams(new URL(request.url).searchParams);
         const pending = query.request_id ? await pendingRequest(env, request, query.request_id) : null;
+        const refused = await platformRefusal(env, pending, session);
+        if (refused) return refused;
         return form(env, request, session, query, await passwordStatus(env, session), Boolean(query.done), pending);
     }
     const body = await readBody(request, 'form');
     await requireCsrf(request, env, session, body.csrf);
     const pending = body.request_id ? await pendingRequest(env, request, body.request_id) : null;
+    const refused = await platformRefusal(env, pending, session);
+    if (refused) return refused;
     await savePassword(env, ctx, session, body);
     if (!pending) return redirect(`${env.ISSUER}/account/password?done=1`);
     // Continue to the app as a password sign-in: the person has just proved the mailbox and chosen the password.

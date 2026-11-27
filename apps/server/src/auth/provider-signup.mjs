@@ -6,6 +6,7 @@ import { limitEmail } from './rate-limit.mjs';
 import { signupOwnershipGuard } from '../workspaces/signup-guards.mjs';
 import { completeOpenSignup } from '../workspaces/signup.mjs';
 import { submitSignupApproval } from '../workspaces/signup-requests.mjs';
+import { reportSignInRefusal } from './sign-in-refusals.mjs';
 
 export async function completeProviderSignup(request, env, pending, state, profile, mode, proof, clearCookie) {
     const signup = { email: profile.email, workspace_name: state.workspace_name, provider: state.provider,
@@ -25,6 +26,7 @@ export async function completeProviderSignup(request, env, pending, state, profi
     try {
         await deliverMagicLink(env, pending, pending.row.browser_hash, { ...signup, purpose: 'signup' });
     } catch {
+        await reportSignInRefusal(env, 'link_skipped', signup.email);
         throw new AppError(500, 'server_error', 'The request could not be completed.');
     }
     return redirect(`${env.ISSUER}/check-email?request_id=${id}`, [checkEmailCookie(pending.row.id, signup.email), clearCookie]);

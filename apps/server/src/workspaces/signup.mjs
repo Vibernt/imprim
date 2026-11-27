@@ -1,6 +1,6 @@
 import { addProducts, addWorkspaceOwner, guardedWrite, workspaceId } from './model.mjs';
 import { signupAccessGuard, signupBrowserChecks, signupOwnershipGuard, signupSettingsGuard,
-    signupProviderAccountGuard, signupProviderMethodGuard } from './signup-guards.mjs';
+    signupAccountRoleGuard, signupProviderMethodGuard } from './signup-guards.mjs';
 import { signupProviderEffects, signupProviderGuard } from './signup-identity.mjs';
 import { readSignupOwner, signupAccount } from './signup-account.mjs';
 
@@ -24,13 +24,13 @@ export async function createSignupWorkspace(env, client, signup, {
     const { email, workspace_name, provider } = signup;
     const id = workspaceId();
     const { owner, guard, effects } = await signupAccount(env, email, now);
-    const providerChecks = provider ? [signupProviderAccountGuard(env, email)] : [];
+    const providerChecks = [];
     if (provider && !requestId) providerChecks.push(signupProviderGuard(env, signup));
     const link = provider ? signupProviderEffects(env, signup, owner, now, Boolean(requestId)) : { effects: [] };
     const workspace = await guardedWrite(env, {
         client, id, now,
         checks: [...checks, signupSettingsGuard(env, client, mode), signupOwnershipGuard(env, client, email),
-            guard, ...providerChecks, signupAccessGuard(env, client, email, now)],
+            guard, signupAccountRoleGuard(env, email), ...providerChecks, signupAccessGuard(env, client, email, now)],
         create: { kind: 'team', name: signupName(email, workspace_name), owner: null, via: 'signup' },
         effects: [...effects, ...link.effects, addProducts(env, id, [client.product], now), addWorkspaceOwner(env, id, owner, now),
             env.DB.prepare(`INSERT INTO client_admissions(user_id,client_id,created,source) VALUES(?,?,?,'workspace')

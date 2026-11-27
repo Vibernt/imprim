@@ -49,7 +49,8 @@ export async function readAudit(env, id, action, query) {
     const clientActors = `a.event IN ('code_replay','invitation_registered','machine_client_requested','workspace_resource_named') OR
         (a.event LIKE 'workspace-%' AND coalesce(a.actor=CASE WHEN json_valid(a.detail)
             THEN json_extract(a.detail,'$.client_id') END, 0))`;
-    const clientTargets = "a.event IN ('admin_client_create','admin_client_draft_create','admin_client_activate','admin_client_update','admin_client_secret_rotate','backchannel_expired')";
+    const clientTargets = `a.event IN ('admin_client_create','admin_client_draft_create','admin_client_activate',
+        'admin_client_update','admin_client_secret_rotate','backchannel_expired','invitation_registered','invitation_revoked','sign_in_refused')`;
     const serviceTargets = "a.event IN ('admin_service_create','admin_service_update','admin_service_delete','machine_client_disabled','machine_client_renewed')";
     const { results: rows } = await env.DB.prepare(`SELECT a.*,
         coalesce(u.email,nullif(json_extract(c.branding,'$.name'),'')) AS actor_label,

@@ -12,6 +12,7 @@ import { liveSignupEnabled } from '../auth/signup-policy.mjs';
 import { AppError } from '../lib/errors.mjs';
 import { providerMark } from './provider-marks.mjs';
 import { appLinksNote } from './next-steps.mjs';
+import { inviteOnlyText, showSignInRefusal } from './sign-in-refusal.mjs';
 const challengeConfigured = env => Boolean(env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET);
 // One form serves email links and passwords: the button pressed chooses the action (see signInScript).
 function emailForm(env, requestId, { link, password, signup, active, providers }) {
@@ -27,7 +28,8 @@ ${signup && password ? `<div data-sign-in-only${attrs({ hidden: active })}>${pas
 ${signup ? signupFields(env, active) : ''}${challengeConfigured(env) ? `<div class="cf-turnstile" data-sitekey="${escapeHtml(env.TURNSTILE_SITE_KEY)}" data-action="sign_in"></div>` : ''}
 ${signup ? `<div id="sign-in-actions" class="fd-stack" data-gap="4" data-sign-in-only${attrs({ hidden: active })}>${signInButtons}</div>${signupButtons(env, providers, active)}` : signInButtons}</form>`;
 }
-export function signInPage(env, requestId = '', responseCookies = [], client = null, { signup = false, signupView = false, appLinks = '' } = {}) {
+export function signInPage(env, requestId = '', responseCookies = [], client = null,
+    { signup = false, signupView = false, appLinks = '', inviteOnly = client?.signup_policy === 'invited' && !signup } = {}) {
     useLocale(env, { client });
     const branding = brandingFor(env, client);
     const methods = client ? signInSettings(client).methods : ['email'];
@@ -42,7 +44,8 @@ export function signInPage(env, requestId = '', responseCookies = [], client = n
     // In the app's order; "or" separates the email form from the buttons around it.
     const divider = or(env, active), ordered = controls.flatMap((c, i) => c.startsWith('<form') ? [...(i > 0 ? [divider] : []), c, ...(i < controls.length - 1 ? [divider] : [])] : [c]);
     const heading = brandCopy(env, branding, 'sign_in_heading') || t(env, 'Sign in to {name}', { name: branding.name || env.REALM.display_name }), help = brandCopy(env, branding, 'sign_in_help');
-    return page(t(env, 'Sign in'), `<header class="fd-screen-head" id="sign-in-head"${attrs({ hidden: active })}><h1 class="fd-h1">${escapeHtml(heading)}</h1>${help ? `<p class="fd-muted">${escapeHtml(help)}</p>` : ''}</header>
+    const inviteNote = inviteOnly ? `<p class="fd-muted">${escapeHtml(inviteOnlyText(env, branding.name || env.REALM.display_name))}</p>` : '';
+    return page(t(env, 'Sign in'), `<header class="fd-screen-head" id="sign-in-head"${attrs({ hidden: active })}><h1 class="fd-h1">${escapeHtml(heading)}</h1>${inviteNote}${help ? `<p class="fd-muted">${escapeHtml(help)}</p>` : ''}</header>
 ${signup ? signupHeading(env, active) : ''}
 <section id="request" class="fd-stack" data-gap="3" data-request-id="${escapeHtml(requestId)}">${ordered.join('\n')}${appLinks}</section>
 <section id="confirm" class="fd-stack" data-gap="4" hidden><header class="fd-screen-head"><p class="fd-muted">${escapeHtml(t(env, 'Finish signing in with the link you opened. Keep this browser.'))}</p></header>${button(t(env, 'Sign in'), { id: 'verify', type: 'button', variant: 'primary', size: 'lg', block: true })}</section>
@@ -58,8 +61,10 @@ export async function loginPage(request, env, url) {
     if (id && tokenShape(existing)) {
         try {
             const { row, client } = await pendingRequest(env, request, id);
+            const liveSignup = await liveSignupEnabled(env, client);
             return signInPage(env, row.id, responseCookies, client, {
-                signup: !row.agent_client_id && await liveSignupEnabled(env, client), signupView: url.searchParams.get('view') === 'signup'
+                signup: !row.agent_client_id && liveSignup, inviteOnly: client.signup_policy === 'invited' && !liveSignup,
+                signupView: url.searchParams.get('view') === 'signup'
             });
         } catch (error) {
             if (!(error instanceof AppError) || error.status >= 500) throw error;
@@ -71,6 +76,7 @@ const MESSAGES = [msg('Sign-in failed.'), msg('Enter your password, or choose to
 export const signInScriptFor = locale => localizeScript(signInScript, locale, MESSAGES);
 // Reading a fragment does not redeem it. Only the explicit click sends the token with a same-origin POST.
 export const signInScript = `
+${showSignInRefusal}
 const params = new URLSearchParams(location.hash.slice(1));
 const token = params.get('token');
 if(token){history.replaceState(null,'',location.pathname+location.search);document.getElementById('request').hidden=true;document.getElementById('confirm').hidden=false;const footer=document.getElementById('signup-foot');if(footer)footer.hidden=true;}
@@ -114,6 +120,7 @@ document.getElementById('verify').addEventListener('click',async()=>{
  const button=document.getElementById('verify');button.disabled=true;
  try{
   const result=await fetch('/v1/auth/magic/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token, browser_response:true})});
+  if(await showSignInRefusal(result))return;
   const body=await result.json();if(!result.ok)throw new Error(body.error_description||'Sign-in failed.');
   location.assign(body.redirect);
  }catch(error){
@@ -132,6 +139,7 @@ emailForm?.addEventListener('submit',async(event)=>{
   if(action==='password'){
    if(!form.get('password'))throw new Error('Enter your password, or choose to get an email link.');
    const result=await fetch('/v1/auth/password',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...common,password:form.get('password')})});
+   if(await showSignInRefusal(result))return;
    const body=await result.json();if(!result.ok)throw new Error(body.error_description||'Sign-in failed.');
    location.assign(body.redirect);return;
   }

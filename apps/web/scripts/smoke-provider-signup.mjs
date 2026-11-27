@@ -22,6 +22,7 @@ export function providerSignupSmoke(browser) {
             response_type: 'code', scope: 'openid email', state: 'rp-state', nonce: 'rp-nonce',
             code_challenge: await challengeOf(server.verifier), code_challenge_method: 'S256' });
         await page.goto(server.origin + '/authorize?' + authorize);
+        assert.equal(await page.getByText('Notes is invite-only for now.', { exact: false }).count(), 0);
         const id = await page.locator('#request').getAttribute('data-request-id');
         const googleIn = page.getByRole('link', { name: 'Sign in with Google' });
         const githubIn = page.getByRole('link', { name: 'Sign in with GitHub' });
@@ -45,6 +46,7 @@ export function providerSignupSmoke(browser) {
         assert.equal(posted.method(), 'POST');
         assert.equal(posted.postDataJSON().purpose, 'signup');
         await page.waitForURL('**/check-email?request_id=' + id);
+        assert.equal(await page.getByText('Notes is invite-only for now.', { exact: false }).count(), 0);
         await server.drain();
         assert.equal(db.prepare('SELECT count(*) AS n FROM oauth_states').get().n, 0);
 
@@ -81,16 +83,28 @@ export function providerSignupSmoke(browser) {
         // Drive a sign-in callback in the same browser without contacting GitHub.
         const jar = (await context.cookies(server.origin)).filter(cookie => cookie.name === '__Host-vi_browser')
             .map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
-        const start = await server.call('/v1/auth/github/start?request_id=' + id, { headers: { cookie: jar } });
-        assert.equal(start.status, 303);
-        const value = start.headers.getSetCookie()[0].match(/__Host-vi_oauth=([^;]+)/)[1];
-        await context.addCookies([{ name: '__Host-vi_oauth', value, domain: 'localhost', path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
-        const state = new URL(start.headers.get('location')).searchParams.get('state');
-        await page.goto(server.origin + '/auth/github/callback?' + new URLSearchParams({ state, code: 'provider-test-code' }));
+        const signInCallback = async () => {
+            const start = await server.call('/v1/auth/github/start?request_id=' + id, { headers: { cookie: jar } });
+            assert.equal(start.status, 303);
+            const value = start.headers.getSetCookie()[0].match(/__Host-vi_oauth=([^;]+)/)[1];
+            await context.addCookies([{ name: '__Host-vi_oauth', value, domain: 'localhost', path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
+            const state = new URL(start.headers.get('location')).searchParams.get('state');
+            await page.goto(server.origin + '/auth/github/callback?' + new URLSearchParams({ state, code: 'provider-test-code' }));
+        };
+        await signInCallback();
         await page.getByRole('heading', { name: 'No Notes account yet' }).waitFor();
         await page.getByText('applicant@example.com has no Notes account.', { exact: false }).waitFor();
         assert.equal(await page.getByRole('link', { name: 'Create an account' }).getAttribute('href'), signIn + '&view=signup');
         assert.equal(await page.getByRole('link', { name: 'Sign in another way' }).getAttribute('href'), signIn);
         assert.equal(await page.locator('script[src^="/fire/"], [style], style').count(), 0);
+
+        db.exec("UPDATE clients SET self_signup='off' WHERE id='app'");
+        await signInCallback();
+        await page.getByRole('heading', { name: "applicant@example.com isn't invited to Notes" }).waitFor();
+        await page.getByText('Notes is invite-only for now.', { exact: false }).waitFor();
+        assert.equal(await page.getByRole('link', { name: 'Create an account' }).count(), 0);
+        await page.getByRole('link', { name: 'Sign in another way' }).click();
+        await page.waitForURL('**' + signIn);
+        await githubIn.waitFor();
     });
 }

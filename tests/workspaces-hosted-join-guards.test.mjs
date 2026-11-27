@@ -5,7 +5,9 @@ import { addTeam, jarOf, joinWorld } from './support/workspace-join.mjs';
 import { begin } from './support/world.mjs';
 
 async function setup(t) {
-    const w = await joinWorld(t), owner = await w.person('admin@example.com');
+    const w = await joinWorld(t);
+    w.db.exec("UPDATE admins SET role='realm' WHERE email='admin@example.com'");
+    const owner = await w.person('admin@example.com');
     addTeam(w.db, 'team', owner.user.id);
     const flow = await w.offer(owner);
     return { ...w, owner, flow };
@@ -77,7 +79,8 @@ for (const [label, change] of [
     ['client redirect', w => w.db.exec(`UPDATE clients SET redirect_uris='["https://other.example/callback"]' WHERE id='other'`)],
     ['sign-in methods', w => w.db.exec(`UPDATE clients SET sign_in_methods='["passkey"]' WHERE id='other'`)],
     ['request expiry', w => w.db.prepare('UPDATE auth_requests SET expires_at=0 WHERE id=?').run(w.flow.id)],
-    ['session revocation', w => w.db.prepare('DELETE FROM sessions WHERE hash=?').run(w.owner.session.hash)]
+    ['session revocation', w => w.db.prepare('DELETE FROM sessions WHERE hash=?').run(w.owner.session.hash)],
+    ['promotion to platform admin', w => w.db.exec("UPDATE admins SET role='platform' WHERE email='admin@example.com'")]
 ]) test(`the hosted write fences a concurrent change to ${label}`, async t => {
     const w = await setup(t), batch = w.env.DB.batch;
     t.mock.method(w.env.DB, 'batch', statements => { change(w); return batch(statements); });
@@ -86,6 +89,16 @@ for (const [label, change] of [
     assert.equal(w.productCount(), 0);
     assert.equal(w.db.prepare("SELECT version FROM workspaces WHERE id='team'").get().version, 1);
     assert.equal(w.db.prepare('SELECT count(*) AS n FROM workspace_event_outbox').get().n, 0);
+});
+
+test('a platform administrator cannot accept an already issued workspace join offer', async t => {
+    const w = await setup(t);
+    w.db.exec("UPDATE admins SET role='platform' WHERE email='admin@example.com'");
+    const refused = await w.answer(w.flow);
+    assert.equal(refused.status, 200);
+    assert.match(await refused.text(), /This address manages Vibernt/);
+    assert.equal(w.productCount(), 0);
+    assert.equal(w.db.prepare("SELECT version FROM workspaces WHERE id='team'").get().version, 1);
 });
 
 test('simultaneous joins for one request can add at most one of its offered workspaces', async t => {
