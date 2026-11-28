@@ -3,6 +3,18 @@
 Each release lists the migrations it needs. Apply them in order, then deploy, as [Deploying](docs/DEPLOY.md)
 describes. The client package's own changes are in [Clients](docs/CLIENTS.md).
 
+## 2026-11-28
+
+No migration. The account and console screens only.
+
+- **Fire v0.14.1.** Its logo field previews the chosen file as a `data:` URL, so it works under Imprim's
+  `img-src 'self' data:` policy. `docs/fire`: GUIDE, WRITING, AGENT-RULES, CLASSES and VOCABULARY from the tag.
+- **Branding's logo uploads use Fire's logo field**: one row per logo with a preview of the saved or chosen image,
+  Remove, and the error line. The same types (SVG, PNG, JPEG, WebP) and 0.25 MB limit are checked before anything
+  is read or sent; uploads still go through Imprim's asset API, and removal is saved with the rest of the branding.
+- **List rows wrap cleanly on a phone.** On Security, Sessions and Agents, dates such as "last used" now sit in the
+  row's description and wrap from the left, instead of hanging under the row on the right.
+
 ## 2026-11-27.3
 
 No migration.

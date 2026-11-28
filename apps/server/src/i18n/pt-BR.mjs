@@ -172,6 +172,8 @@ export default Object.freeze({
     "Add authenticator app": "Adicionar app autenticador",
     "Authenticator apps": "Apps autenticadores",
     "Added {date}": "Adicionado em {date}",
+    "Added {date} · last used {lastUsed}": "Adicionado em {date} · último uso em {lastUsed}",
+    "Added {date} · never used": "Adicionado em {date} · nunca usado",
     "last used {date}": "último uso em {date}",
     "never used": "nunca usado",
     "Remove": "Remover",

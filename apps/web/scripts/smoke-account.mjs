@@ -144,6 +144,8 @@ export function accountSmoke(open) {
         const posts = postsTo(page, '/v1/account/sessions');
         await page.locator('.fd-sidebar').getByRole('link', { name: 'Sessions', exact: true }).click();
         const firefox = page.getByRole('list', { name: 'Signed-in sessions' }).getByRole('listitem').filter({ hasText: 'Firefox on Mac' });
+        await firefox.locator('.fd-list-desc').getByText(/Signed in .+ · Active /).waitFor();
+        assert.equal(await firefox.locator('.fd-list-meta').count(), 0);
         await openAction(firefox, 'More actions for Firefox on Mac', 'Sign out Firefox on Mac');
         await page.locator('.fd-toast[data-front][data-held][data-state="open"]').getByRole('button', { name: 'Undo', exact: true }).waitFor();
         assert.equal(posts.length, 0, 'Nothing is sent while the action is held');
@@ -224,7 +226,8 @@ export function accountSmoke(open) {
         const unverified = page.locator('.fd-list-row').filter({ hasText: 'Self-registered editor' });
         await unverified.getByText('Unverified', { exact: true }).waitFor();
         // A connection's first token is issued at approval, so last_used is always set (never "Not used yet").
-        await unverified.locator('.fd-list-meta').getByText(/^Used /).waitFor();
+        await unverified.locator('.fd-list-desc').getByText(/ · Used /).waitFor();
+        assert.equal(await unverified.locator('.fd-list-meta').count(), 0);
         await unverified.locator('summary').click();
         await unverified.getByText('https://app.example.com/editor', { exact: true }).waitFor();
         assert.equal(await unverified.locator('code').getByText('self-registered', { exact: true }).count(), 0);
@@ -235,8 +238,8 @@ export function accountSmoke(open) {
         assert.equal(await history.getAttribute('open'), null);
         await summary.click();
         const ended = history.locator('.fd-list-row').filter({ hasText: 'Other agent' });
-        await ended.getByText(/Expired /).waitFor();
-        await ended.locator('.fd-list-desc').getByText(/Editorial team/).waitFor();
+        await ended.locator('.fd-list-desc').getByText(/Editorial team · Expired /).waitFor();
+        assert.equal(await ended.locator('.fd-list-meta').count(), 0);
         assert.equal(await ended.locator('[data-fd-menu]').count(), 0);
         await row.locator('.fd-list-desc').getByText(/Editorial team · Firefox on Linux, Paris, FR/).waitFor();
         assert.equal(await row.getByText('Editorial tools', { exact: true }).isVisible(), false);

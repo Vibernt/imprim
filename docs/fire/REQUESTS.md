@@ -1,6 +1,6 @@
 # Fire requests from Imprim
 
-Imprim uses Fire v0.14.0 (commit `9de1e67`).
+Imprim uses Fire v0.14.1 (commit `0f982b3`).
 
 Gaps found while building Imprim's screens with Fire ([GUIDE.md](GUIDE.md) section 7). Own classes and tokens use
 the `im-` prefix. Request a Fire variant when an existing component needs a change.

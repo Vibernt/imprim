@@ -41,9 +41,9 @@ export function machineClientSmoke(browser, open) {
         forgetRealms(server.env);
         const id = 'ws-' + '1'.repeat(20);
         db.prepare(`INSERT INTO service_clients(id,realm_id,app_id,name,owner_email,jwks,scopes,resource_prefixes,source,
-            workspace_id,accountable_user_id,expires_at,created,updated)
+            workspace_id,accountable_user_id,expires_at,created,updated,last_used)
             VALUES(?,'default','app','Editorial bot',?,'{"keys":[]}','["read"]','["https://app.example/mcp"]',
-                'workspace','ws_test',?,?,?,?)`).run(id, user.email, user.id, now + 60000, now, now);
+                'workspace','ws_test',?,?,?,?,?)`).run(id, user.email, user.id, now + 60000, now, now, now);
         await page.goto(server.origin + (role ? '/admin/services' : '/account/agents'));
         const byButton = name => page.getByRole('button', { name, exact: true });
         const trigger = byButton('More actions for Editorial bot');
@@ -60,6 +60,8 @@ export function machineClientSmoke(browser, open) {
             await page.keyboard.press('Escape');
         } else {
             await page.getByRole('heading', { name: 'Your machines' }).waitFor();
+            await row.locator('.fd-list-desc').getByText(/Editorial team · Used /).waitFor();
+            assert.equal(await row.locator('.fd-list-meta').count(), 0);
             const menu = byButton('More actions for Editorial bot');
             await menu.click();
             await page.getByRole('menuitem', { name: 'Renew' }).click();
@@ -79,5 +81,10 @@ export function machineClientSmoke(browser, open) {
         await page.getByText(role ? 'Service client disabled' : 'Machine disabled', { exact: true }).waitFor();
         assert.equal(disables.length, 1);
         assert.equal(db.prepare('SELECT status FROM service_clients WHERE id=?').get(id).status, 'disabled');
+        if (!role) {
+            const disabled = page.locator('li.fd-list-row').filter({ has: page.getByText('Editorial bot', { exact: true }) });
+            await disabled.locator('.fd-list-meta').getByText('Disabled', { exact: true }).waitFor();
+            assert.doesNotMatch(await disabled.locator('.fd-list-desc').textContent(), / · Used /);
+        }
     });
 }

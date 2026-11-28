@@ -27,8 +27,8 @@ export function agentRow(agent: Agent, pending: boolean, rename: () => void,
   const id = `agent-${agent.id}`;
   return connectionRow({ id, title: agent.label || agent.name,
     lead: true, badgeTone: 'warning', badge: agent.host ? undefined : t('Unverified'), pending, form, confirmation,
-    description: [agent.app, agent.workspace_name, device].filter(Boolean).join(' · '),
-    meta: agent.status === 'active' ? useTime(agent.last_used) : ended(agent),
+    description: [agent.app, agent.workspace_name, device,
+      agent.status === 'active' ? useTime(agent.last_used) : ended(agent)].filter(Boolean).join(' · '),
     actions: agent.status === 'active' ? [{ label: t('Rename'), run: rename },
       { label: t('Revoke'), danger: true, confirmRow: confirmRowId(id) }] : [],
     details: html`

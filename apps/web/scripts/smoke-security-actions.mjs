@@ -3,6 +3,28 @@ import assert from 'node:assert/strict';
 import { dismissRowConfirm, finishHold, focused, openAction, postsTo, undoHold } from './smoke-actions.mjs';
 
 export function securityActionsSmoke(open) {
+    test('phone authenticator rows put both usage states in the description', async t => {
+        const { page, server } = await open(t, { width: 375 });
+        const db = server.env.DB.db, user = db.prepare('SELECT id FROM users').get();
+        const created = Date.UTC(2026, 10, 25, 12), used = Date.UTC(2026, 10, 27, 14);
+        const insert = db.prepare(`INSERT INTO mfa_factors(id,user_id,type,name,sealed_secret,confirmed,created,last_used)
+            VALUES(?,?,'totp',?,'test fixture',1,?,?)`);
+        insert.run(crypto.randomUUID(), user.id, 'Travel phone', created, used);
+        insert.run(crypto.randomUUID(), user.id, 'Backup phone', created, null);
+        await page.goto(server.origin + '/account/security');
+        const [addedDate, usedDate] = await page.evaluate(times => {
+            const format = new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: 'medium', timeStyle: 'short' });
+            return times.map(time => format.format(time));
+        }, [created, used]);
+        const factors = page.getByRole('list', { name: 'Authenticator apps' });
+        for (const [name, usage] of [['Travel phone', `last used ${usedDate}`], ['Backup phone', 'never used']]) {
+            const row = factors.getByRole('listitem').filter({ has: page.getByText(name, { exact: true }) });
+            await row.locator('.fd-list-desc').getByText(`Added ${addedDate} · ${usage}`, { exact: true }).waitFor();
+            assert.equal(await row.locator('.fd-list-meta').count(), 0);
+        }
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    });
+
     for (const last of ['authenticator app', 'passkey']) test(`Security holds a non-last factor removal and confirms the last ${last}`, async t => {
         const { page, server } = await open(t, { width: 375, colorScheme: 'dark' });
         const db = server.env.DB.db, user = db.prepare('SELECT id FROM users').get(), now = Date.now();

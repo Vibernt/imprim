@@ -1,7 +1,7 @@
 # Fire in Imprim
 
-Every Imprim page uses **Fire v0.14.0** (commit `9de1e67`), MIT, from the pinned package
-`"fire-design": "github:vidhatanand/firedesign#v0.14.0"` (root and `apps/web` `package.json`).
+Every Imprim page uses **Fire v0.14.1** (commit `0f982b3`), MIT, from the pinned package
+`"fire-design": "github:vidhatanand/firedesign#v0.14.1"` (root and `apps/web` `package.json`).
 `scripts/build-fire.mjs` copies its CSS, ES modules and other static assets into `apps/server/public/fire/`,
 the generated directory served by Workers Static Assets. The package includes SIL OFL notices for the fonts
 and the ISC notice for the Lucide icons.
@@ -49,6 +49,7 @@ and check the upgrade. Review the sign-in, account and console pages in light an
 
 | Fire | In Imprim since | What changed for Imprim |
 |---|---|---|
+| 0.14.1 | 2026-11-28 | The logo field previews the chosen file as a `data:` URL, so it works under Imprim's `img-src 'self' data:`. Branding's logo uploads now use Fire's logo field. |
 | 0.14.0 | 2026-11-27 | Fire added `fd-confirm-row`, and Imprim adopted it for every in-row confirmation. No other changes. |
 | 0.13.2 | 2026-11-27 | Skeletons are stronger and wait 160 ms before they show; opening a modal no longer moves a page without a scroll bar; a stacked table's expandable rows open on a phone. The package now holds the reference screens, docs pages and pictures, and the `fire` skill leads with them; `AGENT-RULES.md` asks every screen to name the reference screen it follows. Fire proposals are now public issues (`fire propose`): Imprim's agents write them and show the maintainer, who decides what is filed. Nothing to change in Imprim's markup or scripts (it imports `fire-design`, not `fire-design/elements`). |
 | 0.12.4 | 2026-11-24 | A person's reduced-motion setting wins over every look: `fire/tokens.css` keeps `--fd-motion` at 0 (and the press scale at 1) with `!important`, above the brand's `theme.css`. Nothing to change in Imprim; a smoke test holds it. The logo field fix does not touch Imprim (no `fd-logo`). |

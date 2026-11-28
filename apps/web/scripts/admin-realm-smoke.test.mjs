@@ -4,12 +4,13 @@ import { chromium } from 'playwright-core';
 import { smokeServer } from './smoke-server.mjs';
 import { seedSignupRequest } from './signup-fixture.mjs';
 import { detailConfirmation, dismissRowConfirm, dismissToasts, enterConfirmationPhrase, openAction, finishHold, postsTo, undoHold } from './smoke-actions.mjs';
+import { chooseFullLogo, fullLogoField, rejectInvalidLogos } from './smoke-branding-logos.mjs';
 import { ensureUser } from '../../server/src/services/admission.mjs';
 
 const browser = await chromium.launch();
 test.after(() => browser.close());
 
-async function open(t, width = 1440, colorScheme = 'light', expectedConflict = null) {
+async function open(t, width = 1440, colorScheme = 'light', { expectedConflict, expectedLogoPreviewBlock = false } = {}) {
     const server = await smokeServer(t, 'platform');
     const context = server.track(await browser.newContext({ viewport: { width, height: 900 }, colorScheme, locale: 'en-US' }));
     t.after(() => context.close());
@@ -22,10 +23,16 @@ async function open(t, width = 1440, colorScheme = 'light', expectedConflict = n
         if (message.type() !== 'error') return;
         // A refusal the test provokes on purpose (a 409 from the endpoint it names) is not a failure.
         const conflict = expectedConflict?.test(message.location().url) && /status of 409/.test(message.text());
-        if (!conflict) failures.push(message.text());
+        // Fire 0.14.0 uses a blob URL for a chosen logo. The console's img-src blocks it.
+        const logoPreviewBlock = expectedLogoPreviewBlock && new URL(page.url()).pathname === '/admin/branding' &&
+            /['"]blob:[^'"]+['"]/.test(message.text()) && message.text().includes("img-src 'self' data:");
+        if (!conflict && !logoPreviewBlock) failures.push(message.text());
     });
     page.on('requestfailed', request => {
-        if (request.failure()?.errorText !== 'net::ERR_ABORTED') failures.push(request.failure()?.errorText);
+        const error = request.failure()?.errorText;
+        const logoPreviewBlock = expectedLogoPreviewBlock && new URL(page.url()).pathname === '/admin/branding' &&
+            request.url().startsWith('blob:') && /^(?:net::ERR_BLOCKED_BY_CSP|csp)$/i.test(error);
+        if (error !== 'net::ERR_ABORTED' && !logoPreviewBlock) failures.push(error);
     });
     t.after(() => assert.deepEqual(failures, []));
     const go = path => page.goto(server.origin + path);
@@ -37,7 +44,7 @@ async function open(t, width = 1440, colorScheme = 'light', expectedConflict = n
 }
 
 test('Workspaces uses Fire filters and form controls and closes only after the name is typed', async t => {
-    const { page, server, go, fits, toast } = await open(t, 1440, 'light', /\/admin\/api\/workspaces\/[^/]+\/invite$/);
+    const { page, server, go, fits, toast } = await open(t, 1440, 'light', { expectedConflict: /\/admin\/api\/workspaces\/[^/]+\/invite$/ });
     const db = server.env.DB.db;
     db.prepare("UPDATE clients SET product='reports',workspaces='shared' WHERE id='other'").run();
     const seed = db.prepare("INSERT INTO workspaces(id,realm_id,kind,name,status,created) VALUES(?,'default','team',?,?,0)");
@@ -169,8 +176,10 @@ test('Workspaces uses Fire filters and form controls and closes only after the n
 });
 
 test('Branding lazy-loads Tweaks, restores the route look, uploads a logo and shows the saved email', async t => {
-    const { page, go, fits, toast, context } = await open(t);
+    const { page, go, fits, toast, context } = await open(t, 1440, 'light', { expectedLogoPreviewBlock: true });
     const requests = [];
+    const assetPosts = postsTo(page, '/admin/api/branding/assets');
+    const brandingPosts = postsTo(page, '/admin/api/branding');
     page.on('request', req => requests.push(new URL(req.url()).pathname));
     await go('/admin/settings');
     await page.getByRole('heading', { name: 'Configuration', exact: true }).waitFor();
@@ -213,13 +222,13 @@ test('Branding lazy-loads Tweaks, restores the route look, uploads a logo and sh
     await logosTab.click();
     assert.equal(await logosTab.getAttribute('aria-selected'), 'true');
     assert.equal(await page.getByRole('tab', { name: 'Look', exact: true }).getAttribute('aria-selected'), 'false');
-    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XWQ8AAAAASUVORK5CYII=', 'base64');
-    await page.getByLabel('Full logo', { exact: true }).setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });
-    await toast('Logo uploaded');
+    await rejectInvalidLogos(page, assetPosts);
+    await chooseFullLogo(page, toast, assetPosts);
     await page.getByRole('tab', { name: 'Name and links', exact: true }).click();
     await page.getByLabel('Name', { exact: true }).fill('Temporary name');
     await page.getByRole('tab', { name: 'Words', exact: true }).click();
     await saveBar.getByRole('button', { name: 'Discard changes' }).click();
+    await dismissToasts(page);
     await page.getByRole('tab', { name: 'Name and links', exact: true }).click();
     assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), '');
     await page.getByLabel('Name', { exact: true }).fill('Studio');
@@ -229,11 +238,14 @@ test('Branding lazy-loads Tweaks, restores the route look, uploads a logo and sh
     await page.getByRole('button', { name: 'Open tweaks' }).click();
     await panel.locator('[data-palette="forest"]').click();
     await panel.getByRole('button', { name: 'Close tweaks' }).click();
-    await page.getByRole('tab', { name: 'Logos', exact: true }).click();
-    await page.getByLabel('Full logo', { exact: true }).setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });
-    await toast('Logo uploaded');
+    await logosTab.click();
+    assert.equal(await fullLogoField(page).locator('.fd-dropzone-preview img').count(), 0, 'Discard clears the chosen logo');
+    await chooseFullLogo(page, toast, assetPosts);
     await page.getByRole('button', { name: 'Save branding' }).click();
     await toast('Branding saved');
+    assert.equal(brandingPosts.length, 1);
+    const savedLogo = brandingPosts[0].branding.logo_light;
+    assert.match(savedLogo, /^[0-9a-f]{64}$/);
     assert.equal(await page.locator('html').getAttribute('data-palette'), 'forest');
     await page.locator('.fd-sidebar .fd-brand').getByRole('img', { name: 'Studio' }).waitFor();
     assert.equal(await page.locator('.fd-topbar-title').textContent(), 'Vibernt');
@@ -243,6 +255,25 @@ test('Branding lazy-loads Tweaks, restores the route look, uploads a logo and sh
     await email.getByRole('heading', { name: 'Sign in to Studio' }).waitFor();
     assert.match(await email.locator('img.im-logo-light').getAttribute('src'), /^data:image\/png;base64,/);
     assert.equal(await email.locator('a.im-button-text').getAttribute('href'), '#sample');
+    await email.close();
+    await logosTab.click();
+    const field = fullLogoField(page);
+    const savedPreview = field.locator('.fd-dropzone-preview').getByRole('img', { name: 'Current full logo' });
+    await savedPreview.waitFor();
+    assert.equal(await savedPreview.getAttribute('src'), '/assets/brand/' + savedLogo);
+    await page.waitForFunction(image => image.complete && image.naturalWidth > 0, await savedPreview.elementHandle());
+    await field.getByRole('button', { name: 'Remove', exact: true }).click();
+    await savedPreview.waitFor({ state: 'detached' });
+    assert.equal(brandingPosts.length, 1, 'Remove stages the change');
+    await dismissToasts(page);
+    await saveBar.getByRole('button', { name: 'Save branding' }).click();
+    await toast('Branding saved');
+    assert.equal(brandingPosts.length, 2);
+    assert.equal('logo_light' in brandingPosts[1].branding, false);
+    assert.equal(assetPosts.length, 2, 'Remove sends no asset upload');
+    await logosTab.click();
+    await fullLogoField(page).locator('.fd-dropzone-preview .fd-tile').waitFor();
+    assert.equal(await fullLogoField(page).locator('.fd-dropzone-preview img').count(), 0);
 });
 
 test('platform screens rotate and revoke signing keys and create, update and administer a realm', async t => {
@@ -380,6 +411,11 @@ test('admin screens fit a dark phone viewport, including the workspace-off state
         await go('/admin/' + path);
         await page.locator('main.fd-page').getByText(visible, { exact: true }).first().waitFor();
         await fits(path);
+        if (path === 'branding') {
+            await page.getByRole('tab', { name: 'Logos', exact: true }).click();
+            await fullLogoField(page).waitFor();
+            await fits('Branding logos');
+        }
     }
     const bar = page.locator('.fd-tabbar');
     const more = bar.getByRole('button', { name: 'More' });

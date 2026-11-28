@@ -10,7 +10,7 @@ import { failed, formData, notice } from '../realm-ui';
 import { collect, copyFields, languageFields, nameFields } from './fields';
 import { openLookPreview } from './look';
 import { signatureFields } from './signature';
-import { encodeFile, logoFields } from './logos';
+import { encodeFile, logoFields, releaseLogoPreviews } from './logos';
 import type { Asset, BrandResponse, Branding, Look } from './types';
 import { brandingTabs, specimen, type Section } from './view';
 import type { LoadingPreset } from '../../loading';
@@ -42,6 +42,7 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
 
   override disconnectedCallback() {
     this.previewLife?.abort();
+    releaseLogoPreviews(this);
     super.disconnectedCallback();
   }
 
@@ -82,22 +83,24 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
     void this.editLook(tweaks => tweaks.toggle(trigger));
   };
 
-  private upload = async (event: CustomEvent<{ value: File[] }>, slot: Asset) => {
+  private changeLogo = async (event: CustomEvent<{ value: File[] }>, slot: Asset) => {
+    if (this.pending) return;
     const file = event.detail.value[0];
-    if (this.pending || !file) return;
+    if (!file) {
+      this.removeLogo(slot);
+      return;
+    }
     const zone = event.currentTarget as HTMLElement;
-    const row = zone.nextElementSibling?.querySelector<HTMLElement>('.fd-file[data-state="uploading"]');
     this.pending = true;
     try {
-      if (row) forms.setFileProgress(row, 0);
       const { id } = await api<{ id: string }>('/admin/api/branding/assets', { method: 'POST',
         body: { content_type: file.type, data: await encodeFile(file) } });
       if (!this.isConnected) return;
-      if (row) forms.setFileProgress(row, 100, { message: 'Uploaded' });
+      forms.setFileProgress(zone, 100, { message: 'Uploaded' });
       this.assetDraft = { ...this.assetDraft, [slot]: id };
       notice('Logo uploaded', 'Save branding to use it.');
     } catch (error) {
-      if (row) forms.setFileProgress(row, 0, { state: 'error', message: 'Upload failed' });
+      forms.setFileProgress(zone, 0, { state: 'error', message: 'Upload failed' });
       if (this.isConnected) failed(error);
     } finally {
       this.pending = false;
@@ -113,6 +116,7 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
   private discard = () => {
     if (!this.data) return;
     this.previewLife?.abort();
+    releaseLogoPreviews(this);
     this.tweaks = undefined;
     this.assetDraft = this.data.branding;
     this.previewCopy = { name: this.data.branding.name, copy: this.data.branding.copy };
@@ -149,7 +153,8 @@ class BrandingScreen extends AdminRealmScreen<BrandResponse> {
           ?disabled=${this.lookPending || this.pending} @click=${this.openTweaks}>${icon('sliders-horizontal')}<span>Open tweaks</span></button>`)}
         ${signatureFields(this.look, this.lookPending || this.pending, signature => void this.editLook(tweaks => tweaks.set({ signature })))}
       </div>`,
-      logos: logoFields(this.assetDraft, this.pending, this.upload, this.removeLogo),
+      // Seed the rows from the saved brand. Fire owns the preview until Save or Discard.
+      logos: logoFields(branding, this.view.session.realm.display_name, this.pending, this.changeLogo),
       name: html`<div class="fd-stack" data-gap="4">${nameFields(branding)}</div>`,
       languages: languageFields(branding),
       words: html`<p class="fd-muted">Leave a field empty to use the built-in words in that language.</p>${copyFields(branding)}`,

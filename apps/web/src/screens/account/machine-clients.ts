@@ -20,8 +20,10 @@ export function machineClients(clients: MachineClient[], pending: boolean, renew
       const id = `machine-${client.client_id}`;
       const confirmation = client.can_disable ? disableQuestion(client) : undefined;
       return connectionRow({ id, title: client.name, confirmation,
-        lead: true, description: [client.app, client.workspace].filter(Boolean).join(' · '), pending,
-        meta: client.status === 'active' ? useTime(client.last_used) : client.status === 'expired' ? t('Expired') :
+        lead: true, pending,
+        description: [client.app, client.workspace, client.status === 'active' ? useTime(client.last_used) : undefined]
+          .filter(Boolean).join(' · '),
+        meta: client.status === 'active' ? undefined : client.status === 'expired' ? t('Expired') :
           client.can_disable ? t('Inactive') : t('Disabled'),
         actions: [
           ...(client.status === 'active' ? [{ label: t('Renew'), run: () => renew(client) }] : []),

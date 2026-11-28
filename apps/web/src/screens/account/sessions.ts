@@ -59,8 +59,11 @@ class ScreenSessions extends AccountScreen<Access> {
           const id = `session-${s.sid}`;
           return connectionRow({
             id, title: s.device, busy: (bulkHeld && !s.current) || this.holds.has(id),
-            description: [s.location, t('Signed in {time} with {method}', { time: when(s.auth_time * 1000), method: method(s.method) })].filter(Boolean).join(' · '),
-            meta: t('Active {time}', { time: when(s.last_seen) }),
+            description: [
+              s.location,
+              t('Signed in {time} with {method}', { time: when(s.auth_time * 1000), method: method(s.method) }),
+              t('Active {time}', { time: when(s.last_seen) }),
+            ].filter(Boolean).join(' · '),
             badge: s.current ? t('This browser') : undefined, badgeTone: 'success',
             actions: s.current ? [] : [{
               label: t('Sign out'), name: t('Sign out {device}', { device: s.device }), danger: true,

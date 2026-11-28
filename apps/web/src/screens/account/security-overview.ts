@@ -46,8 +46,9 @@ export function overview(data: Security, pending: boolean, actions: Actions, cha
           <p class="fd-small fd-muted">${t('Apps that show a new 6-digit code every 30 seconds.')}</p>
           ${data.factors.length ? list(t('Authenticator apps'), data.factors, factor => factor.id, factor => connectionRow({
             ...factorActions('authenticator', factor), title: factor.name,
-            description: t('Added {date}', { date: when(factor.created) }),
-            meta: factor.last_used ? t('last used {date}', { date: when(factor.last_used) }) : t('never used'),
+            description: factor.last_used === null
+              ? t('Added {date} · never used', { date: when(factor.created) })
+              : t('Added {date} · last used {lastUsed}', { date: when(factor.created), lastUsed: when(factor.last_used) }),
           })) : empty(t('No authenticator app yet'))}
           <div class="fd-row">${addAuthenticator}</div>
         </section>

@@ -37,5 +37,8 @@ export function heldSmoke(open) {
         assert.equal(posts.filter(post => post.sid === oldest.sid).length, 1);
         assert.ok(posts.every(post => post.sid !== undone.sid));
         assert.ok(db.prepare('SELECT 1 FROM sessions WHERE sid=?').get(undone.sid));
+
+        // Let the remaining holds commit before browser and database teardown.
+        await Promise.all(others.map(session => row(session).waitFor({ state: 'detached', timeout: 10_000 })));
     });
 }
